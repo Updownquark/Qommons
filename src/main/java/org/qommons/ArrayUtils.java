@@ -599,12 +599,12 @@ public final class ArrayUtils {
 				SortedSearchFilter.PreferLess);
 			if (found != null && found.get().position == pos) {
 				posValue = found.get().value;
-				CollectionElement<PositionMeasure> adjEl = values.getAdjacentElement(found.getElementId(), false);
+				CollectionElement<PositionMeasure> adjEl = found.getAdjacent(false);
 				if (adjEl != null && adjEl.get().position == pos - 1) {
 					adjIsLess = true;
 					adjValue = adjEl.get().value;
 				} else {
-					adjEl = values.getAdjacentElement(found.getElementId(), true);
+					adjEl = found.getAdjacent(true);
 					if (adjEl != null && adjEl.get().position == pos + 1) {
 						adjIsLess = false;
 						adjValue = adjEl.get().value;
@@ -637,7 +637,7 @@ public final class ArrayUtils {
 			if (measureCompare.compare(adjValue, posValue) > 0)
 				return adjIsLess ? -1 : 1;
 			adjIsLess = !adjIsLess;
-			CollectionElement<PositionMeasure> adjEl = values.getAdjacentElement(found.getElementId(), !adjIsLess);
+			CollectionElement<PositionMeasure> adjEl = found.getAdjacent(!adjIsLess);
 			if (adjEl != null && Math.abs(adjEl.get().position - pos) == 1) {
 				adjValue = adjEl.get().value;
 			} else if (adjIsLess) {

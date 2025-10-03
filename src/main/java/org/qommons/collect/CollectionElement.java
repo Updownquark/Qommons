@@ -20,6 +20,12 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>>, 
 	@Override
 	E get();
 
+	/**
+	 * @param next Whether to retrieve the next element in the collection or the previous one
+	 * @return The previous or next element in this element's collection
+	 */
+	CollectionElement<E> getAdjacent(boolean next);
+
 	@Override
 	default int compareTo(CollectionElement<E> other) {
 		return getElementId().compareTo(other.getElementId());
@@ -54,6 +60,11 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>>, 
 		@Override
 		public E get() {
 			return theWrapped.get();
+		}
+
+		@Override
+		public CollectionElement<E> getAdjacent(boolean next) {
+			return CollectionElement.reverse(theWrapped.getAdjacent(!next));
 		}
 
 		@Override

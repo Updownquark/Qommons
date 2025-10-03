@@ -8,6 +8,9 @@ package org.qommons.collect;
  */
 public interface MutableMultiMapHandle<K, V> extends MultiEntryValueHandle<K, V>, MutableMapEntryHandle<K, V> {
 	@Override
+	MutableMultiMapHandle<K, V> getAdjacent(boolean next);
+
+	@Override
 	default MutableMultiMapHandle<K, V> reverse() {
 		return new ReversedMutableMultiMapHandle<>(this);
 	}
@@ -31,6 +34,12 @@ public interface MutableMultiMapHandle<K, V> extends MultiEntryValueHandle<K, V>
 		@Override
 		public ElementId getKeyId() {
 			return getWrapped().getKeyId().reverse();
+		}
+
+		@Override
+		public MutableMultiMapHandle<K, V> getAdjacent(boolean next) {
+			MutableMultiMapHandle<K, V> adj = getWrapped().getAdjacent(!next);
+			return adj == null ? null : adj.reverse();
 		}
 
 		@Override

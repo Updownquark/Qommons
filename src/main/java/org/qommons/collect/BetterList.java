@@ -30,7 +30,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 * @return The element in this list at the given index
 	 * @throws IndexOutOfBoundsException If the given index is less than zero or &gt;={@link #size()}
 	 */
-	CollectionElement<E> getElement(int index) throws IndexOutOfBoundsException;
+	ListElement<E> getElement(int index) throws IndexOutOfBoundsException;
 
 	/**
 	 * <p>
@@ -49,17 +49,35 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 */
 	boolean isContentControlled();
 
-	/**
-	 * @param id The element
-	 * @return The number of elements in this collection positioned before the given element
-	 */
-	int getElementsBefore(ElementId id);
+	@Override
+	ListElement<E> getElement(ElementId id);
 
-	/**
-	 * @param id The element
-	 * @return The number of elements in this collection positioned after the given element
-	 */
-	int getElementsAfter(ElementId id);
+	@Override
+	ListElement<E> getElement(E value, boolean first);
+
+	@Override
+	ListElement<E> getTerminalElement(boolean first);
+
+	@Override
+	MutableListElement<E> mutableElement(ElementId id);
+
+	@Override
+	ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+		throws UnsupportedOperationException, IllegalArgumentException;
+
+	@Override
+	ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+		throws UnsupportedOperationException, IllegalArgumentException;
+
+	@Override
+	default ListElement<E> addElement(E value, boolean first) throws UnsupportedOperationException, IllegalArgumentException {
+		return (ListElement<E>) BetterCollection.super.addElement(value, first);
+	}
+
+	@Override
+	default ListElement<E> find(Predicate<? super E> search, boolean first) {
+		return (ListElement<E>) BetterCollection.super.find(search, first);
+	}
 
 	@Override
 	void clear();
@@ -203,8 +221,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 */
 	@Override
 	default int indexOf(Object value) {
-		CollectionElement<E> element = getElement((E) value, true);
-		return element == null ? -1 : getElementsBefore(element.getElementId());
+		ListElement<E> element = getElement((E) value, true);
+		return element == null ? -1 : element.getElementsBefore();
 	}
 
 	/**
@@ -214,8 +232,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 */
 	@Override
 	default int lastIndexOf(Object value) {
-		CollectionElement<E> element = getElement((E) value, false);
-		return element == null ? -1 : getElementsBefore(element.getElementId());
+		ListElement<E> element = getElement((E) value, false);
+		return element == null ? -1 : element.getElementsBefore();
 	}
 
 	/**
@@ -279,7 +297,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 			return canAdd(element, last.getElementId(), null);
 		} else {
 			CollectionElement<E> before = getElement(index);
-			CollectionElement<E> after = getAdjacentElement(before.getElementId(), false);
+			CollectionElement<E> after = before.getAdjacent(false);
 			return canAdd(element, after.getElementId(), before.getElementId());
 		}
 	}
@@ -299,20 +317,21 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 * @param element The new value to add
 	 * @return The element at which the value was added
 	 */
-	default CollectionElement<E> addElement(int index, E element) {
+	default ListElement<E> addElement(int index, E element) {
 		try (Transaction t = lock(true, null)) {
 			int sz = size();
 			if (index < 0 || index > sz)
 				throw new IndexOutOfBoundsException(index + " of " + sz);
-			ElementId after;
+			CollectionElement<E> afterEl;
 			CollectionElement<E> beforeEl;
 			if (index == 0) {
-				after = null;
+				afterEl = null;
 				beforeEl = getTerminalElement(true);
 			} else {
-				after = getElement(index - 1).getElementId();
-				beforeEl = getAdjacentElement(after, true);
+				afterEl = getElement(index - 1);
+				beforeEl = afterEl.getAdjacent(true);
 			}
+			ElementId after = afterEl == null ? null : afterEl.getElementId();
 			ElementId before = beforeEl == null ? null : beforeEl.getElementId();
 			return addElement(element, after, before, true);
 		}
@@ -372,7 +391,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				MutableCollectionElement<E> mutableEl = mutableElement(el.getElementId());
 				if (mutableEl.canRemove() == null)
 					mutableEl.remove();
-				el = getAdjacentElement(el.getElementId(), true);
+				el = el.getAdjacent(true);
 			}
 		}
 	}
@@ -429,7 +448,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 			startEl = getTerminalElement(true);
 			break;
 		default:
-			startEl = getAdjacentElement(getElement(start).getElementId(), false);
+			startEl = getElement(start).getAdjacent(false);
 			break;
 		}
 		if (end >= size)
@@ -437,7 +456,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		else if (end == size - 1)
 			endEl = getTerminalElement(false);
 		else
-			endEl = getAdjacentElement(getElement(end).getElementId(), true);
+			endEl = getElement(end).getAdjacent(true);
 		ElementId positionEl;
 		boolean atStart;
 		if (position == -1) {
@@ -475,7 +494,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	}
 
 	@Override
-	default BetterList<CollectionElement<E>> elements() {
+	default BetterList<? extends ListElement<E>> elements() {
 		return elementsBetween(null, true, null, true);
 	}
 
@@ -488,8 +507,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 * @param highIncluded Whether the high bound should be included in the list
 	 * @return The sub-list
 	 */
-	default BetterList<CollectionElement<E>> elementsBetween(ElementId low, boolean lowIncluded, ElementId high, boolean highIncluded) {
-		return new ElementList<>(this, low, lowIncluded, high, highIncluded);
+	default BetterList<? extends ListElement<E>> elementsBetween(ElementId low, boolean lowIncluded, ElementId high, boolean highIncluded) {
+		return new ElementList<>(this, low == null ? null : getElement(low), lowIncluded, high == null ? null : getElement(high),
+			highIncluded);
 	}
 
 	/**
@@ -648,25 +668,36 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<E> getElement(int index) {
+		public ListElement<E> getElement(int index) {
 			try (Transaction t = lock(false, null)) {
 				return getWrapped().getElement(reflect(index, false)).reverse();
 			}
 		}
 
 		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			return CollectionElement.reverse(getWrapped().getAdjacentElement(elementId.reverse(), !next));
+		public ListElement<E> getTerminalElement(boolean first) {
+			return (ListElement<E>) super.getTerminalElement(first);
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
-			return getWrapped().getElementsAfter(id.reverse());
+		public ListElement<E> getElement(E value, boolean first) {
+			return (ListElement<E>) super.getElement(value, first);
 		}
 
 		@Override
-		public int getElementsAfter(ElementId id) {
-			return getWrapped().getElementsBefore(id.reverse());
+		public ListElement<E> getElement(ElementId id) {
+			return (ListElement<E>) super.getElement(id);
+		}
+
+		@Override
+		public ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return (ListElement<E>) super.addElement(value, after, before, first);
+		}
+
+		@Override
+		public ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove) {
+			return (ListElement<E>) super.move(valueEl, after, before, first, afterRemove);
 		}
 
 		protected int reflect(int index, boolean terminalInclusive) {
@@ -679,6 +710,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 			if (!terminalInclusive)
 				reflected--;
 			return reflected;
+		}
+
+		@Override
+		public MutableListElement<E> mutableElement(ElementId id) {
+			return (MutableListElement<E>) super.mutableElement(id);
 		}
 
 		@Override
@@ -717,22 +753,38 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<E> getElement(int index) {
+		public ListElement<E> getTerminalElement(boolean first) {
+			return null;
+		}
+
+		@Override
+		public ListElement<E> getElement(E value, boolean first) {
+			return null;
+		}
+
+		@Override
+		public ListElement<E> getElement(ElementId id) {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public ListElement<E> getElement(int index) {
 			throw new IndexOutOfBoundsException(index + " of 0");
 		}
 
 		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
+		public ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return (ListElement<E>) super.addElement(value, after, before, first);
+		}
+
+		@Override
+		public ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove) {
 			throw new NoSuchElementException();
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
-			throw new NoSuchElementException();
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
+		public MutableListElement<E> mutableElement(ElementId id) {
 			throw new NoSuchElementException();
 		}
 	}
@@ -748,33 +800,73 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
+		protected SingletonElement createElement(E value) {
+			return new SingletonListElement(value);
+		}
+
+		@Override
 		public boolean isContentControlled() {
 			return true;
 		}
 
 		@Override
-		public CollectionElement<E> getElement(int index) {
+		public ListElement<E> getTerminalElement(boolean first) {
+			return (ListElement<E>) super.getTerminalElement(first);
+		}
+
+		@Override
+		public ListElement<E> getElement(int index) {
 			if (index == 0)
 				return getTerminalElement(true);
 			throw new IndexOutOfBoundsException(index + " of 1");
 		}
 
 		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			getElement(elementId); // Make sure the element exists, let the super class throw the exception
-			return null;
+		public ListElement<E> getElement(E value, boolean first) {
+			return (ListElement<E>) super.getElement(value, first);
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
-			getElement(id); // Make sure the element exists, let the super class throw the exception
-			return 0;
+		public ListElement<E> getElement(ElementId id) {
+			return (ListElement<E>) super.getElement(id);
 		}
 
 		@Override
-		public int getElementsAfter(ElementId id) {
-			getElement(id); // Make sure the element exists, let the super class throw the exception
-			return 0;
+		public ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return (ListElement<E>) super.addElement(value, after, before, first);
+		}
+
+		@Override
+		public ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return (ListElement<E>) super.move(valueEl, after, before, first, afterRemove);
+		}
+
+		@Override
+		public MutableListElement<E> mutableElement(ElementId id) {
+			return (MutableListElement<E>) super.mutableElement(id);
+		}
+
+		class SingletonListElement extends SingletonElement implements MutableListElement<E> {
+			SingletonListElement(E value) {
+				super(value);
+			}
+
+			@Override
+			public MutableListElement<E> getAdjacent(boolean next) {
+				return null;
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return 0;
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return 0;
+			}
 		}
 	}
 
@@ -799,13 +891,18 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
+		public ListElement<E> getCurrent() throws NoSuchElementException {
+			return (ListElement<E>) super.getCurrent();
+		}
+
+		@Override
 		protected BetterList<E> getCollection() {
 			return (BetterList<E>) super.getCollection();
 		}
 
 		@Override
 		public int getIndex() throws IllegalStateException {
-			return getCollection().getElementsBefore(getCurrent().getElementId());
+			return getCurrent().getElementsBefore();
 		}
 	}
 
@@ -917,44 +1014,44 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<E> getTerminalElement(boolean first) {
+		public ListElement<E> getTerminalElement(boolean first) {
 			if (theEnd == theStart)
 				return null;
 			if (first) {
 				if (theStart == 0)
-					return theWrapped.getTerminalElement(first);
+					return wrapElement(theWrapped.getTerminalElement(first));
 				else if (theStart < theWrapped.size())
-					return theWrapped.getElement(theStart);
+					return wrapElement(theWrapped.getElement(theStart));
 				else
 					return null;
 			} else {
 				if (theEnd == theWrapped.size())
-					return theWrapped.getTerminalElement(first);
+					return wrapElement(theWrapped.getTerminalElement(first));
 				else
-					return theWrapped.getElement(theEnd - 1);
+					return wrapElement(theWrapped.getElement(theEnd - 1));
 			}
 		}
 
 		@Override
-		public CollectionElement<E> getElement(E value, boolean first) {
+		public ListElement<E> getElement(E value, boolean first) {
 			try (Transaction t = lock(false, null)) {
 				if (isEmpty())
 					return null;
-				CollectionElement<E> firstMatch = theWrapped.getElement(value, first);
+				ListElement<E> firstMatch = theWrapped.getElement(value, first);
 				if (firstMatch == null)
 					return null;
-				int index = theWrapped.getElementsBefore(firstMatch.getElementId());
+				int index = firstMatch.getElementsBefore();
 				if ((first && index >= theEnd) || (!first && index < theStart))
 					return null;
 				if ((first && index >= theStart) || (!first && index < theEnd))
-					return firstMatch;
-				CollectionElement<E> el = getTerminalElement(first);
+					return wrapElement(firstMatch);
+				ListElement<E> el = getTerminalElement(first);
 				if (first) {
 					index = theStart;
 					while (index < theEnd && el != null) {
 						if (Objects.equals(el.get(), value))
 							return el;
-						el = theWrapped.getAdjacentElement(el.getElementId(), first);
+						el = el.getAdjacent(first);
 						index++;
 					}
 				} else {
@@ -962,7 +1059,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 					while (index >= theStart && el != null) {
 						if (Objects.equals(el.get(), value))
 							return el;
-						el = theWrapped.getAdjacentElement(el.getElementId(), first);
+						el = el.getAdjacent(first);
 						index--;
 					}
 				}
@@ -971,55 +1068,31 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<E> getElement(ElementId id) {
+		public ListElement<E> getElement(ElementId id) {
 			try (Transaction t = lock(false, null)) {
-				int index = theWrapped.getElementsBefore(id);
+				ListElement<E> wrapped = theWrapped.getElement(id);
+				int index = wrapped.getElementsBefore();
 				if (index < theStart || index >= theEnd)
 					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return theWrapped.getElement(id);
+				return wrapElement(wrapped);
 			}
 		}
 
 		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			CollectionElement<E> adj = theWrapped.getAdjacentElement(elementId, next);
-			if (adj == null)
-				return null;
-			int index = theWrapped.getElementsBefore(adj.getElementId());
-			if (index < theStart || index >= theEnd)
-				return null;
-			return adj;
-		}
-
-		@Override
-		public MutableCollectionElement<E> mutableElement(ElementId id) {
-			return wrapElement(theWrapped.mutableElement(id));
-		}
-
-		@Override
-		public CollectionElement<E> getElement(int index) {
+		public MutableListElement<E> mutableElement(ElementId id) {
 			try (Transaction t = lock(false, null)) {
-				return theWrapped.getElement(theStart + checkIndex(index, false));
-			}
-		}
-
-		@Override
-		public int getElementsBefore(ElementId id) {
-			try (Transaction t = lock(false, null)) {
-				int wrappedEls = theWrapped.getElementsBefore(id);
-				if (wrappedEls < theStart || wrappedEls >= theEnd)
+				MutableListElement<E> wrapped = theWrapped.mutableElement(id);
+				int index = wrapped.getElementsBefore();
+				if (index < theStart || index >= theEnd)
 					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return wrappedEls - theStart;
+				return wrapElement(wrapped);
 			}
 		}
 
 		@Override
-		public int getElementsAfter(ElementId id) {
+		public ListElement<E> getElement(int index) {
 			try (Transaction t = lock(false, null)) {
-				int wrappedEls = theWrapped.getElementsBefore(id);
-				if (wrappedEls < theStart || wrappedEls >= theEnd)
-					throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-				return theEnd - wrappedEls - 1;
+				return wrapElement(theWrapped.getElement(theStart + checkIndex(index, false)));
 			}
 		}
 
@@ -1028,9 +1101,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
 			return QommonsUtils.filterMap(theWrapped.getElementsBySource(sourceEl, sourceCollection), el -> {
-				int index = theWrapped.getElementsBefore(el.getElementId());
+				int index = ((ListElement<E>) el).getElementsBefore();
 				return index >= theStart && index < theEnd;
-			}, el -> el);
+			}, el -> wrapElement((ListElement<E>) el));
 		}
 
 		@Override
@@ -1093,24 +1166,27 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 			return BetterCollection.toString(this);
 		}
 
-		protected MutableCollectionElement<E> wrapElement(MutableCollectionElement<E> el) {
-			return new SubListElement(el);
+		protected ListElement<E> wrapElement(ListElement<E> el) {
+			return el == null ? null : new SubListElement(el);
 		}
 
-		protected class SubListElement implements MutableCollectionElement<E> {
-			protected final MutableCollectionElement<E> theWrappedEl;
+		protected MutableListElement<E> wrapElement(MutableListElement<E> el) {
+			return el == null ? null : new MutableSubListElement(el);
+		}
 
-			protected SubListElement(MutableCollectionElement<E> wrappedEl) {
-				this.theWrappedEl = wrappedEl;
+		protected class SubListElement implements ListElement<E> {
+			private final ListElement<E> theWrappedEl;
+
+			protected SubListElement(ListElement<E> wrappedEl) {
+				theWrappedEl = wrappedEl;
 			}
 
-			protected MutableCollectionElement<E> getWrappedEl() {
-				return theWrappedEl;
-			}
-
-			@Override
-			public BetterCollection<E> getCollection() {
+			protected SubList<E> getSubList() {
 				return SubList.this;
+			}
+
+			protected ListElement<E> getWrappedEl() {
+				return theWrappedEl;
 			}
 
 			@Override
@@ -1119,48 +1195,109 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 			}
 
 			@Override
-			public int compareTo(CollectionElement<E> o) {
-				return theWrappedEl.compareTo(o);
-			}
-
-			@Override
 			public E get() {
 				return theWrappedEl.get();
 			}
 
 			@Override
+			public ListElement<E> getAdjacent(boolean next) {
+				ListElement<E> adj = theWrappedEl.getAdjacent(next);
+				if (adj == null)
+					return null;
+				else if (next) {
+					if (adj.getElementsBefore() >= theEnd)
+						return null;
+				} else {
+					if (adj.getElementsBefore() < theStart)
+						return null;
+				}
+				return wrapAdj(adj);
+			}
+
+			protected ListElement<E> wrapAdj(ListElement<E> adj) {
+				return new SubListElement(adj);
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return theWrappedEl.getElementsBefore() - theStart;
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return theEnd - theWrappedEl.getElementsBefore() - 1;
+			}
+
+			@Override
+			public int hashCode() {
+				return theWrappedEl.hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				if (this == obj)
+					return true;
+				else if (!(obj instanceof SubList.SubListElement))
+					return false;
+				SubList<?>.SubListElement other = (SubList<?>.SubListElement) obj;
+				return getWrappedEl().equals(other.getWrappedEl()) && getSubList().theStart == other.getSubList().theStart
+					&& getSubList().theEnd == other.getSubList().theEnd;
+			}
+
+			@Override
+			public String toString() {
+				return new StringBuilder().append('[').append(getElementsBefore()).append("]:").append(get()).toString();
+			}
+		}
+
+		protected class MutableSubListElement extends SubListElement implements MutableListElement<E> {
+			protected MutableSubListElement(MutableListElement<E> wrappedEl) {
+				super(wrappedEl);
+			}
+
+			@Override
+			protected MutableListElement<E> getWrappedEl() {
+				return (MutableListElement<E>) super.getWrappedEl();
+			}
+
+			@Override
+			public MutableListElement<E> getAdjacent(boolean next) {
+				return (MutableListElement<E>) super.getAdjacent(next);
+			}
+
+			@Override
+			public MutableListElement<E> wrapAdj(ListElement<E> adj) {
+				return new MutableSubListElement((MutableListElement<E>) adj);
+			}
+
+			@Override
 			public String isEnabled() {
-				return theWrappedEl.isEnabled();
+				return getWrappedEl().isEnabled();
 			}
 
 			@Override
 			public String isAcceptable(E value) {
-				return theWrappedEl.isAcceptable(value);
+				return getWrappedEl().isAcceptable(value);
 			}
 
 			@Override
 			public void set(E value) throws IllegalArgumentException, UnsupportedOperationException {
-				try (Transaction t = lock(true, null)) {
-					theWrappedEl.set(value);
-				}
+				getWrappedEl().set(value);
+				updated();
 			}
 
 			@Override
 			public String canRemove() {
-				return theWrappedEl.canRemove();
+				return getWrappedEl().canRemove();
 			}
 
 			@Override
 			public void remove() throws UnsupportedOperationException {
 				try (Transaction t = lock(true, null)) {
-					theWrappedEl.remove();
+					getWrappedEl().remove();
 					theEnd--;
+					updated();
 				}
-			}
-
-			@Override
-			public String toString() {
-				return theWrappedEl.toString();
 			}
 		}
 
@@ -1192,9 +1329,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+		public ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			CollectionElement<E> newEl;
+			ListElement<E> newEl;
 			int wrapSize;
 			try (Transaction t = lock(true, null)) {
 				if (after == null && theStart > 0)
@@ -1214,12 +1351,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				// we need to throw an exception
 				throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
 			}
-			return newEl;
+			return wrapElement(newEl);
 		}
 
 		@Override
-		public CollectionElement<E> addElement(int index, E element) {
-			CollectionElement<E> newEl;
+		public ListElement<E> addElement(int index, E element) {
+			ListElement<E> newEl;
 			try (Transaction t = lock(true, null)) {
 				newEl = theWrapped.addElement(theStart + checkIndex(index, true), element);
 				if (newEl != null) {
@@ -1233,7 +1370,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				// we need to throw an exception
 				throw new IllegalArgumentException(StdMsg.ELEMENT_EXISTS);
 			}
-			return newEl;
+			return wrapElement(newEl);
 		}
 
 		@Override
@@ -1249,7 +1386,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+		public ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			try (Transaction t = lock(true, null)) {
 				if (after == null && theStart > 0)
@@ -1257,8 +1394,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				int wrapSize = theWrapped.size();
 				if (before == null && theEnd < wrapSize)
 					before = theWrapped.getElement(theEnd).getElementId();
-				CollectionElement<E> newEl = theWrapped.move(valueEl, after, before, first, afterRemove);
-				return newEl;
+				ListElement<E> newEl = theWrapped.move(valueEl, after, before, first, afterRemove);
+				return wrapElement(newEl);
 			}
 		}
 
@@ -1294,14 +1431,16 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 * Implements {@link BetterList#elementsBetween(ElementId, boolean, ElementId, boolean)}
 	 * 
 	 * @param <E> The type of the backing list
+	 * @param <LE> The sub-type of list element provided by the list API
 	 */
-	class ElementList<E> extends ElementCollection<E> implements BetterList<CollectionElement<E>> {
-		private final ElementId theLowBound;
+	class ElementList<E, LE extends ListElement<E>> extends ElementCollection<E, LE> implements BetterList<LE> {
+		private final ListElement<E> theLowBound;
 		private final boolean isLowIncluded;
-		private final ElementId theHighBound;
+		private final ListElement<E> theHighBound;
 		private final boolean isHighIncluded;
 
-		public ElementList(BetterList<E> collection, ElementId lowBound, boolean lowIncluded, ElementId highBound, boolean highIncluded) {
+		public ElementList(BetterList<E> collection, ListElement<E> lowBound, boolean lowIncluded, ListElement<E> highBound,
+			boolean highIncluded) {
 			super(collection);
 			if (lowBound != null && highBound != null && lowBound.compareTo(highBound) > 0)
 				throw new IllegalArgumentException("Low bound (" + lowBound + ") is after high bound (" + highBound + ")");
@@ -1317,7 +1456,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		/** @return The low bound of this sub-collection */
-		public ElementId getLowBound() {
+		public ListElement<E> getLowBound() {
 			return theLowBound;
 		}
 
@@ -1327,7 +1466,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		/** @return The high bound of this sub-collection */
-		public ElementId getHighBound() {
+		public ListElement<E> getHighBound() {
 			return theHighBound;
 		}
 
@@ -1338,12 +1477,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		protected boolean check(ElementId toCheck, boolean low, boolean high) {
 			if (low && theLowBound != null) {
-				int comp = toCheck.compareTo(theLowBound);
+				int comp = toCheck.compareTo(theLowBound.getElementId());
 				if (comp < 0 || (comp == 0 && !isLowIncluded))
 					return false;
 			}
 			if (high && theHighBound != null) {
-				int comp = toCheck.compareTo(theHighBound);
+				int comp = toCheck.compareTo(theHighBound.getElementId());
 				if (comp > 0 || (comp == 0 && !isHighIncluded))
 					return false;
 			}
@@ -1359,12 +1498,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		public int size() {
 			int size = super.size();
 			if (theLowBound != null) {
-				size -= getCollection().getElementsBefore(theLowBound);
+				size -= theLowBound.getElementsBefore();
 				if (!isLowIncluded)
 					size--;
 			}
 			if (theHighBound != null) {
-				size -= getCollection().getElementsAfter(theHighBound);
+				size -= theHighBound.getElementsAfter();
 				if (!isHighIncluded)
 					size--;
 			}
@@ -1372,28 +1511,28 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> getElement(CollectionElement<E> value, boolean first) {
+		public ListElement<LE> getElement(LE value, boolean first) {
 			if (value == null || !check(value.getElementId(), true, true))
 				return null;
 			return getElement(value.getElementId());
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> getElement(ElementId id) {
+		public ListElement<LE> getElement(ElementId id) {
 			if (!check(id, true, true))
 				throw new NoSuchElementException("Element is not included in this sub-list: " + id);
-			return super.getElement(id);
+			return (ListElement<LE>) super.getElement(id);
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> getTerminalElement(boolean first) {
+		public ListElement<LE> getTerminalElement(boolean first) {
 			CollectionElement<E> el;
 			if (first) {
 				if (theLowBound != null) {
 					if (isLowIncluded)
-						el = getCollection().getElement(theLowBound);
+						el = theLowBound;
 					else
-						el = getCollection().getAdjacentElement(theLowBound, true);
+						el = theLowBound.getAdjacent(true);
 				} else
 					el = getCollection().getTerminalElement(first);
 				if (el != null && !check(el.getElementId(), false, true))
@@ -1401,9 +1540,9 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 			} else {
 				if (theHighBound != null) {
 					if (isHighIncluded)
-						el = getCollection().getElement(theHighBound);
+						el = theHighBound;
 					else
-						el = getCollection().getAdjacentElement(theHighBound, false);
+						el = theHighBound.getAdjacent(false);
 				} else
 					el = getCollection().getTerminalElement(first);
 				if (el != null && !check(el.getElementId(), true, false))
@@ -1413,25 +1552,14 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> getAdjacentElement(ElementId elementId, boolean next) {
-			if (!check(elementId, true, true))
-				throw new NoSuchElementException("Element is not included in this sub-list: " + elementId);
-			CollectionElement<E> el = getCollection().getAdjacentElement(elementId, next);
-			if (el != null && !check(el.getElementId(), !next, next))
-				return null;
-			return super.getAdjacentElement(elementId, next);
-		}
-
-		@Override
-		public MutableCollectionElement<CollectionElement<E>> mutableElement(ElementId id) {
+		public MutableListElement<LE> mutableElement(ElementId id) {
 			if (!check(id, true, true))
 				throw new NoSuchElementException("Element is not included in this sub-list: " + id);
-			return super.mutableElement(id);
+			return (MutableListElement<LE>) super.mutableElement(id);
 		}
 
 		@Override
-		public BetterList<CollectionElement<CollectionElement<E>>> getElementsBySource(ElementId sourceEl,
-			BetterCollection<?> sourceCollection) {
+		public BetterList<CollectionElement<LE>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
 			return QommonsUtils.filterMap(super.getElementsBySource(sourceEl, sourceCollection), el -> check(el.getElementId(), true, true),
@@ -1446,24 +1574,29 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
-			Runnable afterRemove) {
+		public ListElement<LE> addElement(LE value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return (ListElement<LE>) super.addElement(value, after, before, first);
+		}
+
+		@Override
+		public ListElement<LE> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove) {
 			if (!check(valueEl, true, true))
 				throw new NoSuchElementException("Element is not included in this sub-list: " + valueEl);
 			if (after != null && !check(after, true, true))
 				throw new NoSuchElementException("Element is not included in this sub-list: " + after);
 			if (before != null && !check(before, true, true))
 				throw new NoSuchElementException("Element is not included in this sub-list: " + before);
-			return super.move(valueEl, after, before, first, afterRemove);
+			return (ListElement<LE>) super.move(valueEl, after, before, first, afterRemove);
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> getElement(int index) throws IndexOutOfBoundsException {
+		public ListElement<LE> getElement(int index) throws IndexOutOfBoundsException {
 			if (index < 0)
 				throw new IndexOutOfBoundsException("" + index);
 			int index2 = index;
 			if (theLowBound != null) {
-				index2 += getCollection().getElementsBefore(theLowBound);
+				index2 += theLowBound.getElementsBefore();
 				if (!isLowIncluded)
 					index2++;
 			}
@@ -1479,36 +1612,6 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
-			int eb = getCollection().getElementsBefore(id);
-			if (theLowBound != null) {
-				eb -= getCollection().getElementsBefore(theLowBound);
-				if (!isLowIncluded)
-					eb--;
-				if (eb < 0)
-					throw new NoSuchElementException("Element is not included in this sub-list: " + id);
-			}
-			if (!check(id, false, true))
-				throw new NoSuchElementException("Element is not included in this sub-list: " + id);
-			return eb;
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
-			int ea = getCollection().getElementsAfter(id);
-			if (theHighBound != null) {
-				ea -= getCollection().getElementsAfter(theHighBound);
-				if (!isHighIncluded)
-					ea--;
-				if (ea < 0)
-					throw new NoSuchElementException("Element is not included in this sub-list: " + id);
-			}
-			if (!check(id, true, false))
-				throw new NoSuchElementException("Element is not included in this sub-list: " + id);
-			return ea;
-		}
-
-		@Override
 		public void clear() {
 			if (theLowBound == null && theHighBound == null)
 				super.clear();
@@ -1517,7 +1620,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				if (theLowBound == null)
 					low = 0;
 				else {
-					low = getCollection().getElementsBefore(theLowBound);
+					low = theLowBound.getElementsBefore();
 					if (!isLowIncluded)
 						low++;
 				}
@@ -1525,11 +1628,63 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				if (theHighBound == null)
 					high = getCollection().size();
 				else {
-					high = getCollection().getElementsBefore(theHighBound);
+					high = theHighBound.getElementsBefore();
 					if (isHighIncluded)
 						high++;
 				}
 				getCollection().removeRange(low, high);
+			}
+		}
+
+		@Override
+		protected ListElement<LE> wrap(CollectionElement<E> el) {
+			return el == null ? null : new WrappedListElement((ListElement<E>) el);
+		}
+
+		@Override
+		protected MutableListElement<LE> wrapMutable(CollectionElement<E> el) {
+			return new MutableWrappedListElement((MutableListElement<E>) el);
+		}
+
+		class WrappedListElement extends WrappedCollectionElement implements ListElement<LE> {
+			WrappedListElement(ListElement<E> element) {
+				super(element);
+			}
+
+			@Override
+			public ListElement<LE> getAdjacent(boolean next) {
+				return wrap(getWrapped().getAdjacent(next));
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return getWrapped().getElementsBefore();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return getWrapped().getElementsAfter();
+			}
+		}
+
+		class MutableWrappedListElement extends MutableWrappedCollectionElement implements MutableListElement<LE> {
+			MutableWrappedListElement(ListElement<E> element) {
+				super(element);
+			}
+
+			@Override
+			public MutableListElement<LE> getAdjacent(boolean next) {
+				return (MutableListElement<LE>) super.getAdjacent(next);
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return getWrapped().getElementsBefore();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return getWrapped().getElementsAfter();
 			}
 		}
 	}
@@ -1584,31 +1739,21 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		public abstract E get(int index);
 
 		@Override
-		public CollectionElement<E> getTerminalElement(boolean first) {
+		public ListElement<E> getTerminalElement(boolean first) {
 			if (isEmpty())
 				return null;
 			return elementFor(first ? 0 : size() - 1);
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
-			return ((IndexElementId) id).index;
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
-			return size() - ((IndexElementId) id).index - 1;
-		}
-
-		@Override
-		public CollectionElement<E> getElement(int index) {
+		public ListElement<E> getElement(int index) {
 			return elementFor(index);
 		}
 
-		private CollectionElement<E> elementFor(int index) {
+		private ListElement<E> elementFor(int index) {
 			if (index < 0 || index >= size())
 				throw new IndexOutOfBoundsException(index + " of " + size());
-			return new CollectionElement<E>() {
+			return new ListElement<E>() {
 				@Override
 				public ElementId getElementId() {
 					return new IndexElementId(index);
@@ -1617,6 +1762,31 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				@Override
 				public E get() {
 					return AbstractConstantList.this.get(index);
+				}
+
+				@Override
+				public ListElement<E> getAdjacent(boolean next) {
+					int adjIndex;
+					if (next) {
+						adjIndex = index + 1;
+						if (adjIndex == size())
+							return null;
+					} else {
+						if (index == 0)
+							return null;
+						adjIndex = index - 1;
+					}
+					return elementFor(adjIndex);
+				}
+
+				@Override
+				public int getElementsBefore() {
+					return index;
+				}
+
+				@Override
+				public int getElementsAfter() {
+					return size() - index - 1;
 				}
 
 				@Override
@@ -1629,7 +1799,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<E> getElement(E value, boolean first) {
+		public ListElement<E> getElement(E value, boolean first) {
 			int size = size();
 			for (int i = 0; i < size; i++)
 				if (Objects.equals(get(i), value))
@@ -1638,33 +1808,19 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<E> getElement(ElementId id) {
+		public ListElement<E> getElement(ElementId id) {
 			return elementFor(((IndexElementId) id).index);
 		}
 
 		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			int index = ((IndexElementId) elementId).index;
-			index += next ? 1 : -1;
-			if (index < 0 || index >= size())
-				return null;
-			return getElement(index);
-		}
-
-		@Override
-		public MutableCollectionElement<E> mutableElement(ElementId id) {
+		public MutableListElement<E> mutableElement(ElementId id) {
 			return mutableElementFor(((IndexElementId) id).index);
 		}
 
-		private MutableCollectionElement<E> mutableElementFor(int index) {
+		private MutableListElement<E> mutableElementFor(int index) {
 			if (index < 0 || index >= size())
 				throw new IndexOutOfBoundsException(index + " of " + size());
-			return new MutableCollectionElement<E>() {
-				@Override
-				public BetterCollection<E> getCollection() {
-					return AbstractConstantList.this;
-				}
-
+			return new MutableListElement<E>() {
 				@Override
 				public ElementId getElementId() {
 					return new IndexElementId(index);
@@ -1673,6 +1829,31 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				@Override
 				public E get() {
 					return AbstractConstantList.this.get(index);
+				}
+
+				@Override
+				public MutableListElement<E> getAdjacent(boolean next) {
+					int adjIndex;
+					if (next) {
+						adjIndex = index + 1;
+						if (adjIndex == size())
+							return null;
+					} else {
+						if (index == 0)
+							return null;
+						adjIndex = index - 1;
+					}
+					return mutableElementFor(adjIndex);
+				}
+
+				@Override
+				public int getElementsBefore() {
+					return index;
+				}
+
+				@Override
+				public int getElementsAfter() {
+					return size() - index - 1;
 				}
 
 				@Override
@@ -1775,7 +1956,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+		public ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			return null;
 		}
@@ -1790,7 +1971,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+		public ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			if (after != null && valueEl.compareTo(after) < 0)
 				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
@@ -1800,7 +1981,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public void clear() {}
+		public void clear() {
+		}
 
 		@Override
 		public int hashCode() {

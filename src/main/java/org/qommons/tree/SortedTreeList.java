@@ -155,13 +155,13 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 		else if (isDistinct)
 			return found;
 		if (first) {
-			for (BinaryTreeNode<E> left = found.getClosest(true); left != null
-				&& theCompare.compare(left.get(), value) == 0; left = left.getClosest(true)) {
+			for (BinaryTreeNode<E> left = found.getAdjacent(false); left != null
+				&& theCompare.compare(left.get(), value) == 0; left = left.getAdjacent(false)) {
 				found = left;
 			}
 		} else {
-			for (BinaryTreeNode<E> right = found.getClosest(false); right != null
-				&& theCompare.compare(right.get(), value) == 0; right = right.getClosest(false)) {
+			for (BinaryTreeNode<E> right = found.getAdjacent(true); right != null
+				&& theCompare.compare(right.get(), value) == 0; right = right.getAdjacent(true)) {
 				found = right;
 			}
 		}
@@ -211,7 +211,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 				else if (compare > 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
 				if (first) {
-					CollectionElement<E> adj = getAdjacentElement(after, true);
+					CollectionElement<E> adj = getElement(after).getAdjacent(true);
 					if (adj == null || theCompare.compare(adj.get(), value) >= 0)
 						useAfter = true;
 				}
@@ -223,7 +223,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 				else if (compare < 0)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
 				if (!first) {
-					CollectionElement<E> adj = getAdjacentElement(before, false);
+					CollectionElement<E> adj = getElement(before).getAdjacent(false);
 					if (adj == null || theCompare.compare(adj.get(), value) <= 0)
 						useBefore = true;
 				}
@@ -244,7 +244,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 					return null;
 			} else {
 				while (compare == 0) {
-					BinaryTreeNode<E> adj = getAdjacentElement(result.getElementId(), !first);
+					BinaryTreeNode<E> adj = result.getAdjacent(!first);
 					if (adj != null) {
 						result = adj;
 						compare = theCompare.compare(result.get(), value);
@@ -272,7 +272,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	}
 
 	@Override
-	public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+	public BinaryTreeNode<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 		throws UnsupportedOperationException, IllegalArgumentException {
 		if (after != null && before != null && after.compareTo(before) > 0)
 			throw new IllegalArgumentException("after (" + after + ") is after before (" + before + ")");
@@ -367,11 +367,6 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 		}
 
 		@Override
-		public BinaryTreeNode<E> getAdjacentElement(ElementId elementId, boolean next) {
-			return (BinaryTreeNode<E>) super.getAdjacentElement(elementId, next);
-		}
-
-		@Override
 		public BinaryTreeNode<E> getElement(E value, boolean first) {
 			return (BinaryTreeNode<E>) super.getElement(value, first);
 		}
@@ -427,11 +422,6 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 		}
 
 		@Override
-		public BetterCollection<E> getCollection() {
-			return SortedTreeList.this;
-		}
-
-		@Override
 		public ElementId getElementId() {
 			return theWrapped.getElementId();
 		}
@@ -462,23 +452,23 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 		}
 
 		@Override
-		public MutableBinaryTreeNode<E> getClosest(boolean left) {
-			return mutableNodeFor(theWrapped.getClosest(left));
+		public MutableBinaryTreeNode<E> getAdjacent(boolean next) {
+			return mutableNodeFor(theWrapped.getAdjacent(next));
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return theWrapped.getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return theWrapped.getElementsAfter();
 		}
 
 		@Override
 		public boolean getSide() {
 			return theWrapped.getSide();
-		}
-
-		@Override
-		public int getNodesBefore() {
-			return theWrapped.getNodesBefore();
-		}
-
-		@Override
-		public int getNodesAfter() {
-			return theWrapped.getNodesAfter();
 		}
 
 		@Override
@@ -513,8 +503,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 		public String isAcceptable(E value) {
 			if (value == get())
 				return null;
-			BinaryTreeNode<E> previous = getClosest(true);
-			BinaryTreeNode<E> next = getClosest(false);
+			BinaryTreeNode<E> previous = getAdjacent(false);
+			BinaryTreeNode<E> next = getAdjacent(true);
 			if (previous != null) {
 				int compare = comparator().compare(value, previous.get());
 				if (isDistinct && compare == 0)

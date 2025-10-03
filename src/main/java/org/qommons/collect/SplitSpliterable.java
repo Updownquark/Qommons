@@ -21,7 +21,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 	 * @return An element in this list that is between the given elements with a spacing suitable for double-bounded binary search; or null
 	 *         if the elements are the same or adjacent
 	 */
-	CollectionElement<E> splitBetween(ElementId element1, ElementId element2);
+	ListElement<E> splitBetween(ElementId element1, ElementId element2);
 
 	@Override
 	default Spliterator<E> spliterator() {
@@ -54,13 +54,13 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 	 */
 	public class DefaultSplittableSpliterator<E> implements Spliterator<E> {
 		private final SplitSpliterable<E> theCollection;
-		private CollectionElement<E> theElement;
+		private ListElement<E> theElement;
 		private boolean elementIsNext;
 
 		private final Comparator<? super E> theSorting;
 		private final int theCharacteristics;
-		private CollectionElement<E> theLeftBound;
-		private CollectionElement<E> theRightBound;
+		private ListElement<E> theLeftBound;
+		private ListElement<E> theRightBound;
 
 		/**
 		 * @param collection The colection to create the spliterator for
@@ -73,7 +73,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		 * @param rightBound The right bound for this spliterator (exclusive)
 		 */
 		public DefaultSplittableSpliterator(SplitSpliterable<E> collection, Comparator<? super E> compare, int characteristics,
-			CollectionElement<E> current, boolean currentIsNext, CollectionElement<E> leftBound, CollectionElement<E> rightBound) {
+			ListElement<E> current, boolean currentIsNext, ListElement<E> leftBound, ListElement<E> rightBound) {
 			theCollection = collection;
 			theElement = current;
 			elementIsNext = currentIsNext;
@@ -103,11 +103,11 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 			try (Transaction t = theCollection.lock(false, null)) {
 				int size;
 				if (theRightBound != null)
-					size = theCollection.getElementsBefore(theRightBound.getElementId());
+					size = theRightBound.getElementsBefore();
 				else
 					size = theCollection.size();
 				if (theLeftBound != null)
-					size -= theCollection.getElementsBefore(theLeftBound.getElementId());
+					size -= theLeftBound.getElementsBefore();
 				return size;
 			}
 		}
@@ -118,7 +118,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 				if (theElement == null && theLeftBound == null)
 					theElement = theCollection.getTerminalElement(true);
 			} else if (theElement != null)
-				theElement = theCollection.getAdjacentElement(theElement.getElementId(), true);
+				theElement = theElement.getAdjacent(true);
 			else
 				theElement = null;
 			if (theElement == null || (theRightBound != null && theElement.getElementId().compareTo(theRightBound.getElementId()) >= 0))
@@ -130,15 +130,15 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 
 		@Override
 		public Spliterator<E> trySplit() {
-			CollectionElement<E> left = theLeftBound != null ? theLeftBound : theCollection.getTerminalElement(true);
+			ListElement<E> left = theLeftBound != null ? theLeftBound : theCollection.getTerminalElement(true);
 			if (left == null)
 				return null;
 
-			CollectionElement<E> right = theRightBound == null ? theRightBound : theCollection.getTerminalElement(true);
+			ListElement<E> right = theRightBound == null ? theRightBound : theCollection.getTerminalElement(true);
 			if (right == null)
 				return null;
 
-			CollectionElement<E> divider = theCollection.splitBetween(left.getElementId(), right.getElementId());
+			ListElement<E> divider = theCollection.splitBetween(left.getElementId(), right.getElementId());
 			if (divider == null)
 				return null;
 
@@ -184,7 +184,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 				}
 				if (theRightBound != null && node.getElementId().equals(theRightBound.getElementId()))
 					str.append('>');
-				node = theCollection.getAdjacentElement(node.getElementId(), true);
+				node = node.getAdjacent(true);
 				if (node != null)
 					str.append(", ");
 			}
@@ -213,7 +213,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		}
 
 		@Override
-		public CollectionElement<E> splitBetween(ElementId element1, ElementId element2) {
+		public ListElement<E> splitBetween(ElementId element1, ElementId element2) {
 			return getWrapped().splitBetween(element1, element2);
 		}
 
@@ -247,7 +247,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		}
 
 		@Override
-		public CollectionElement<E> splitBetween(ElementId element1, ElementId element2) {
+		public ListElement<E> splitBetween(ElementId element1, ElementId element2) {
 			return getWrapped().splitBetween(element1, element2);
 		}
 	}
@@ -330,7 +330,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 			}
 
 			@Override
-			public CollectionElement<E> splitBetween(ElementId element1, ElementId element2) {
+			public ListElement<E> splitBetween(ElementId element1, ElementId element2) {
 				return getWrapped().splitBetween(element1, element2);
 			}
 
@@ -364,7 +364,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 			}
 
 			@Override
-			public CollectionElement<E> splitBetween(ElementId element1, ElementId element2) {
+			public ListElement<E> splitBetween(ElementId element1, ElementId element2) {
 				return getWrapped().splitBetween(element1, element2);
 			}
 

@@ -228,7 +228,7 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 
 		void setNode(BinaryTreeNode<Map.Entry<K, V>> node) {
 			theEntryNode = node;
-			theId = node.getElementId();
+			theElement = (CollectionElement<? extends BetterMapEntryImpl<K, V>>) node;
 		}
 
 		protected BinaryTreeNode<Map.Entry<K, V>> getEntryNode() {
@@ -256,23 +256,23 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		}
 
 		@Override
-		public TreeEntry getClosest(boolean left) {
-			return wrap(theEntryNode.getClosest(left));
+		public TreeEntry getAdjacent(boolean next) {
+			return wrap(theEntryNode.getAdjacent(next));
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return theEntryNode.getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return theEntryNode.getElementsAfter();
 		}
 
 		@Override
 		public boolean getSide() {
 			return theEntryNode.getSide();
-		}
-
-		@Override
-		public int getNodesBefore() {
-			return theEntryNode.getNodesBefore();
-		}
-
-		@Override
-		public int getNodesAfter() {
-			return theEntryNode.getNodesAfter();
 		}
 
 		@Override
@@ -304,7 +304,8 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		}
 
 		@Override
-		protected MutableBinaryTreeEntry<K, V> createMutableHandle(BetterSet<Entry<K, V>> entrySet, Supplier<BetterCollection<V>> values) {
+		protected MutableBinaryTreeEntry<K, V> createMutableHandle(BetterSet<? extends Map.Entry<K, V>> entrySet,
+			Supplier<BetterCollection<V>> values) {
 			return new MutableTreeEntry(this);
 		}
 
@@ -323,13 +324,14 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		}
 
 		@Override
-		protected MutableBinaryTreeNode<K> mutableKeyHandle(BetterSet<Map.Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
+		protected MutableBinaryTreeNode<K> mutableKeyHandle(BetterSet<? extends Map.Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
 			return (MutableBinaryTreeNode<K>) super.mutableKeyHandle(entrySet, keySet);
 		}
 
 		@Override
-		protected MutableCollectionElement<K> createMutableKeyHandle(BetterSet<Map.Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
-			MutableCollectionElement<Map.Entry<K, V>> mutableEntryEl = entrySet.mutableElement(theId);
+		protected MutableCollectionElement<K> createMutableKeyHandle(BetterSet<? extends Map.Entry<K, V>> entrySet,
+			Supplier<BetterSet<K>> keySet) {
+			MutableCollectionElement<? extends Map.Entry<K, V>> mutableEntryEl = entrySet.mutableElement(getElementId());
 			return new MutableBinaryTreeKeyHandle(this, mutableEntryEl, keySet);
 		}
 	}
@@ -360,8 +362,18 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		}
 
 		@Override
-		public BinaryTreeNode<K> getClosest(boolean left) {
-			return key(getEntry().getClosest(left));
+		public BinaryTreeNode<K> getAdjacent(boolean next) {
+			return key(getEntry().getAdjacent(next));
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return getEntry().getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return getEntry().getElementsAfter();
 		}
 
 		@Override
@@ -387,16 +399,6 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		@Override
 		public BinaryTreeNode<K> get(int index, OptimisticContext ctx) {
 			return key(getEntry().get(index, ctx));
-		}
-
-		@Override
-		public int getNodesBefore() {
-			return getEntry().getNodesBefore();
-		}
-
-		@Override
-		public int getNodesAfter() {
-			return getEntry().getNodesAfter();
 		}
 
 		private BinaryTreeNode<K> key(BetterTreeMap<K, ?>.TreeEntry entry) {
@@ -431,8 +433,18 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		}
 
 		@Override
-		public MutableBinaryTreeNode<K> getClosest(boolean left) {
-			return key(getEntry().getClosest(left));
+		public MutableBinaryTreeNode<K> getAdjacent(boolean next) {
+			return key(getEntry().getAdjacent(next));
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return getEntry().getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return getEntry().getElementsAfter();
 		}
 
 		@Override
@@ -465,16 +477,6 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		@Override
 		public MutableBinaryTreeNode<K> get(int index, OptimisticContext ctx) {
 			return key(getEntry().get(index, ctx));
-		}
-
-		@Override
-		public int getNodesBefore() {
-			return getEntry().getNodesBefore();
-		}
-
-		@Override
-		public int getNodesAfter() {
-			return getEntry().getNodesAfter();
 		}
 
 		@Override
@@ -529,13 +531,13 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		}
 
 		@Override
-		public int getNodesBefore() {
-			return getEntry().getNodesBefore();
+		public int getElementsBefore() {
+			return getEntry().getElementsBefore();
 		}
 
 		@Override
-		public int getNodesAfter() {
-			return getEntry().getNodesAfter();
+		public int getElementsAfter() {
+			return getEntry().getElementsAfter();
 		}
 
 		@Override
@@ -554,8 +556,8 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		}
 
 		@Override
-		public MutableBinaryTreeEntry<K, V> getClosest(boolean left) {
-			return wrapMutable(getEntry().getClosest(left));
+		public MutableBinaryTreeEntry<K, V> getAdjacent(boolean next) {
+			return wrapMutable(getEntry().getAdjacent(next));
 		}
 
 		@Override
@@ -655,16 +657,6 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
-			return theEntries.getElementsBefore(id);
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
-			return theEntries.getElementsAfter(id);
-		}
-
-		@Override
 		public int indexFor(Comparable<? super K> search) {
 			return theEntries.indexFor(e -> search.compareTo(e.getKey()));
 		}
@@ -687,12 +679,6 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		@Override
 		public BinaryTreeNode<K> getTerminalElement(boolean first) {
 			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getTerminalElement(first);
-			return entryEl == null ? null : handleFor(entryEl);
-		}
-
-		@Override
-		public BinaryTreeNode<K> getAdjacentElement(ElementId elementId, boolean next) {
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getAdjacentElement(elementId, next);
 			return entryEl == null ? null : handleFor(entryEl);
 		}
 
@@ -844,11 +830,6 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		}
 
 		@Override
-		public BinaryTreeNode<Map.Entry<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
-			return (BinaryTreeNode<Map.Entry<K, V>>) super.getAdjacentElement(elementId, next);
-		}
-
-		@Override
 		public BinaryTreeNode<Map.Entry<K, V>> search(Comparable<? super Map.Entry<K, V>> search,
 			BetterSortedList.SortedSearchFilter filter) {
 			return (BinaryTreeNode<Map.Entry<K, V>>) super.search(search, filter);
@@ -861,7 +842,7 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 
 		@Override
 		public BinaryTreeNode<Map.Entry<K, V>> getElement(ElementId id) {
-			return new EntryElement(id);
+			return new EntryElement(getEntryById(id));
 		}
 
 		@Override
@@ -878,7 +859,7 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 
 		@Override
 		public MutableBinaryTreeNode<Map.Entry<K, V>> mutableElement(ElementId id) {
-			return new MutableEntryElement(id);
+			return new MutableEntryElement(mutableEntry(id));
 		}
 
 		@Override
@@ -887,124 +868,133 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 			return (BinaryTreeNode<Map.Entry<K, V>>) super.addElement(value, after, before, first);
 		}
 
-		class EntryElement implements BinaryTreeNode<Map.Entry<K, V>> {
-			final ElementId theId;
+		@Override
+		protected BinaryTreeNode<Map.Entry<K, V>> entryFor(MapEntryHandle<K, V> entry) {
+			return entry == null ? null : new EntryElement((BinaryTreeEntry<K, V>) entry);
+		}
 
-			EntryElement(ElementId id) {
-				theId = id;
+		class EntryElement implements BinaryTreeNode<Map.Entry<K, V>> {
+			private final BinaryTreeEntry<K, V> theEntry;
+
+			EntryElement(BinaryTreeEntry<K, V> entry) {
+				theEntry = entry;
+			}
+
+			protected BinaryTreeEntry<K, V> getEntry() {
+				return theEntry;
 			}
 
 			@Override
 			public ElementId getElementId() {
-				return theId;
+				return theEntry.getElementId();
 			}
 
 			@Override
 			public Map.Entry<K, V> get() {
-				return getEntryById(theId);
+				return theEntry;
 			}
 
 			@Override
 			public BinaryTreeNode<Map.Entry<K, V>> getParent() {
-				return element(getEntryById(theId).getParent());
+				return entryFor(theEntry.getParent());
 			}
 
 			@Override
 			public BinaryTreeNode<Map.Entry<K, V>> getLeft() {
-				return element(getEntryById(theId).getLeft());
+				return entryFor(theEntry.getLeft());
 			}
 
 			@Override
 			public BinaryTreeNode<Map.Entry<K, V>> getRight() {
-				return element(getEntryById(theId).getRight());
+				return entryFor(theEntry.getRight());
 			}
 
 			@Override
-			public BinaryTreeNode<Map.Entry<K, V>> getClosest(boolean left) {
-				return element(getEntryById(theId).getClosest(left));
+			public BinaryTreeNode<Map.Entry<K, V>> getAdjacent(boolean next) {
+				return entryFor(theEntry.getAdjacent(next));
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return theEntry.getElementsBefore();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return theEntry.getElementsAfter();
 			}
 
 			@Override
 			public int size() {
-				return getEntryById(theId).size();
+				return theEntry.size();
 			}
 
 			@Override
 			public BinaryTreeNode<Map.Entry<K, V>> getRoot() {
-				return element(getEntryById(theId).getRoot());
+				return entryFor(theEntry.getRoot());
 			}
 
 			@Override
 			public boolean getSide() {
-				return getEntryById(theId).getSide();
+				return theEntry.getSide();
 			}
 
 			@Override
 			public BinaryTreeNode<Map.Entry<K, V>> getSibling() {
-				return element(getEntryById(theId).getSibling());
+				return entryFor(theEntry.getSibling());
 			}
 
 			@Override
 			public BinaryTreeNode<Map.Entry<K, V>> get(int index, OptimisticContext ctx) {
-				return element(getEntryById(theId).get(index, ctx));
+				return entryFor(theEntry.get(index, ctx));
 			}
 
-			@Override
-			public int getNodesBefore() {
-				return getEntryById(theId).getNodesBefore();
-			}
-
-			@Override
-			public int getNodesAfter() {
-				return getEntryById(theId).getNodesAfter();
-			}
-
-			BinaryTreeNode<Map.Entry<K, V>> element(CollectionElement<?> el) {
-				return el == null ? null : new EntryElement(el.getElementId());
+			protected BinaryTreeNode<Map.Entry<K, V>> element(BinaryTreeEntry<K, V> entry) {
+				return entry == null ? null : new EntryElement(entry);
 			}
 		}
 
 		class MutableEntryElement extends EntryElement implements MutableBinaryTreeNode<Map.Entry<K, V>> {
-			MutableEntryElement(ElementId id) {
-				super(id);
+			MutableEntryElement(MutableBinaryTreeEntry<K, V> entry) {
+				super(entry);
 			}
 
 			@Override
-			public BetterCollection<Map.Entry<K, V>> getCollection() {
-				return EntrySet.this;
+			protected MutableBinaryTreeEntry<K, V> getEntry() {
+				return (MutableBinaryTreeEntry<K, V>) super.getEntry();
 			}
 
 			@Override
 			public String isEnabled() {
-				return mutableElement(theId).isEnabled();
+				return getEntry().isEnabled();
 			}
 
 			@Override
 			public String isAcceptable(Map.Entry<K, V> value) {
 				if (value == null)
 					return StdMsg.ILLEGAL_ELEMENT;
-				String msg = theKeySet.mutableElement(theId).isAcceptable(value.getKey());
+				String msg = theKeySet.mutableElement(getEntry().getElementId()).isAcceptable(value.getKey());
 				if (msg != null)
 					return msg;
-				return mutableEntry(theId).isAcceptable(value.getValue());
+				return getEntry().isAcceptable(value.getValue());
 			}
 
 			@Override
 			public void set(Map.Entry<K, V> value) throws UnsupportedOperationException, IllegalArgumentException {
 				if (value == null)
 					throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-				theKeySet.mutableElement(theId).set(value.getKey());
-				mutableEntry(theId).set(value.getValue());
+				theKeySet.mutableElement(getEntry().getElementId()).set(value.getKey());
+				getEntry().set(value.getValue());
 			}
 
 			@Override
 			public String canRemove() {
-				return mutableEntry(theId).canRemove();
+				return getEntry().canRemove();
 			}
 
 			@Override
 			public void remove() throws UnsupportedOperationException {
-				mutableEntry(theId).remove();
+				getEntry().remove();
 			}
 
 			@Override
@@ -1029,8 +1019,8 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 			}
 
 			@Override
-			public MutableBinaryTreeNode<Map.Entry<K, V>> getClosest(boolean left) {
-				return (MutableBinaryTreeNode<java.util.Map.Entry<K, V>>) super.getClosest(left);
+			public MutableBinaryTreeNode<Map.Entry<K, V>> getAdjacent(boolean next) {
+				return (MutableBinaryTreeNode<java.util.Map.Entry<K, V>>) super.getAdjacent(next);
 			}
 
 			@Override
@@ -1049,8 +1039,8 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 			}
 
 			@Override
-			MutableBinaryTreeNode<Map.Entry<K, V>> element(CollectionElement<?> el) {
-				return el == null ? null : new MutableEntryElement(el.getElementId());
+			protected MutableBinaryTreeNode<Map.Entry<K, V>> element(BinaryTreeEntry<K, V> entry) {
+				return entry == null ? null : new MutableEntryElement((MutableBinaryTreeEntry<K, V>) entry);
 			}
 		}
 	}

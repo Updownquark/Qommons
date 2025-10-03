@@ -106,7 +106,7 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 			while (el != null) {
 				if (Objects.equals(el.get(), value))
 					return el;
-				el = getAdjacentElement(el.getElementId(), first);
+				el = el.getAdjacent(first);
 			}
 			return null;
 		}
@@ -118,16 +118,16 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	}
 
 	@Override
-	public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+	public ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 		throws UnsupportedOperationException, IllegalArgumentException {
+		MutableCollectionElement<E> el = mutableElement(valueEl);
 		if (first) {
-			if (valueEl.equals(after) || Objects.equals(CollectionElement.getElementId(getAdjacentElement(valueEl, false)), after))
+			if (valueEl.equals(after) || Objects.equals(CollectionElement.getElementId(el.getAdjacent(false)), after))
 				return getElement(valueEl);
 		} else {
-			if (valueEl.equals(before) || Objects.equals(CollectionElement.getElementId(getAdjacentElement(valueEl, true)), before))
+			if (valueEl.equals(before) || Objects.equals(CollectionElement.getElementId(el.getAdjacent(true)), before))
 				return getElement(valueEl);
 		}
-		MutableCollectionElement<E> el = mutableElement(valueEl);
 		E value = el.get();
 		el.remove();
 		if (afterRemove != null)

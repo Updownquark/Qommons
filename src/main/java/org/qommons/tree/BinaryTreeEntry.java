@@ -1,8 +1,8 @@
 package org.qommons.tree;
 
 import org.qommons.collect.BetterMap;
-import org.qommons.collect.MapEntryHandle;
 import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.OrderedMapEntry;
 
 /**
  * A {@link BinaryTreeNode} for a tree-based {@link BetterMap}
@@ -10,7 +10,7 @@ import org.qommons.collect.OptimisticContext;
  * @param <K> The key type of the map
  * @param <V> The value type of the map
  */
-public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle<K, V> {
+public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, OrderedMapEntry<K, V> {
 	@Override
 	BinaryTreeEntry<K, V> getParent();
 
@@ -21,7 +21,7 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle
 	BinaryTreeEntry<K, V> getRight();
 
 	@Override
-	BinaryTreeEntry<K, V> getClosest(boolean left);
+	BinaryTreeEntry<K, V> getAdjacent(boolean next);
 
 	@Override
 	BinaryTreeEntry<K, V> getRoot();
@@ -82,8 +82,8 @@ public interface BinaryTreeEntry<K, V> extends BinaryTreeNode<V>, MapEntryHandle
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> getClosest(boolean left) {
-			return (BinaryTreeEntry<K, V>) super.getClosest(left);
+		public BinaryTreeEntry<K, V> getAdjacent(boolean next) {
+			return (BinaryTreeEntry<K, V>) super.getAdjacent(next);
 		}
 
 		@Override

@@ -45,7 +45,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	 * @return The value entry in this map with the given IDs
 	 */
 	default MultiEntryValueHandle<K, V> getEntryById(ElementId keyId, ElementId valueId) {
-		return new DefaultValueHandle<>(getEntryById(keyId), valueId);
+		MultiEntryHandle<K, V> entry = getEntryById(keyId);
+		return new DefaultValueHandle<>(entry, entry.getValues().getElement(valueId));
 	}
 
 	/**
@@ -65,10 +66,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	 * @return The adjacent entry, or null if the given entry is terminal in the given direction
 	 */
 	default MultiEntryHandle<K, V> getAdjacentEntry(ElementId entryId, boolean next) {
-		try (Transaction t = lock(false, null)) {
-			CollectionElement<K> keyEl = keySet().getAdjacentElement(entryId, next);
-			return keyEl == null ? null : getEntryById(keyEl.getElementId());
-		}
+		return getEntryById(entryId).getAdjacent(next);
 	}
 
 	@Override
@@ -115,9 +113,15 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	 * @return The mutable value entry in this map with the given IDs
 	 */
 	default MutableMultiMapHandle<K, V> mutableElement(ElementId keyId, ElementId valueId) {
-		MultiEntryHandle<K, V> keyElement = getEntryById(keyId);
-		MutableCollectionElement<V> valueElement = keyElement.getValues().mutableElement(valueId);
-		return new MutableMultiMapHandle<K, V>() {
+		class MutableMultiMapHandleImpl implements MutableMultiMapHandle<K, V> {
+			private final MultiEntryHandle<K, V> keyElement;
+			private final MutableCollectionElement<V> valueElement;
+
+			MutableMultiMapHandleImpl(MultiEntryHandle<K, V> keyElement, MutableCollectionElement<V> valueElement) {
+				this.keyElement = keyElement;
+				this.valueElement = valueElement;
+			}
+
 			@Override
 			public ElementId getKeyId() {
 				return keyElement.getElementId();
@@ -129,11 +133,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			}
 
 			@Override
-			public BetterCollection<V> getCollection() {
-				return keyElement.getValues();
-			}
-
-			@Override
 			public ElementId getElementId() {
 				return valueElement.getElementId();
 			}
@@ -141,6 +140,19 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			@Override
 			public V get() {
 				return valueElement.get();
+			}
+
+			@Override
+			public MutableMultiMapHandle<K, V> getAdjacent(boolean next) {
+				CollectionElement<V> adjValue = valueElement.getAdjacent(next);
+				MultiEntryHandle<K, V> adjKey = keyElement;
+				while (adjValue == null && adjKey != null) {
+					adjKey = adjKey.getAdjacent(next);
+					adjValue = adjKey.getValues().getTerminalElement(next);
+				}
+				if (adjKey == null || adjValue == null)
+					return null;
+				return new MutableMultiMapHandleImpl(adjKey, adjKey.getValues().mutableElement(adjValue.getElementId()));
 			}
 
 			@Override
@@ -173,6 +185,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 				return getKey() + "=" + get();
 			}
 		};
+		MultiEntryHandle<K, V> keyElement = getEntryById(keyId);
+		return new MutableMultiMapHandleImpl(keyElement, keyElement.getValues().mutableElement(valueId));
 	}
 
 	/**
@@ -427,14 +441,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public CollectionElement<MultiEntryHandle<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
-			try (Transaction t = lock(false, null)) {
-				CollectionElement<K> keyEl = getMap().keySet().getAdjacentElement(elementId, next);
-				return keyEl == null ? null : entryFor(getMap().getEntryById(keyEl.getElementId()));
-			}
-		}
-
-		@Override
 		public MutableCollectionElement<MultiEntryHandle<K, V>> mutableElement(ElementId id) {
 			return mutableEntryFor(getMap().getEntryById(id));
 		}
@@ -586,11 +592,15 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			return BetterSet.toString(this);
 		}
 
-		private class EntrySetElement implements CollectionElement<MultiEntryHandle<K, V>> {
+		protected class EntrySetElement implements CollectionElement<MultiEntryHandle<K, V>> {
 			final MultiEntryHandle<K, V> theEntry;
 
-			EntrySetElement(MultiEntryHandle<K, V> entry) {
+			protected EntrySetElement(MultiEntryHandle<K, V> entry) {
 				theEntry = entry;
+			}
+
+			protected MultiEntryHandle<K, V> getEntry() {
+				return theEntry;
 			}
 
 			@Override
@@ -603,14 +613,20 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 				return theEntry;
 			}
 
-			public BetterCollection<MultiEntryHandle<K, V>> getCollection() {
-				return BetterMultiMapEntrySet.this;
+			@Override
+			public CollectionElement<MultiEntryHandle<K, V>> getAdjacent(boolean next) {
+				return entryFor(theEntry.getAdjacent(next));
 			}
 		}
 
-		private class MutableEntrySetElement extends EntrySetElement implements MutableCollectionElement<MultiEntryHandle<K, V>> {
-			MutableEntrySetElement(MultiEntryHandle<K, V> entry) {
+		protected class MutableEntrySetElement extends EntrySetElement implements MutableCollectionElement<MultiEntryHandle<K, V>> {
+			protected MutableEntrySetElement(MultiEntryHandle<K, V> entry) {
 				super(entry);
+			}
+
+			@Override
+			public MutableCollectionElement<MultiEntryHandle<K, V>> getAdjacent(boolean next) {
+				return mutableEntryFor(theEntry.getAdjacent(next));
 			}
 
 			@Override
@@ -781,24 +797,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public CollectionElement<MultiEntryValueHandle<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
-			if (!(elementId instanceof KeyValueElementId))
-				throw new NoSuchElementException();
-			KeyValueElementId kvId = (KeyValueElementId) elementId;
-			ElementId keyId = kvId.keyId;
-			MultiEntryHandle<K, V> entry = getMap().getEntryById(keyId);
-			CollectionElement<V> value = entry.getValues().getAdjacentElement(kvId.valueId, next);
-			while (value == null) {
-				keyId = CollectionElement.getElementId(getMap().keySet().getAdjacentElement(entry.getElementId(), next));
-				if (keyId == null)
-					break;
-				entry = getMap().getEntryById(keyId);
-				value = entry.getValues().getTerminalElement(next);
-			}
-			return value == null ? null : entryFor(getMap().getEntryById(keyId, value.getElementId()));
-		}
-
-		@Override
 		public MutableCollectionElement<MultiEntryValueHandle<K, V>> mutableElement(ElementId id) {
 			if (!(id instanceof KeyValueElementId))
 				throw new NoSuchElementException();
@@ -837,7 +835,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 						return BetterList
 							.of(els.stream().map(valueEl -> entryFor(getMap().getEntryById(entry.getElementId(), valueEl.getElementId()))));
 
-					keyEl = getMap().keySet().getAdjacentElement(keyEl.getElementId(), true);
+					keyEl = keyEl.getAdjacent(true);
 				}
 			}
 			return BetterList.empty();
@@ -1113,12 +1111,16 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			}
 		}
 
-		class ValueHandleElement implements CollectionElement<MultiEntryValueHandle<K, V>> {
+		protected class ValueHandleElement implements CollectionElement<MultiEntryValueHandle<K, V>> {
 			final MultiEntryValueHandle<K, V> theEntry;
 			KeyValueElementId theId;
 
-			ValueHandleElement(MultiEntryValueHandle<K, V> entry) {
+			protected ValueHandleElement(MultiEntryValueHandle<K, V> entry) {
 				theEntry = entry;
+			}
+
+			protected MultiEntryValueHandle<K, V> getEntry() {
+				return theEntry;
 			}
 
 			@Override
@@ -1129,22 +1131,28 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			}
 
 			@Override
+			public CollectionElement<MultiEntryValueHandle<K, V>> getAdjacent(boolean next) {
+				return entryFor(theEntry.getAdjacent(next));
+			}
+
+			@Override
 			public MultiEntryValueHandle<K, V> get() {
 				return theEntry;
 			}
 		}
 
-		class MutableValueHandleElement extends ValueHandleElement implements MutableCollectionElement<MultiEntryValueHandle<K, V>> {
+		protected class MutableValueHandleElement extends ValueHandleElement
+			implements MutableCollectionElement<MultiEntryValueHandle<K, V>> {
 			final MutableCollectionElement<V> theValueEl;
 
-			MutableValueHandleElement(MultiEntryValueHandle<K, V> entry) {
+			protected MutableValueHandleElement(MultiEntryValueHandle<K, V> entry) {
 				super(entry);
 				theValueEl = getMap().getEntryById(entry.getKeyId()).getValues().mutableElement(entry.getElementId());
 			}
 
 			@Override
-			public BetterCollection<MultiEntryValueHandle<K, V>> getCollection() {
-				return BetterMapSingleEntryCollection.this;
+			public MutableCollectionElement<MultiEntryValueHandle<K, V>> getAdjacent(boolean next) {
+				return mutableEntryFor(theEntry.getAdjacent(next));
 			}
 
 			@Override
@@ -1252,7 +1260,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		public CollectionElement<V> getElement(V value, boolean first) {
 			CollectionElement<V> el = getTerminalElement(first);
 			while (el != null && !Objects.equals(el.get(), value))
-				el = getAdjacentElement(el.getElementId(), first);
+				el = el.getAdjacent(first);
 			return el;
 		}
 
@@ -1273,21 +1281,6 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 					return entryFor(keyEntry.getElementId(), valueEl);
 			}
 			return null;
-		}
-
-		@Override
-		public CollectionElement<V> getAdjacentElement(ElementId elementId, boolean next) {
-			if (!(elementId instanceof BetterMultiMapValueCollection.MapValueId))
-				throw new NoSuchElementException();
-			MapValueId mvi = (MapValueId) elementId;
-			MultiEntryHandle<K, V> keyEntry = theMap.getEntryById(mvi.keyId);
-			CollectionElement<V> valueEntry = keyEntry.getValues().getAdjacentElement(mvi.valueId, next);
-			while (valueEntry == null && keyEntry != null) {
-				keyEntry = theMap.getAdjacentEntry(keyEntry.getElementId(), next);
-				if (keyEntry != null)
-					valueEntry = keyEntry.getValues().getTerminalElement(next);
-			}
-			return keyEntry == null ? null : entryFor(keyEntry.getElementId(), valueEntry);
 		}
 
 		@Override
@@ -1327,7 +1320,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 						return BetterList
 							.of(els.stream().map(valueEl -> entryFor(theMap.getEntryById(entry.getElementId(), valueEl.getElementId()))));
 
-					keyEl = theMap.keySet().getAdjacentElement(keyEl.getElementId(), true);
+					keyEl = keyEl.getAdjacent(true);
 				}
 			}
 			return BetterList.empty();
@@ -1686,7 +1679,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		protected class ValueElement implements CollectionElement<V> {
 			private final MultiEntryValueHandle<K, V> theMapEntry;
 
-			ValueElement(MultiEntryValueHandle<K, V> mapEntry) {
+			protected ValueElement(MultiEntryValueHandle<K, V> mapEntry) {
 				theMapEntry = mapEntry;
 			}
 
@@ -1702,6 +1695,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			@Override
 			public V get() {
 				return theMapEntry.get();
+			}
+
+			@Override
+			public CollectionElement<V> getAdjacent(boolean next) {
+				return entryFor(theMapEntry.getAdjacent(next));
 			}
 
 			@Override
@@ -1721,7 +1719,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		class MutableValueElement extends ValueElement implements MutableCollectionElement<V> {
-			MutableValueElement(MutableMultiMapHandle<K, V> mapEntry) {
+			protected MutableValueElement(MutableMultiMapHandle<K, V> mapEntry) {
 				super(mapEntry);
 			}
 
@@ -1731,8 +1729,9 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			}
 
 			@Override
-			public BetterCollection<V> getCollection() {
-				return BetterMultiMapValueCollection.this;
+			public MutableCollectionElement<V> getAdjacent(boolean next) {
+				MutableMultiMapHandle<K, V> adj = getMapEntry().getAdjacent(next);
+				return adj == null ? null : new MutableValueElement(adj);
 			}
 
 			@Override
@@ -1770,11 +1769,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	 */
 	class DefaultValueHandle<K, V> implements MultiEntryValueHandle<K, V> {
 		private final MultiEntryHandle<K, V> theMultiEntry;
-		private final ElementId theValueId;
+		private final CollectionElement<V> theValueEl;
 
-		public DefaultValueHandle(MultiEntryHandle<K, V> multiEntry, ElementId valueId) {
+		public DefaultValueHandle(MultiEntryHandle<K, V> multiEntry, CollectionElement<V> valueEl) {
 			theMultiEntry = multiEntry;
-			theValueId = valueId;
+			theValueEl = valueEl;
 		}
 
 		@Override
@@ -1784,12 +1783,12 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 
 		@Override
 		public ElementId getElementId() {
-			return theValueId;
+			return theValueEl.getElementId();
 		}
 
 		@Override
 		public V get() {
-			return theMultiEntry.getValues().getElement(theValueId).get();
+			return theValueEl.get();
 		}
 
 		@Override
@@ -1798,18 +1797,30 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
+		public MultiEntryValueHandle<K, V> getAdjacent(boolean next) {
+			CollectionElement<V> valueAdj = theValueEl.getAdjacent(next);
+			MultiEntryHandle<K, V> entryAdj = theMultiEntry;
+			while (valueAdj == null && entryAdj != null) {
+				entryAdj = entryAdj.getAdjacent(next);
+				if (entryAdj != null)
+					valueAdj = entryAdj.getValues().getTerminalElement(next);
+			}
+			return valueAdj == null ? null : new DefaultValueHandle<>(entryAdj, valueAdj);
+		}
+
+		@Override
 		public int hashCode() {
-			return theValueId.hashCode();
+			return theValueEl.hashCode();
 		}
 
 		@Override
 		public boolean equals(Object obj) {
-			return obj instanceof DefaultValueHandle && theValueId.equals(((DefaultValueHandle<?, ?>) obj).theValueId);
+			return obj instanceof DefaultValueHandle && theValueEl.equals(((DefaultValueHandle<?, ?>) obj).theValueEl);
 		}
 
 		@Override
 		public String toString() {
-			return theValueId.toString();
+			return theValueEl.toString();
 		}
 	}
 
@@ -2027,24 +2038,22 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		class SingleEntry implements MultiEntryHandle<K, V> {
-			private final ElementId theId;
-			private final K theKey;
+			private final CollectionElement<K> theKey;
 			private final BetterCollection<V> theValues;
 
 			SingleEntry(CollectionElement<K> key, BetterCollection<V> values) {
-				theId = key.getElementId();
-				theKey = key.get();
+				theKey = key;
 				theValues = values;
 			}
 
 			@Override
 			public ElementId getElementId() {
-				return theId;
+				return theKey.getElementId();
 			}
 
 			@Override
 			public K getKey() {
-				return theKey;
+				return theKey.get();
 			}
 
 			@Override
@@ -2053,8 +2062,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			}
 
 			@Override
+			public MultiEntryHandle<K, V> getAdjacent(boolean next) {
+				return null;
+			}
+
+			@Override
 			public int hashCode() {
-				return Objects.hash(theKey, theValues);
+				return Objects.hash(theKey.get(), theValues);
 			}
 
 			@Override
@@ -2063,7 +2077,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 					return true;
 				else if (!(obj instanceof MultiMap.MultiEntry))
 					return false;
-				return theKey.equals(((MultiMap.MultiEntry<?, ?>) obj).getKey())//
+				return theKey.get().equals(((MultiMap.MultiEntry<?, ?>) obj).getKey())//
 					&& theValues.equals(((MultiMap.MultiEntry<?, ?>) obj).getValues());
 			}
 
@@ -2174,37 +2188,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		 * @return The map entry to expose as an entry of this map, backed by the multi-entry from the source
 		 */
 		protected MapEntryHandle<K, X> entryFor(MultiEntryHandle<K, V> outerHandle) {
-			return outerHandle == null ? null : new MapEntryHandle<K, X>() {
-				@Override
-				public ElementId getElementId() {
-					return outerHandle.getElementId();
-				}
-
-				@Override
-				public X get() {
-					return map(outerHandle.getValues());
-				}
-
-				@Override
-				public K getKey() {
-					return outerHandle.getKey();
-				}
-
-				@Override
-				public int hashCode() {
-					return outerHandle.hashCode();
-				}
-
-				@Override
-				public boolean equals(Object obj) {
-					return obj instanceof MapEntryHandle && Objects.equals(getKey(), ((MapEntryHandle<?, ?>) obj).getKey());
-				}
-
-				@Override
-				public String toString() {
-					return getKey() + "=" + get();
-				}
-			};
+			return outerHandle == null ? null : new SingleEntry(outerHandle);
 		}
 
 		@Override
@@ -2214,62 +2198,11 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 
 		@Override
 		public MutableMapEntryHandle<K, X> mutableEntry(ElementId entryId) {
-			return mutableEntryFor(values(), getSource().getEntryById(entryId));
+			return mutableEntryFor(getSource().getEntryById(entryId));
 		}
 
-		private MutableMapEntryHandle<K, X> mutableEntryFor(BetterCollection<X> collection, MultiEntryHandle<K, V> outerHandle) {
-			return outerHandle == null ? null : new MutableMapEntryHandle<K, X>() {
-				@Override
-				public K getKey() {
-					return outerHandle.getKey();
-				}
-
-				@Override
-				public BetterCollection<X> getCollection() {
-					return collection;
-				}
-
-				@Override
-				public ElementId getElementId() {
-					return outerHandle.getElementId();
-				}
-
-				@Override
-				public X get() {
-					return map(outerHandle.getValues());
-				}
-
-				@Override
-				public String isEnabled() {
-					return canReverse(outerHandle.getValues());
-				}
-
-				@Override
-				public String isAcceptable(X value) {
-					return canReverse(outerHandle.getValues(), value);
-				}
-
-				@Override
-				public void set(X value) throws UnsupportedOperationException, IllegalArgumentException {
-					AbstractSingleMap.this.reverse(outerHandle.getValues(), value);
-				}
-
-				@Override
-				public String canRemove() {
-					for (CollectionElement<V> valueEl : outerHandle.getValues().elements()) {
-						String msg = outerHandle.getValues().mutableElement(valueEl.getElementId()).canRemove();
-						if (msg != null)
-							return msg;
-					}
-					return null;
-				}
-
-				@Override
-				public void remove() throws UnsupportedOperationException {
-					for (CollectionElement<V> valueEl : outerHandle.getValues().elements())
-						outerHandle.getValues().mutableElement(valueEl.getElementId()).remove();
-				}
-			};
+		protected MutableMapEntryHandle<K, X> mutableEntryFor(MultiEntryHandle<K, V> outerHandle) {
+			return outerHandle == null ? null : new MutableSingleEntry(outerHandle);
 		}
 
 		@Override
@@ -2292,6 +2225,96 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		@Override
 		public String toString() {
 			return entrySet().toString();
+		}
+
+		protected class SingleEntry implements MapEntryHandle<K, X> {
+			private final MultiEntryHandle<K, V> theEntry;
+
+			protected SingleEntry(MultiEntryHandle<K, V> entry) {
+				theEntry = entry;
+			}
+
+			protected MultiEntryHandle<K, V> getEntry() {
+				return theEntry;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return theEntry.getElementId();
+			}
+
+			@Override
+			public X get() {
+				return map(theEntry.getValues());
+			}
+
+			@Override
+			public K getKey() {
+				return theEntry.getKey();
+			}
+
+			@Override
+			public MapEntryHandle<K, X> getAdjacent(boolean next) {
+				return entryFor(theEntry.getAdjacent(next));
+			}
+
+			@Override
+			public int hashCode() {
+				return theEntry.hashCode();
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof MapEntryHandle && Objects.equals(getKey(), ((MapEntryHandle<?, ?>) obj).getKey());
+			}
+
+			@Override
+			public String toString() {
+				return getKey() + "=" + get();
+			}
+		}
+
+		protected class MutableSingleEntry extends SingleEntry implements MutableMapEntryHandle<K, X> {
+			protected MutableSingleEntry(MultiEntryHandle<K, V> entry) {
+				super(entry);
+			}
+
+			@Override
+			public MutableMapEntryHandle<K, X> getAdjacent(boolean next) {
+				MultiEntryHandle<K, V> adj = getEntry().getAdjacent(next);
+				return adj == null ? null : new MutableSingleEntry(adj);
+			}
+
+			@Override
+			public String isEnabled() {
+				return canReverse(getEntry().getValues());
+			}
+
+			@Override
+			public String isAcceptable(X value) {
+				return canReverse(getEntry().getValues(), value);
+			}
+
+			@Override
+			public void set(X value) throws UnsupportedOperationException, IllegalArgumentException {
+				AbstractSingleMap.this.reverse(getEntry().getValues(), value);
+			}
+
+			@Override
+			public String canRemove() {
+				for (CollectionElement<V> valueEl : getEntry().getValues().elements()) {
+					String msg = getEntry().getValues().mutableElement(valueEl.getElementId()).canRemove();
+					if (msg != null)
+						return msg;
+				}
+				return null;
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				for (CollectionElement<V> valueEl : getEntry().getValues().elements())
+					getEntry().getValues().mutableElement(valueEl.getElementId()).remove();
+			}
 		}
 	}
 

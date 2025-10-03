@@ -55,6 +55,9 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 	 */
 	public interface TableEntry<R, C, V> extends BetterMap<C, V>, CollectionElement<R> {
 		@Override
+		TableEntry<R, C, V> getAdjacent(boolean next);
+
+		@Override
 		TableView<C, R, V> keySet();
 
 		@Override
@@ -75,9 +78,6 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 
 		@Override
 		TableValueEntry<R, C, V> getTerminalEntry(boolean first);
-
-		@Override
-		TableValueEntry<R, C, V> getAdjacentEntry(ElementId entryId, boolean next);
 
 		@Override
 		MutableTableValueEntry<R, C, V> mutableEntry(ElementId entryId);
@@ -101,6 +101,9 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 	 * @param <V> The type of values in the table
 	 */
 	public interface MutableTableEntry<R, C, V> extends TableEntry<R, C, V>, MutableCollectionElement<R> {
+		@Override
+		MutableTableEntry<R, C, V> getAdjacent(boolean next);
+
 		@Override
 		String canRemove();
 
@@ -133,6 +136,9 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 	 * @param <V> The type of values in the table
 	 */
 	public interface TableValueEntry<R, C, V> extends MapEntryHandle<C, V> {
+		@Override
+		TableValueEntry<R, C, V> getAdjacent(boolean next);
+
 		/** @return The row in the table that this entry is for */
 		R getRow();
 
@@ -172,6 +178,9 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 	 */
 	public interface MutableTableValueEntry<R, C, V> extends TableValueEntry<R, C, V>, MutableMapEntryHandle<C, V> {
 		@Override
+		MutableTableValueEntry<R, C, V> getAdjacent(boolean next);
+
+		@Override
 		default MutableTableValueEntry<R, C, V> reverse() {
 			return new ReversedMutableTableValueEntry<>(this);
 		}
@@ -205,9 +214,6 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 
 		@Override
 		TableEntry<R, C, V> getTerminalElement(boolean first);
-
-		@Override
-		TableEntry<R, C, V> getAdjacentElement(ElementId elementId, boolean next);
 
 		@Override
 		MutableTableEntry<R, C, V> mutableElement(ElementId id);
@@ -336,11 +342,6 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 		}
 
 		@Override
-		public TableEntry<R, C, V> getAdjacentElement(ElementId elementId, boolean next) {
-			return (TableEntry<R, C, V>) super.getAdjacentElement(elementId, next);
-		}
-
-		@Override
 		public MutableTableEntry<R, C, V> mutableElement(ElementId id) {
 			return (MutableTableEntry<R, C, V>) super.mutableElement(id);
 		}
@@ -402,6 +403,12 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 		}
 
 		@Override
+		public TableEntry<R, C, V> getAdjacent(boolean next) {
+			TableEntry<R, C, V> adj = getWrapped().getAdjacent(!next);
+			return adj == null ? null : new ReversedTableEntry<>(adj);
+		}
+
+		@Override
 		public TableValueEntry<R, C, V> putEntry(C key, V value, ElementId after, ElementId before, boolean first) {
 			return (TableValueEntry<R, C, V>) super.putEntry(key, value, after, before, first);
 		}
@@ -429,11 +436,6 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 		@Override
 		public TableValueEntry<R, C, V> getTerminalEntry(boolean first) {
 			return (TableValueEntry<R, C, V>) super.getTerminalEntry(first);
-		}
-
-		@Override
-		public TableValueEntry<R, C, V> getAdjacentEntry(ElementId entryId, boolean next) {
-			return (TableValueEntry<R, C, V>) super.getAdjacentEntry(entryId, next);
 		}
 
 		@Override
@@ -468,8 +470,9 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 		}
 
 		@Override
-		public BetterCollection<R> getCollection() {
-			return getWrapped().getCollection().reverse();
+		public MutableTableEntry<R, C, V> getAdjacent(boolean next) {
+			MutableTableEntry<R, C, V> adj = getWrapped().getAdjacent(!next);
+			return adj == null ? null : new ReversedMutableTableEntry<>(adj);
 		}
 
 		@Override
@@ -529,6 +532,12 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 		}
 
 		@Override
+		public TableValueEntry<R, C, V> getAdjacent(boolean next) {
+			TableValueEntry<R, C, V> adj = getWrapped().getAdjacent(!next);
+			return adj == null ? null : new ReversedTableValueEntry<>(adj);
+		}
+
+		@Override
 		public R getRow() {
 			return getWrapped().getRow();
 		}
@@ -576,8 +585,9 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 		}
 
 		@Override
-		public BetterCollection<V> getCollection() {
-			return getWrapped().getCollection().reverse();
+		public ReversedMutableTableValueEntry<R, C, V> getAdjacent(boolean next) {
+			MutableTableValueEntry<R, C, V> adj = getWrapped().getAdjacent(!next);
+			return adj == null ? null : new ReversedMutableTableValueEntry<>(adj);
 		}
 
 		@Override

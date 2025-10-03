@@ -278,7 +278,7 @@ public interface SessionValues {
 			theValues = BetterHashMap.build().build();
 			for (MapEntryHandle<String, ValueContainer> entry = theParent.theValues.getTerminalEntry(true); //
 				entry != null; //
-				entry = theParent.theValues.getAdjacentEntry(entry.getElementId(), true)) {
+				entry = entry.getAdjacent(true)) {
 				if (entry.getValue().getSource() != ValueSource.Local)
 					theValues.put(entry.getKey(), new Inherited(entry));
 			}

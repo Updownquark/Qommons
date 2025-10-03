@@ -20,6 +20,9 @@ public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, Mutab
 	}
 
 	@Override
+	MutableMapEntryHandle<K, V> getAdjacent(boolean next);
+
+	@Override
 	default MutableMapEntryHandle<K, V> reverse() {
 		return new ReversedMutableMapEntryHandle<>(this);
 	}
@@ -27,6 +30,16 @@ public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, Mutab
 	@Override
 	default MapEntryHandle<K, V> immutable() {
 		return new ImmutableMapEntryHandle<>(this);
+	}
+
+	/**
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type of the entry
+	 * @param entry The entry to reverse
+	 * @return The reversed entry, or null if entry was null
+	 */
+	static <K, V> MutableMapEntryHandle<K, V> reverse(MutableMapEntryHandle<K, V> entry) {
+		return entry == null ? null : entry.reverse();
 	}
 
 	/**
@@ -53,6 +66,11 @@ public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, Mutab
 		@Override
 		public K getKey() {
 			return getWrapped().getKey();
+		}
+
+		@Override
+		public MutableMapEntryHandle<K, V> getAdjacent(boolean next) {
+			return MutableMapEntryHandle.reverse(getWrapped().getAdjacent(!next));
 		}
 
 		@Override
@@ -94,6 +112,12 @@ public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, Mutab
 		}
 
 		@Override
+		public MapEntryHandle<K, V> getAdjacent(boolean next) {
+			MutableMapEntryHandle<K, V> adj = getWrapped().getAdjacent(next);
+			return adj == null ? null : new ImmutableMapEntryHandle<>(adj);
+		}
+
+		@Override
 		public int hashCode() {
 			return theWrapped.hashCode();
 		}
@@ -109,15 +133,5 @@ public interface MutableMapEntryHandle<K, V> extends MapEntryHandle<K, V>, Mutab
 		public String toString() {
 			return getKey() + "=" + get();
 		}
-	}
-
-	/**
-	 * @param <K> The key type of the entry
-	 * @param <V> The value type of the entry
-	 * @param entry The entry to reverse
-	 * @return The reversed entry, or null if entry was null
-	 */
-	static <K, V> MutableMapEntryHandle<K, V> reverse(MutableMapEntryHandle<K, V> entry) {
-		return entry == null ? null : entry.reverse();
 	}
 }

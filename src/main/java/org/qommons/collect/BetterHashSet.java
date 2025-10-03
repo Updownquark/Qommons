@@ -370,12 +370,6 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 	}
 
 	@Override
-	public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-		HashEntry entry = ((HashId) elementId).entry;
-		return MutableCollectionElement.immutable(next ? entry.next : entry.previous);
-	}
-
-	@Override
 	public String canAdd(E value, ElementId after, ElementId before) {
 		return getEntry(theHasher.applyAsInt(value), equalsTest(value)) == null ? null : StdMsg.ELEMENT_EXISTS;
 	}
@@ -509,9 +503,9 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 		throws UnsupportedOperationException, IllegalArgumentException {
 		checkIntegrity();
 		if (valueEl.equals(after))
-			after = CollectionElement.getElementId(getAdjacentElement(after, false));
+			after = CollectionElement.getElementId(getElement(after).getAdjacent(false));
 		if (valueEl.equals(before))
-			before = CollectionElement.getElementId(getAdjacentElement(before, true));
+			before = CollectionElement.getElementId(getElement(before).getAdjacent(true));
 		HashId hashId = (BetterHashSet<E>.HashId) valueEl;
 		if (!hashId.isPresent())
 			throw new NoSuchElementException("Element has been removed");
@@ -538,8 +532,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 			else
 				theLast = entry.previous;
 			HashEntry newEntry;
-			ElementId prevTreeEntry = CollectionElement
-				.getElementId(entry.theTableEntry.entries.getAdjacentElement(entry.theTreeNode.getElementId(), false));
+			ElementId prevTreeEntry = CollectionElement.getElementId(entry.theTreeNode.getAdjacent(false));
 			entry.theTreeNode.remove();
 			entry.next = entry.previous = null;
 			if (afterRemove != null) {
@@ -778,11 +771,6 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 		}
 
 		@Override
-		public BetterCollection<E> getCollection() {
-			return BetterHashSet.this;
-		}
-
-		@Override
 		public ElementId getElementId() {
 			return new HashId(this);
 		}
@@ -797,6 +785,11 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 		@Override
 		public E get() {
 			return theValue;
+		}
+
+		@Override
+		public MutableCollectionElement<E> getAdjacent(boolean nextEl) {
+			return nextEl ? next : previous;
 		}
 
 		boolean isValid() {
@@ -960,15 +953,15 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 			while (ctx.getAsBoolean() && node2 != null && node2.get().hashCode() == hashCode) {
 				if (equals.test(node2.get().get()))
 					return node2.get();
-				node2 = node2.getClosest(true);
+				node2 = node2.getAdjacent(false);
 			}
 			if (!ctx.getAsBoolean())
 				return null;
-			node2 = node.getClosest(false);
+			node2 = node.getAdjacent(true);
 			while (ctx.getAsBoolean() && node2 != null && node2.get().hashCode() == hashCode) {
 				if (equals.test(node2.get().get()))
 					return node2.get();
-				node2 = node2.getClosest(false);
+				node2 = node2.getAdjacent(true);
 			}
 			return node2 == null ? null : node2.get();
 		}

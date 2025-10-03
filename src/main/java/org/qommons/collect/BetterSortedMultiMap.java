@@ -28,6 +28,31 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		return new BetterSortedMultiMapEntrySet<>(this);
 	}
 
+	@Override
+	default OrderedMultiEntry<K, V> getEntryById(ElementId keyId) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	default OrderedMultiEntry<K, V> getTerminalEntry(boolean first) {
+		return (OrderedMultiEntry<K, V>) BetterMultiMap.super.getTerminalEntry(first);
+	}
+
+	@Override
+	default OrderedMultiEntry<K, V> getAdjacentEntry(ElementId entryId, boolean next) {
+		return getEntryById(entryId).getAdjacent(next);
+	}
+
+	@Override
+	default OrderedMultiEntry<K, V> getEntry(K key) {
+		return (OrderedMultiEntry<K, V>) BetterMultiMap.super.getEntry(key);
+	}
+
+	@Override
+	OrderedMultiEntry<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
+		ElementId beforeKey, boolean first, Runnable preAdd, Runnable postAdd);
+
 	/**
 	 * Searches this sorted map for a value
 	 *
@@ -168,7 +193,27 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public CollectionElement<MultiEntryHandle<K, V>> search(Comparable<? super MultiEntryHandle<K, V>> search,
+		public ListElement<MultiEntryHandle<K, V>> getElement(MultiEntryHandle<K, V> value, boolean first) {
+			return (ListElement<MultiEntryHandle<K, V>>) super.getElement(value, first);
+		}
+
+		@Override
+		public ListElement<MultiEntryHandle<K, V>> getElement(ElementId id) {
+			return (ListElement<MultiEntryHandle<K, V>>) super.getElement(id);
+		}
+
+		@Override
+		public ListElement<MultiEntryHandle<K, V>> getTerminalElement(boolean first) {
+			return (ListElement<MultiEntryHandle<K, V>>) super.getTerminalElement(first);
+		}
+
+		@Override
+		public MutableListElement<MultiEntryHandle<K, V>> mutableElement(ElementId id) {
+			return mutableEntryFor(getMap().getEntryById(id));
+		}
+
+		@Override
+		public ListElement<MultiEntryHandle<K, V>> search(Comparable<? super MultiEntryHandle<K, V>> search,
 			SortedSearchFilter filter) {
 			TempEntry temp = new TempEntry();
 			CollectionElement<K> keyEl = getMap().keySet().search(key -> {
@@ -179,18 +224,8 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public CollectionElement<MultiEntryHandle<K, V>> getElement(int index) throws IndexOutOfBoundsException {
+		public ListElement<MultiEntryHandle<K, V>> getElement(int index) throws IndexOutOfBoundsException {
 			return entryFor(getMap().getEntryById(getMap().keySet().getElement(index).getElementId()));
-		}
-
-		@Override
-		public int getElementsBefore(ElementId id) {
-			return getMap().keySet().getElementsBefore(id);
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
-			return getMap().keySet().getElementsAfter(id);
 		}
 
 		@Override
@@ -200,6 +235,34 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 				temp.key = key;
 				return search.compareTo(temp);
 			});
+		}
+
+		@Override
+		public ListElement<MultiEntryHandle<K, V>> addElement(MultiEntryHandle<K, V> value, ElementId after, ElementId before,
+			boolean first) throws UnsupportedOperationException, IllegalArgumentException {
+			return (ListElement<MultiEntryHandle<K, V>>) super.addElement(value, after, before, first);
+		}
+
+		@Override
+		public ListElement<MultiEntryHandle<K, V>> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
+			Runnable afterRemove) throws UnsupportedOperationException, IllegalArgumentException {
+			return (ListElement<MultiEntryHandle<K, V>>) super.move(valueEl, after, before, first, afterRemove);
+		}
+
+		@Override
+		public ListElement<MultiEntryHandle<K, V>> getOrAdd(MultiEntryHandle<K, V> value, ElementId after, ElementId before, boolean first,
+			Runnable preAdd, Runnable postAdd) {
+			return (ListElement<MultiEntryHandle<K, V>>) super.getOrAdd(value, after, before, first, preAdd, postAdd);
+		}
+
+		@Override
+		protected ListElement<MultiEntryHandle<K, V>> entryFor(MultiEntryHandle<K, V> entry) {
+			return entry == null ? null : new OrderedEntrySetElement((OrderedMultiEntry<K, V>) entry);
+		}
+
+		@Override
+		protected MutableListElement<MultiEntryHandle<K, V>> mutableEntryFor(MultiEntryHandle<K, V> entry) {
+			return entry == null ? null : new OrderedMutableEntrySetElement((OrderedMultiEntry<K, V>) entry);
 		}
 
 		class TempEntry implements MultiEntryHandle<K, V> {
@@ -218,6 +281,63 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 			@Override
 			public BetterCollection<V> getValues() {
 				throw new IllegalStateException("This method may not be called from a search");
+			}
+
+			@Override
+			public MultiEntryHandle<K, V> getAdjacent(boolean next) {
+				throw new IllegalStateException("This method may not be called from a search");
+			}
+		}
+
+		class OrderedEntrySetElement extends EntrySetElement implements ListElement<MultiEntryHandle<K, V>> {
+			public OrderedEntrySetElement(OrderedMultiEntry<K, V> entry) {
+				super(entry);
+			}
+
+			@Override
+			protected OrderedMultiEntry<K, V> getEntry() {
+				return (OrderedMultiEntry<K, V>) super.getEntry();
+			}
+
+			@Override
+			public ListElement<MultiEntryHandle<K, V>> getAdjacent(boolean next) {
+				return entryFor(getEntry().getAdjacent(next));
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return getEntry().getElementsBefore();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return getEntry().getElementsAfter();
+			}
+		}
+
+		class OrderedMutableEntrySetElement extends MutableEntrySetElement implements MutableListElement<MultiEntryHandle<K, V>> {
+			public OrderedMutableEntrySetElement(OrderedMultiEntry<K, V> entry) {
+				super(entry);
+			}
+
+			@Override
+			protected OrderedMultiEntry<K, V> getEntry() {
+				return (OrderedMultiEntry<K, V>) super.getEntry();
+			}
+
+			@Override
+			public MutableListElement<MultiEntryHandle<K, V>> getAdjacent(boolean next) {
+				return mutableEntryFor(getEntry().getAdjacent(next));
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return getEntry().getElementsBefore();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return getEntry().getElementsAfter();
 			}
 		}
 	}
@@ -244,10 +364,98 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
+		public OrderedMapEntry<K, V> getEntry(K key) {
+			return (OrderedMapEntry<K, V>) super.getEntry(key);
+		}
+
+		@Override
+		public OrderedMapEntry<K, V> getEntryById(ElementId entryId) {
+			return (OrderedMapEntry<K, V>) super.getEntryById(entryId);
+		}
+
+		@Override
+		public OrderedMapEntry<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
 			try (Transaction t = lock(false, null)) {
 				MultiEntryHandle<K, V> entry = getSource().searchEntries(e -> search.compareTo(entryFor(e)), filter);
 				return entryFor(entry);
+			}
+		}
+
+		@Override
+		public OrderedMapEntry<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+			return (OrderedMapEntry<K, V>) super.putEntry(key, value, after, before, first);
+		}
+
+		@Override
+		public OrderedMapEntry<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId afterKey, ElementId beforeKey,
+			boolean first, Runnable preAdd, Runnable postAdd) {
+			return (OrderedMapEntry<K, V>) super.getOrPutEntry(key, value, afterKey, beforeKey, first, preAdd, postAdd);
+		}
+
+		@Override
+		public MutableOrderedMapEntry<K, V> mutableEntry(ElementId entryId) {
+			return mutableEntryFor(getSource().getEntryById(entryId));
+		}
+
+		@Override
+		protected OrderedMapEntry<K, V> entryFor(MultiEntryHandle<K, V> outerHandle) {
+			return outerHandle == null ? null : new OrderedSingleEntry((OrderedMultiEntry<K, V>) outerHandle);
+		}
+
+		@Override
+		protected MutableOrderedMapEntry<K, V> mutableEntryFor(MultiEntryHandle<K, V> outerHandle) {
+			return outerHandle == null ? null : new MutableOrderedSingleEntry((OrderedMultiEntry<K, V>) outerHandle);
+		}
+
+		class OrderedSingleEntry extends SingleEntry implements OrderedMapEntry<K, V> {
+			protected OrderedSingleEntry(OrderedMultiEntry<K, V> entry) {
+				super(entry);
+			}
+
+			@Override
+			protected OrderedMultiEntry<K, V> getEntry() {
+				return (OrderedMultiEntry<K, V>) super.getEntry();
+			}
+
+			@Override
+			public OrderedMapEntry<K, V> getAdjacent(boolean next) {
+				return entryFor(getEntry().getAdjacent(next));
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return getEntry().getElementsBefore();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return getEntry().getElementsAfter();
+			}
+		}
+
+		class MutableOrderedSingleEntry extends MutableSingleEntry implements MutableOrderedMapEntry<K, V> {
+			protected MutableOrderedSingleEntry(OrderedMultiEntry<K, V> entry) {
+				super(entry);
+			}
+
+			@Override
+			protected OrderedMultiEntry<K, V> getEntry() {
+				return (OrderedMultiEntry<K, V>) super.getEntry();
+			}
+
+			@Override
+			public MutableOrderedMapEntry<K, V> getAdjacent(boolean next) {
+				return mutableEntryFor(getEntry().getAdjacent(next));
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return getEntry().getElementsBefore();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return getEntry().getElementsAfter();
 			}
 		}
 	}
@@ -319,9 +527,96 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public MapEntryHandle<K, X> searchEntries(Comparable<? super Map.Entry<K, X>> search, SortedSearchFilter filter) {
-			CollectionElement<Map.Entry<K, X>> entry = entrySet().search(search, filter);
-			return entry == null ? null : getEntryById(entry.getElementId());
+		public OrderedMapEntry<K, X> getEntry(K key) {
+			return (OrderedMapEntry<K, X>) super.getEntry(key);
+		}
+
+		@Override
+		public OrderedMapEntry<K, X> getEntryById(ElementId entryId) {
+			return (OrderedMapEntry<K, X>) super.getEntryById(entryId);
+		}
+
+		@Override
+		public OrderedMapEntry<K, X> searchEntries(Comparable<? super Map.Entry<K, X>> search, SortedSearchFilter filter) {
+			return entryFor(getSource().searchEntries(entry -> search.compareTo(entryFor(entry)), filter));
+		}
+
+		@Override
+		public OrderedMapEntry<K, X> putEntry(K key, X value, ElementId after, ElementId before, boolean first) {
+			return (OrderedMapEntry<K, X>) super.putEntry(key, value, after, before, first);
+		}
+
+		@Override
+		public OrderedMapEntry<K, X> getOrPutEntry(K key, Function<? super K, ? extends X> value, ElementId afterKey, ElementId beforeKey,
+			boolean first, Runnable preAdd, Runnable postAdd) {
+			return (OrderedMapEntry<K, X>) super.getOrPutEntry(key, value, afterKey, beforeKey, first, preAdd, postAdd);
+		}
+
+		@Override
+		public MutableOrderedMapEntry<K, X> mutableEntry(ElementId entryId) {
+			return mutableEntryFor(getSource().getEntryById(entryId));
+		}
+
+		@Override
+		protected OrderedMapEntry<K, X> entryFor(MultiEntryHandle<K, V> outerHandle) {
+			return outerHandle == null ? null : new OrderedSingleEntry((OrderedMultiEntry<K, V>) outerHandle);
+		}
+
+		@Override
+		protected MutableOrderedMapEntry<K, X> mutableEntryFor(MultiEntryHandle<K, V> outerHandle) {
+			return outerHandle == null ? null : new MutableOrderedSingleEntry((OrderedMultiEntry<K, V>) outerHandle);
+		}
+
+		class OrderedSingleEntry extends SingleEntry implements OrderedMapEntry<K, X> {
+			protected OrderedSingleEntry(OrderedMultiEntry<K, V> entry) {
+				super(entry);
+			}
+
+			@Override
+			protected OrderedMultiEntry<K, V> getEntry() {
+				return (OrderedMultiEntry<K, V>) super.getEntry();
+			}
+
+			@Override
+			public OrderedMapEntry<K, X> getAdjacent(boolean next) {
+				return entryFor(getEntry().getAdjacent(next));
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return getEntry().getElementsBefore();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return getEntry().getElementsAfter();
+			}
+		}
+
+		class MutableOrderedSingleEntry extends MutableSingleEntry implements MutableOrderedMapEntry<K, X> {
+			protected MutableOrderedSingleEntry(OrderedMultiEntry<K, V> entry) {
+				super(entry);
+			}
+
+			@Override
+			protected OrderedMultiEntry<K, V> getEntry() {
+				return (OrderedMultiEntry<K, V>) super.getEntry();
+			}
+
+			@Override
+			public MutableOrderedMapEntry<K, X> getAdjacent(boolean next) {
+				return mutableEntryFor(getEntry().getAdjacent(next));
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return getEntry().getElementsBefore();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return getEntry().getElementsAfter();
+			}
 		}
 	}
 
@@ -357,9 +652,20 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
+		public OrderedMultiEntry<K, V> getEntryById(ElementId keyId) {
+			return (OrderedMultiEntry<K, V>) super.getEntryById(keyId);
+		}
+
+		@Override
 		public MultiEntryHandle<K, V> searchEntries(Comparable<? super MultiEntryHandle<K, V>> search,
 			BetterSortedList.SortedSearchFilter filter) {
 			return MultiEntryHandle.reverse(getSource().searchEntries(e -> -search.compareTo(e.reverse()), filter.opposite()));
+		}
+
+		@Override
+		public OrderedMultiEntry<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
+			ElementId beforeKey, boolean first, Runnable preAdd, Runnable postAdd) {
+			return (OrderedMultiEntry<K, V>) super.getOrPutEntry(key, value, afterKey, beforeKey, first, preAdd, postAdd);
 		}
 
 		@Override
@@ -459,7 +765,7 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public MultiEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
+		public OrderedMultiEntry<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
 			ElementId beforeKey, boolean first, Runnable preAdd, Runnable postAdd) {
 			return theWrapped.getOrPutEntry(key, value, afterKey, beforeKey, first, preAdd, postAdd);
 		}
@@ -472,10 +778,10 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 				return 0;
 			while (theUpperBound.compareTo(entry.getKey()) >= 0) {
 				vs += entry.getValues().size();
-				CollectionElement<K> keyEl = getWrapped().keySet().getAdjacentElement(entry.getElementId(), true);
-				if (keyEl == null)
+				MultiEntryHandle<K, V> adj = entry.getAdjacent(true);
+				if (adj == null)
 					break;
-				entry = getWrapped().getEntryById(keyEl.getElementId());
+				entry = adj;
 			}
 			return vs;
 		}
@@ -493,17 +799,17 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 					if (!cleared && !entry.getElementId().isPresent() || entry.getValues().size() < preSize)
 						cleared = true;
 
-					CollectionElement<K> keyEl = getWrapped().keySet().getAdjacentElement(entry.getElementId(), true);
-					if (keyEl == null)
+					MultiEntryHandle<K, V> adj = entry.getAdjacent(true);
+					if (adj == null)
 						break;
-					entry = getWrapped().getEntryById(keyEl.getElementId());
+					entry = adj;
 				}
 				return cleared;
 			}
 		}
 
 		@Override
-		public MultiEntryHandle<K, V> getEntry(K key) {
+		public OrderedMultiEntry<K, V> getEntry(K key) {
 			return theWrapped.getEntry(key);
 		}
 
@@ -516,9 +822,8 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public MultiEntryHandle<K, V> getEntryById(ElementId entryId) {
-			MultiEntryHandle<K, V> entry = theWrapped.getEntryById(entryId);
-			return entry;
+		public OrderedMultiEntry<K, V> getEntryById(ElementId entryId) {
+			return theWrapped.getEntryById(entryId);
 		}
 
 		public int isInRange(K value) {

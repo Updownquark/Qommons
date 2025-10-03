@@ -11,6 +11,7 @@ import org.junit.Test;
 import org.qommons.LambdaUtils;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
+import org.qommons.collect.ListElement;
 import org.qommons.collect.ValueStoredCollection;
 import org.qommons.testing.QommonsTestUtils;
 import org.qommons.testing.TestHelper;
@@ -322,7 +323,7 @@ public class TreeUtilsTest {
 			ValueStoredCollection.RepairListener<IntHolder, Void> repair = new ValueStoredCollection.RepairListener<IntHolder, Void>() {
 				@Override
 				public Void removed(CollectionElement<IntHolder> element) {
-					copy.remove(set.getElementsBefore(element.getElementId()));
+					copy.remove(((ListElement<IntHolder>) element).getElementsBefore());
 					return null;
 				}
 
@@ -332,7 +333,7 @@ public class TreeUtilsTest {
 
 				@Override
 				public void transferred(CollectionElement<IntHolder> element, Void data) {
-					copy.add(set.getElementsBefore(element.getElementId()), element.get().value);
+					copy.add(((ListElement<IntHolder>) element).getElementsBefore(), element.get().value);
 				}
 			};
 

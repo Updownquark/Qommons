@@ -142,15 +142,36 @@ public class BetterCollections {
 	}
 
 	/**
+	 * This is needed because the standard map entry defines {@link java.util.Map.Entry#setValue(Object) setValue(Object)}, which may be
+	 * supported without needed to retrieve the mutable entry.
+	 * 
 	 * @param <K> The key type of the map
 	 * @param <V> The value type of the map
-	 * @param values The {@link BetterMap#values() values} of the map
+	 * @param entry The map entry to get an unmodifiable view of
+	 * @return An OrderedMapEntry backed by the given entry but though which the source entry cannot be modified in any way
+	 */
+	protected static <K, V> OrderedMapEntry<K, V> unmodifiableOrderedEntry(OrderedMapEntry<? extends K, ? extends V> entry) {
+		return entry == null ? null : new UnmodifiableOrderedEntry<>(entry);
+	}
+
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
 	 * @param entry The map entry to get an unmodifiable view of
 	 * @return A MutableMapEntryHandle backed by the given entry but through which the source entry cannot be modified in any way
 	 */
-	protected static <K, V> MutableMapEntryHandle<K, V> unmodifiableMutableEntry(BetterCollection<? extends V> values,
-		MapEntryHandle<? extends K, ? extends V> entry) {
-		return entry == null ? null : new UnmodifiableMutableEntry<>(values, entry);
+	protected static <K, V> MutableMapEntryHandle<K, V> unmodifiableMutableEntry(MapEntryHandle<? extends K, ? extends V> entry) {
+		return entry == null ? null : new UnmodifiableMutableEntry<>(entry);
+	}
+
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param entry The map entry to get an unmodifiable view of
+	 * @return A MutableOrderedMapEntry backed by the given entry but through which the source entry cannot be modified in any way
+	 */
+	protected static <K, V> MutableOrderedMapEntry<K, V> unmodifiableMutableOrderedEntry(OrderedMapEntry<? extends K, ? extends V> entry) {
+		return entry == null ? null : new UnmodifiableMutableOrderedEntry<>(entry);
 	}
 
 	/**
@@ -282,11 +303,6 @@ public class BetterCollections {
 		}
 
 		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			return (CollectionElement<E>) theWrapped.getAdjacentElement(elementId, next);
-		}
-
-		@Override
 		public MutableCollectionElement<E> mutableElement(ElementId id) {
 			return new UnmodifiableElementWrapper<>(this, theWrapped.getElement(id));
 		}
@@ -377,6 +393,11 @@ public class BetterCollections {
 			theWrapped = wrapped;
 		}
 
+		/** @return The wrapped collection element */
+		protected CollectionElement<? extends E> getWrapped() {
+			return theWrapped;
+		}
+
 		@Override
 		public ElementId getElementId() {
 			return theWrapped.getElementId();
@@ -387,9 +408,15 @@ public class BetterCollections {
 			return theWrapped.get();
 		}
 
-		@Override
-		public BetterCollection<E> getCollection() {
+		/** @return The unmodifiable collection this element is a member of */
+		protected BetterCollection<E> getCollection() {
 			return theCollection;
+		}
+
+		@Override
+		public MutableCollectionElement<E> getAdjacent(boolean next) {
+			CollectionElement<? extends E> adj = theWrapped.getAdjacent(next);
+			return adj == null ? null : new UnmodifiableElementWrapper<>(theCollection, adj);
 		}
 
 		@Override
@@ -499,8 +526,23 @@ public class BetterCollections {
 		}
 
 		@Override
-		public CollectionElement<E> getElement(int index) {
-			return (CollectionElement<E>) getWrapped().getElement(index);
+		public ListElement<E> getElement(E value, boolean first) {
+			return (ListElement<E>) super.getElement(value, first);
+		}
+
+		@Override
+		public ListElement<E> getElement(ElementId id) {
+			return (ListElement<E>) super.getElement(id);
+		}
+
+		@Override
+		public ListElement<E> getTerminalElement(boolean first) {
+			return (ListElement<E>) super.getTerminalElement(first);
+		}
+
+		@Override
+		public ListElement<E> getElement(int index) {
+			return (ListElement<E>) getWrapped().getElement(index);
 		}
 
 		@Override
@@ -509,13 +551,61 @@ public class BetterCollections {
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
-			return getWrapped().getElementsBefore(id);
+		public MutableListElement<E> mutableElement(ElementId id) {
+			return new UnmodifiableListElementWrapper<>(this, getWrapped().getElement(id));
 		}
 
 		@Override
-		public int getElementsAfter(ElementId id) {
-			return getWrapped().getElementsAfter(id);
+		public ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return (ListElement<E>) super.addElement(value, after, before, first);
+		}
+
+		@Override
+		public ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return (ListElement<E>) super.move(valueEl, after, before, first, afterRemove);
+		}
+	}
+
+	/**
+	 * A wrapper implementation of {@link MutableListElement} that does not permit modification
+	 * 
+	 * @param <E> The type of value in the element
+	 */
+	public static class UnmodifiableListElementWrapper<E> extends UnmodifiableElementWrapper<E> implements MutableListElement<E> {
+		/**
+		 * @param collection The unmodifiable list this element belongs to
+		 * @param wrapped The element to wrap
+		 */
+		protected UnmodifiableListElementWrapper(UnmodifiableBetterList<E> collection, ListElement<? extends E> wrapped) {
+			super(collection, wrapped);
+		}
+
+		@Override
+		protected ListElement<? extends E> getWrapped() {
+			return (ListElement<? extends E>) super.getWrapped();
+		}
+
+		@Override
+		public UnmodifiableBetterList<E> getCollection() {
+			return (UnmodifiableBetterList<E>) super.getCollection();
+		}
+
+		@Override
+		public MutableListElement<E> getAdjacent(boolean next) {
+			ListElement<? extends E> adj = getWrapped().getAdjacent(next);
+			return adj == null ? null : new UnmodifiableListElementWrapper<>(getCollection(), adj);
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return getWrapped().getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return getWrapped().getElementsAfter();
 		}
 	}
 
@@ -541,8 +631,8 @@ public class BetterCollections {
 		}
 
 		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
-			return (CollectionElement<E>) getWrapped().search(search, filter);
+		public ListElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
+			return (ListElement<E>) getWrapped().search(search, filter);
 		}
 
 		@Override
@@ -551,7 +641,7 @@ public class BetterCollections {
 		}
 
 		@Override
-		public CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
+		public ListElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
 			return getElement(value, first);
 		}
 
@@ -652,7 +742,7 @@ public class BetterCollections {
 
 		@Override
 		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
-			return unmodifiableMutableEntry(theWrapped.values(), theWrapped.getEntryById(entryId));
+			return unmodifiableMutableEntry(theWrapped.getEntryById(entryId));
 		}
 
 		@Override
@@ -704,8 +794,34 @@ public class BetterCollections {
 		}
 
 		@Override
-		public MapEntryHandle<K, V> searchEntries(Comparable<? super Entry<K, V>> search, BetterSortedList.SortedSearchFilter filter) {
-			return unmodifiableEntry(getWrapped().searchEntries(entry -> search.compareTo((Map.Entry<K, V>) entry), filter));
+		public OrderedMapEntry<K, V> getEntry(K key) {
+			return unmodifiableOrderedEntry(((BetterSortedMap<K, V>) getWrapped()).getEntry(key));
+		}
+
+		@Override
+		public OrderedMapEntry<K, V> getEntryById(ElementId entryId) {
+			return unmodifiableOrderedEntry(getWrapped().getEntryById(entryId));
+		}
+
+		@Override
+		public OrderedMapEntry<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
+			boolean first, Runnable preAdd, Runnable postAdd) {
+			return getEntry(key);
+		}
+
+		@Override
+		public MutableOrderedMapEntry<K, V> mutableEntry(ElementId entryId) {
+			return unmodifiableMutableOrderedEntry(getWrapped().getEntryById(entryId));
+		}
+
+		@Override
+		public OrderedMapEntry<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
+		public OrderedMapEntry<K, V> searchEntries(Comparable<? super Entry<K, V>> search, BetterSortedList.SortedSearchFilter filter) {
+			return unmodifiableOrderedEntry(getWrapped().searchEntries(entry -> search.compareTo((Map.Entry<K, V>) entry), filter));
 		}
 	}
 
@@ -721,6 +837,11 @@ public class BetterCollections {
 		/** @param wrapped The map entry to wrap */
 		protected UnmodifiableEntry(MapEntryHandle<? extends K, ? extends V> wrapped) {
 			theWrapped = wrapped;
+		}
+
+		/** @return The wrapped entry */
+		protected MapEntryHandle<? extends K, ? extends V> getWrapped() {
+			return theWrapped;
 		}
 
 		@Override
@@ -739,6 +860,12 @@ public class BetterCollections {
 		}
 
 		@Override
+		public MapEntryHandle<K, V> getAdjacent(boolean next) {
+			MapEntryHandle<? extends K, ? extends V> adj = theWrapped.getAdjacent(next);
+			return adj == null ? null : new UnmodifiableEntry<>(adj);
+		}
+
+		@Override
 		public int hashCode() {
 			return theWrapped.hashCode();
 		}
@@ -754,6 +881,32 @@ public class BetterCollections {
 		}
 	}
 
+	public static class UnmodifiableOrderedEntry<K, V> extends UnmodifiableEntry<K, V> implements OrderedMapEntry<K, V> {
+		public UnmodifiableOrderedEntry(OrderedMapEntry<? extends K, ? extends V> wrapped) {
+			super(wrapped);
+		}
+
+		@Override
+		protected OrderedMapEntry<? extends K, ? extends V> getWrapped() {
+			return (OrderedMapEntry<? extends K, ? extends V>) super.getWrapped();
+		}
+
+		@Override
+		public OrderedMapEntry<K, V> getAdjacent(boolean next) {
+			OrderedMapEntry<? extends K, ? extends V> adj = getWrapped().getAdjacent(next);
+			return adj == null ? null : new UnmodifiableOrderedEntry<>(adj);
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return getWrapped().getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return getWrapped().getElementsAfter();
+		}
+	}
 	/**
 	 * Implements {@link MutableMapEntryHandle} for unmodifiable maps
 	 * 
@@ -761,20 +914,15 @@ public class BetterCollections {
 	 * @param <V> The value type of the map
 	 */
 	public static class UnmodifiableMutableEntry<K, V> extends UnmodifiableEntry<K, V> implements MutableMapEntryHandle<K, V> {
-		private final BetterCollection<? extends V> theValues;
-
-		/**
-		 * @param values The values collection
-		 * @param wrapped The map entry to wrap
-		 */
-		protected UnmodifiableMutableEntry(BetterCollection<? extends V> values, MapEntryHandle<? extends K, ? extends V> wrapped) {
+		/** @param wrapped The map entry to wrap */
+		protected UnmodifiableMutableEntry(MapEntryHandle<? extends K, ? extends V> wrapped) {
 			super(wrapped);
-			theValues = values;
 		}
 
 		@Override
-		public BetterCollection<V> getCollection() {
-			return unmodifiableCollection(theValues);
+		public MutableMapEntryHandle<K, V> getAdjacent(boolean next) {
+			MapEntryHandle<? extends K, ? extends V> adj = getWrapped().getAdjacent(next);
+			return adj == null ? null : new UnmodifiableMutableEntry<>(adj);
 		}
 
 		@Override
@@ -800,6 +948,34 @@ public class BetterCollections {
 		@Override
 		public void remove() throws UnsupportedOperationException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+	}
+
+	public static class UnmodifiableMutableOrderedEntry<K, V> extends UnmodifiableMutableEntry<K, V>
+		implements MutableOrderedMapEntry<K, V> {
+		public UnmodifiableMutableOrderedEntry(OrderedMapEntry<? extends K, ? extends V> wrapped) {
+			super(wrapped);
+		}
+
+		@Override
+		protected OrderedMapEntry<? extends K, ? extends V> getWrapped() {
+			return (OrderedMapEntry<? extends K, ? extends V>) super.getWrapped();
+		}
+
+		@Override
+		public MutableOrderedMapEntry<K, V> getAdjacent(boolean next) {
+			OrderedMapEntry<? extends K, ? extends V> adj = getWrapped().getAdjacent(next);
+			return adj == null ? null : new UnmodifiableMutableOrderedEntry<>(adj);
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return getWrapped().getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return getWrapped().getElementsAfter();
 		}
 	}
 
@@ -946,6 +1122,12 @@ public class BetterCollections {
 			if (theValues == null)
 				theValues = unmodifiableCollection(theWrapped.getValues());
 			return theValues;
+		}
+
+		@Override
+		public MultiEntryHandle<K, V> getAdjacent(boolean next) {
+			MultiEntryHandle<? extends K, ? extends V> adj = theWrapped.getAdjacent(next);
+			return adj == null ? null : new UnmodifiableMultiEntry<>(adj);
 		}
 
 		@Override

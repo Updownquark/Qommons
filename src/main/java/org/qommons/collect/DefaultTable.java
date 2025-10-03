@@ -27,7 +27,7 @@ import org.qommons.tree.MutableBinaryTreeNode;
 public class DefaultTable<R, C, V> extends AbstractIdentifiable implements BetterTable<R, C, V> {
 	private final BiFunction<? super R, ? super C, ? extends V> theFill;
 	private final BetterMap<R, MutableBinaryTreeNode<List<V>>> theRowMap;
-	private final BetterMap<C, ElementId> theColumnMap;
+	private final BetterMap<C, MutableListElement<ElementId>> theColumnMap;
 	private final BetterTreeList<List<V>> theRows;
 	private final BetterTreeList<ElementId> theColumns;
 	private final CollectionLockingStrategy theLock;
@@ -245,16 +245,6 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		}
 
 		@Override
-		public TableEntry<R, C, V> getAdjacentElement(ElementId elementId, boolean next) {
-			try (Transaction t = lock(false, null)) {
-				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getAdjacentEntry(elementId, next);
-				if (row == null)
-					return null;
-				return new RowEntry(row);
-			}
-		}
-
-		@Override
 		public MutableTableEntry<R, C, V> mutableElement(ElementId id) {
 			try (Transaction t = lock(false, null)) {
 				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getEntryById(id);
@@ -357,7 +347,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public TableEntry<C, R, V> getOrAdd(C value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
 			try (Transaction t = lock(true, null)) {
-				MapEntryHandle<C, ElementId> column = theColumnMap.getEntry(value);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntry(value);
 				if (column != null)
 					return new ColumnEntry(column);
 				if (preAdd != null)
@@ -415,7 +405,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public TableEntry<C, R, V> getElement(C value, boolean first) {
 			try (Transaction t = lock(false, null)) {
-				MapEntryHandle<C, ElementId> column = theColumnMap.getEntry(value);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntry(value);
 				if (column == null)
 					return null;
 				return new ColumnEntry(column);
@@ -425,7 +415,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public TableEntry<C, R, V> getElement(ElementId id) {
 			try (Transaction t = lock(false, null)) {
-				MapEntryHandle<C, ElementId> column = theColumnMap.getEntryById(id);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntryById(id);
 				return new ColumnEntry(column);
 			}
 		}
@@ -433,17 +423,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public TableEntry<C, R, V> getTerminalElement(boolean first) {
 			try (Transaction t = lock(false, null)) {
-				MapEntryHandle<C, ElementId> column = theColumnMap.getTerminalEntry(first);
-				if (column == null)
-					return null;
-				return new ColumnEntry(column);
-			}
-		}
-
-		@Override
-		public TableEntry<C, R, V> getAdjacentElement(ElementId elementId, boolean next) {
-			try (Transaction t = lock(false, null)) {
-				MapEntryHandle<C, ElementId> column = theColumnMap.getAdjacentEntry(elementId, next);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getTerminalEntry(first);
 				if (column == null)
 					return null;
 				return new ColumnEntry(column);
@@ -453,7 +433,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public MutableTableEntry<C, R, V> mutableElement(ElementId id) {
 			try (Transaction t = lock(false, null)) {
-				MapEntryHandle<C, ElementId> column = theColumnMap.getEntryById(id);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntryById(id);
 				return new MutableColumnEntry(column);
 			}
 		}
@@ -464,12 +444,12 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 			try (Transaction t = lock(true, null)) {
 				if (theColumnMap.containsKey(value))
 					return null;
-				MapEntryHandle<C, ElementId> column = theColumnMap.putEntry(value, null, after, before, first);
-				ElementId newColumn = theColumns.addElement(column.getElementId(), false).getElementId();
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.putEntry(value, null, after, before, first);
+				MutableListElement<ElementId> newColumn = theColumns.addElement2(column.getElementId(), false);
 				theColumnMap.mutableEntry(column.getElementId()).set(newColumn);
 				for (MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getTerminalEntry(true); //
 					row != null; //
-					row = theRowMap.getAdjacentEntry(row.getElementId(), true)) {
+					row = row.getAdjacent(true)) {
 					row.getValue().get().add(theFill.apply(row.getKey(), value));
 				}
 				return new ColumnEntry(column);
@@ -565,6 +545,12 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		}
 
 		@Override
+		public TableEntry<R, C, V> getAdjacent(boolean next) {
+			MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> adj = theRowEntry.getAdjacent(next);
+			return adj == null ? null : new RowEntry(adj);
+		}
+
+		@Override
 		public TableView<C, R, V> keySet() {
 			return columns();
 		}
@@ -599,7 +585,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
-				MapEntryHandle<C, ElementId> column = theColumnMap.getEntry(key);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntry(key);
 				return column == null ? null : new TableRowValueElement(theRowEntry, column, rowValues);
 			}
 		}
@@ -611,7 +597,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
-				MapEntryHandle<C, ElementId> column = theColumnMap.getEntry(key);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntry(key);
 				if (column == null)
 					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 				return new TableRowValueElement(theRowEntry, column, rowValues);
@@ -624,7 +610,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
-				MapEntryHandle<C, ElementId> column = theColumnMap.getEntryById(entryId);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntryById(entryId);
 				return new TableRowValueElement(theRowEntry, column, rowValues);
 			}
 		}
@@ -635,18 +621,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
-				MapEntryHandle<C, ElementId> column = theColumnMap.getTerminalEntry(first);
-				return column == null ? null : new TableRowValueElement(theRowEntry, column, rowValues);
-			}
-		}
-
-		@Override
-		public TableValueEntry<R, C, V> getAdjacentEntry(ElementId entryId, boolean next) {
-			try (Transaction t = lock(false, null)) {
-				if (!theRowEntry.getElementId().isPresent())
-					return null;
-				List<V> rowValues = theRowEntry.getValue().get();
-				MapEntryHandle<C, ElementId> column = theColumnMap.getAdjacentEntry(entryId, next);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getTerminalEntry(first);
 				return column == null ? null : new TableRowValueElement(theRowEntry, column, rowValues);
 			}
 		}
@@ -657,7 +632,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
-				MapEntryHandle<C, ElementId> column = theColumnMap.getEntryById(entryId);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntryById(entryId);
 				return new MutableTableRowValueElement(theRowEntry, column, rowValues);
 			}
 		}
@@ -674,8 +649,9 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		}
 
 		@Override
-		public BetterCollection<R> getCollection() {
-			return rows();
+		public MutableTableEntry<R, C, V> getAdjacent(boolean next) {
+			MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> adj = getRowEntry().getAdjacent(next);
+			return adj == null ? null : new MutableRowEntry(adj);
 		}
 
 		@Override
@@ -726,13 +702,13 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 	}
 
 	class ColumnEntry extends AbstractIdentifiable implements TableEntry<C, R, V> {
-		private final MapEntryHandle<C, ElementId> theColumnEntry;
+		private final MapEntryHandle<C, MutableListElement<ElementId>> theColumnEntry;
 
-		ColumnEntry(MapEntryHandle<C, ElementId> columnEntry) {
+		ColumnEntry(MapEntryHandle<C, MutableListElement<ElementId>> columnEntry) {
 			theColumnEntry = columnEntry;
 		}
 
-		MapEntryHandle<C, ElementId> getColumnEntry() {
+		MapEntryHandle<C, MutableListElement<ElementId>> getColumnEntry() {
 			return theColumnEntry;
 		}
 
@@ -754,6 +730,12 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public C get() {
 			return theColumnEntry.getKey();
+		}
+
+		@Override
+		public TableEntry<C, R, V> getAdjacent(boolean next) {
+			MapEntryHandle<C, MutableListElement<ElementId>> adj = theColumnEntry.getAdjacent(next);
+			return adj == null ? null : new ColumnEntry(adj);
 		}
 
 		@Override
@@ -829,16 +811,6 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		}
 
 		@Override
-		public TableValueEntry<C, R, V> getAdjacentEntry(ElementId entryId, boolean next) {
-			try (Transaction t = lock(false, null)) {
-				if (!theColumnEntry.getElementId().isPresent())
-					return null;
-				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getAdjacentEntry(entryId, next);
-				return row == null ? null : new TableColumnValueElement(row, theColumnEntry, row.get().get());
-			}
-		}
-
-		@Override
 		public MutableTableValueEntry<C, R, V> mutableEntry(ElementId entryId) {
 			try (Transaction t = lock(false, null)) {
 				if (!theColumnEntry.getElementId().isPresent())
@@ -855,13 +827,14 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 	}
 
 	class MutableColumnEntry extends ColumnEntry implements MutableTableEntry<C, R, V> {
-		MutableColumnEntry(MapEntryHandle<C, ElementId> columnEntry) {
+		MutableColumnEntry(MapEntryHandle<C, MutableListElement<ElementId>> columnEntry) {
 			super(columnEntry);
 		}
 
 		@Override
-		public BetterCollection<C> getCollection() {
-			return columns();
+		public MutableTableEntry<C, R, V> getAdjacent(boolean next) {
+			MapEntryHandle<C, MutableListElement<ElementId>> adj = getColumnEntry().getAdjacent(next);
+			return adj == null ? null : new MutableColumnEntry(adj);
 		}
 
 		@Override
@@ -897,15 +870,15 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 			try (Transaction t = lock(true, null)) {
 				if (!getColumnEntry().getElementId().isPresent())
 					throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
-				int columnIndex = theColumns.getElementsBefore(getColumnEntry().get());
+				int columnIndex = getColumnEntry().get().getElementsBefore();
 				for (MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getTerminalEntry(true); //
 					row != null; //
-					row = theRowMap.getAdjacentEntry(row.getElementId(), true)) {
+					row = row.getAdjacent(true)) {
 					V value = row.get().get().remove(columnIndex);
 					if (eachEntry != null)
 						eachEntry.accept(row.getKey(), value);
 				}
-				theColumns.mutableElement(getColumnEntry().get()).remove();
+				getColumnEntry().get().remove();
 				theRowMap.keySet().mutableElement(getColumnEntry().getElementId()).remove();
 			}
 		}
@@ -965,7 +938,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> columnValues = theRowEntry.getValue().get();
-				MapEntryHandle<C, ElementId> column = theColumnMap.getEntryById(id);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntryById(id);
 				return new TableRowValueElement(theRowEntry, column, columnValues);
 			}
 		}
@@ -976,18 +949,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> columnValues = theRowEntry.getValue().get();
-				MapEntryHandle<C, ElementId> column = theColumnMap.getTerminalEntry(first);
-				return column == null ? null : new TableRowValueElement(theRowEntry, column, columnValues);
-			}
-		}
-
-		@Override
-		public CollectionElement<V> getAdjacentElement(ElementId elementId, boolean next) {
-			try (Transaction t = lock(false, null)) {
-				if (!theRowEntry.getElementId().isPresent())
-					return null;
-				List<V> columnValues = theRowEntry.getValue().get();
-				MapEntryHandle<C, ElementId> column = theColumnMap.getAdjacentEntry(elementId, next);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getTerminalEntry(first);
 				return column == null ? null : new TableRowValueElement(theRowEntry, column, columnValues);
 			}
 		}
@@ -998,7 +960,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
-				MapEntryHandle<C, ElementId> column = theColumnMap.getEntryById(id);
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntryById(id);
 				return new MutableTableRowValueElement(theRowEntry, column, rowValues);
 			}
 		}
@@ -1044,7 +1006,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
-				MapEntryHandle<C, ElementId> column = theColumnMap
+				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap
 					.getEntryById(theColumnMap.keySet().move(valueEl, after, before, first, afterRemove).getElementId());
 				return new TableRowValueElement(theRowEntry, column, rowValues);
 			}
@@ -1078,10 +1040,10 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 	class TableRowValueElement implements TableValueEntry<R, C, V> {
 		private final MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> theRow;
-		private final MapEntryHandle<C, ElementId> theColumn;
+		private final MapEntryHandle<C, MutableListElement<ElementId>> theColumn;
 		private final List<V> theColumnValues;
 
-		TableRowValueElement(MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row, MapEntryHandle<C, ElementId> column,
+		TableRowValueElement(MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row, MapEntryHandle<C, MutableListElement<ElementId>> column,
 			List<V> columnValues) {
 			theRow = row;
 			theColumn = column;
@@ -1092,12 +1054,18 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 			return theRow;
 		}
 
-		protected MapEntryHandle<C, ElementId> getColumnHandle() {
+		protected MapEntryHandle<C, MutableListElement<ElementId>> getColumnHandle() {
 			return theColumn;
 		}
 
 		protected List<V> getColumnValues() {
 			return theColumnValues;
+		}
+
+		@Override
+		public TableValueEntry<R, C, V> getAdjacent(boolean next) {
+			MapEntryHandle<C, MutableListElement<ElementId>> adj = theColumn.getAdjacent(next);
+			return adj == null ? null : new TableRowValueElement(theRow, adj, theColumnValues);
 		}
 
 		@Override
@@ -1125,21 +1093,23 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 			try (Transaction t = lock(false, null)) {
 				if (!theColumn.getElementId().isPresent())
 					return null;
-				int index = theColumns.getElementsBefore(theColumn.getValue());
+				int index = theColumn.getValue().getElementsBefore();
 				return theColumnValues.get(index);
 			}
 		}
 	}
 
 	class MutableTableRowValueElement extends TableRowValueElement implements MutableTableValueEntry<R, C, V> {
-		MutableTableRowValueElement(MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row, MapEntryHandle<C, ElementId> column,
+		MutableTableRowValueElement(MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row,
+			MapEntryHandle<C, MutableListElement<ElementId>> column,
 			List<V> rowValues) {
 			super(row, column, rowValues);
 		}
 
 		@Override
-		public BetterCollection<V> getCollection() {
-			return rows().getElement(getRowHandle().getElementId()).values();
+		public MutableTableValueEntry<R, C, V> getAdjacent(boolean next) {
+			MapEntryHandle<C, MutableListElement<ElementId>> adj = getColumnHandle().getAdjacent(next);
+			return adj == null ? null : new MutableTableRowValueElement(getRowHandle(), adj, getColumnValues());
 		}
 
 		@Override
@@ -1165,7 +1135,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 			try (Transaction t = lock(false, null)) {
 				if (!getColumnHandle().getElementId().isPresent())
 					throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
-				int index = theColumns.getElementsBefore(getColumnHandle().getValue());
+				int index = getColumnHandle().getValue().getElementsBefore();
 				getColumnValues().set(index, value);
 			}
 		}
@@ -1173,10 +1143,11 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 	class TableColumnValueElement implements TableValueEntry<C, R, V> {
 		private final MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> theRow;
-		private final MapEntryHandle<C, ElementId> theColumn;
+		private final MapEntryHandle<C, MutableListElement<ElementId>> theColumn;
 		private final List<V> theRowValues;
 
-		TableColumnValueElement(MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row, MapEntryHandle<C, ElementId> column,
+		TableColumnValueElement(MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row,
+			MapEntryHandle<C, MutableListElement<ElementId>> column,
 			List<V> rowValues) {
 			theRow = row;
 			theColumn = column;
@@ -1187,12 +1158,18 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 			return theRow;
 		}
 
-		protected MapEntryHandle<C, ElementId> getColumnHandle() {
+		protected MapEntryHandle<C, MutableListElement<ElementId>> getColumnHandle() {
 			return theColumn;
 		}
 
 		protected List<V> getRowValues() {
 			return theRowValues;
+		}
+
+		@Override
+		public TableValueEntry<C, R, V> getAdjacent(boolean next) {
+			MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> adj = theRow.getAdjacent(next);
+			return adj == null ? null : new TableColumnValueElement(adj, theColumn, theRowValues);
 		}
 
 		@Override
@@ -1210,7 +1187,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 			try (Transaction t = lock(false, null)) {
 				if (!theColumn.getElementId().isPresent())
 					return null;
-				int index = theColumns.getElementsBefore(theColumn.getValue());
+				int index = theColumn.getValue().getElementsBefore();
 				return theRowValues.get(index);
 			}
 		}
@@ -1237,14 +1214,16 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 	}
 
 	class MutableTableColumnValueElement extends TableColumnValueElement implements MutableTableValueEntry<C, R, V> {
-		MutableTableColumnValueElement(MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row, MapEntryHandle<C, ElementId> column,
+		MutableTableColumnValueElement(MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row,
+			MapEntryHandle<C, MutableListElement<ElementId>> column,
 			List<V> rowValues) {
 			super(row, column, rowValues);
 		}
 
 		@Override
-		public BetterCollection<V> getCollection() {
-			return rows().getElement(getRowHandle().getElementId()).values();
+		public MutableTableValueEntry<C, R, V> getAdjacent(boolean next) {
+			MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> adj = getRowHandle().getAdjacent(next);
+			return adj == null ? null : new MutableTableColumnValueElement(adj, getColumnHandle(), getRowValues());
 		}
 
 		@Override
@@ -1270,7 +1249,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 			try (Transaction t = lock(false, null)) {
 				if (!getColumnHandle().getElementId().isPresent())
 					throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
-				int index = theColumns.getElementsBefore(getColumnHandle().getValue());
+				int index = getColumnHandle().getValue().getElementsBefore();
 				getRowValues().set(index, value);
 			}
 		}

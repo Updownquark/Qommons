@@ -53,13 +53,6 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	CollectionElement<E> getTerminalElement(boolean first);
 
 	/**
-	 * @param elementId The ID of the element to get the element adjacent to
-	 * @param next Whether to get the element after (true) or before (false) the given element
-	 * @return The element adjacent to the given element, or null if the given element is terminal in that direction
-	 */
-	CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next);
-
-	/**
 	 * @param id The ID of the element to get
 	 * @return A mutable element for the given element
 	 */
@@ -342,7 +335,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 				while (el != null) {
 					if (cSet.contains(el.get()))
 						return true;
-					el = getAdjacentElement(el.getElementId(), true);
+					el = el.getAdjacent(true);
 				}
 				return false;
 			}
@@ -375,7 +368,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			int index = 0;
 			while (el != null) {
 				array[index++] = el.get();
-				el = getAdjacentElement(el.getElementId(), true);
+				el = el.getAdjacent(true);
 			}
 			return array;
 		}
@@ -392,7 +385,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			int index = 0;
 			while (el != null) {
 				array[index++] = (T) el.get();
-				el = getAdjacentElement(el.getElementId(), true);
+				el = el.getAdjacent(true);
 			}
 			return a;
 		}
@@ -544,7 +537,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			while (el != null) {
 				if (search.test(el.get()))
 					return el;
-				el = getAdjacentElement(el.getElementId(), first);
+				el = el.getAdjacent(first);
 			}
 			return null;
 		}
@@ -567,13 +560,13 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 				if (onElement != null)
 					onElement.accept(el);
 			}
-			el = getAdjacentElement(el.getElementId(), forward);
+			el = el.getAdjacent(forward);
 		}
 		return found;
 	}
 
 	/** @return A collection of this collection's elements */
-	default BetterCollection<CollectionElement<E>> elements() {
+	default BetterCollection<? extends CollectionElement<E>> elements() {
 		return new ElementCollection<>(this);
 	}
 
@@ -926,8 +919,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 */
 	public class BetterSequence<E> implements Sequence<E> {
 		private final BetterCollection<E> theCollection;
-		private final ElementId theLowBound;
-		private final ElementId theHighBound;
+		private final CollectionElement<E> theLowBound;
+		private final CollectionElement<E> theHighBound;
 		private final boolean isReversed;
 		private CollectionElement<E> current;
 		private MutableCollectionElement<E> mutableCurrent;
@@ -945,11 +938,11 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		public BetterSequence(BetterCollection<E> collection, ElementId lowBound, ElementId highBound, boolean forward, ElementId position,
 			boolean atStart) {
 			theCollection = collection;
-			theLowBound = lowBound;
-			theHighBound = highBound;
+			theLowBound = lowBound == null ? null : theCollection.getElement(lowBound);
+			theHighBound = highBound == null ? null : theCollection.getElement(highBound);
 			this.isReversed = !forward;
 			if (position != null)
-				current = collection.getElement(position);
+				current = theCollection.getElement(position);
 			isAtStart = atStart;
 		}
 
@@ -994,14 +987,14 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		 */
 		public CollectionElement<E> get(boolean next) {
 			boolean realForward = next ^ isReversed;
-			ElementId bound = realForward ? theHighBound : theLowBound;
+			CollectionElement<E> bound = realForward ? theHighBound : theLowBound;
 			CollectionElement<E> adjacent;
 			if (current != null)
-				adjacent = theCollection.getAdjacentElement(current.getElementId(), realForward);
+				adjacent = current.getAdjacent(realForward);
 			else if (isAtStart != realForward)
 				adjacent = null; // End of sequence
 			else if (bound != null)
-				adjacent = theCollection.getAdjacentElement(bound, realForward);
+				adjacent = bound.getAdjacent(realForward);
 			else
 				adjacent = theCollection.getTerminalElement(realForward);
 			if (adjacent != null && bound != null && adjacent.getElementId().equals(bound))
@@ -1071,8 +1064,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			}
 			ElementId el = current.getElementId();
 			return theCollection.canAdd(value, //
-				before ? CollectionElement.getElementId(theCollection.getAdjacentElement(el, false)) : el, //
-				before ? el : CollectionElement.getElementId(theCollection.getAdjacentElement(el, true)));
+				before ? CollectionElement.getElementId(current.getAdjacent(false)) : el, //
+				before ? el : CollectionElement.getElementId(current.getAdjacent(true)));
 		}
 
 		@Override
@@ -1086,8 +1079,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			} else {
 				ElementId el = current.getElementId();
 				theCollection.addElement(newValue, //
-					before ? CollectionElement.getElementId(theCollection.getAdjacentElement(el, false)) : el, //
-					before ? el : CollectionElement.getElementId(theCollection.getAdjacentElement(el, true)), //
+					before ? CollectionElement.getElementId(current.getAdjacent(false)) : el, //
+					before ? el : CollectionElement.getElementId(current.getAdjacent(true)), //
 					false);
 			}
 		}
@@ -1186,11 +1179,6 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		@Override
 		public CollectionElement<E> getTerminalElement(boolean first) {
 			return CollectionElement.reverse(theWrapped.getTerminalElement(!first));
-		}
-
-		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			return CollectionElement.reverse(theWrapped.getAdjacentElement(elementId.reverse(), !next));
 		}
 
 		@Override
@@ -1394,11 +1382,6 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			return null;
-		}
-
-		@Override
 		public CollectionElement<E> getElement(E value, boolean first) {
 			return null;
 		}
@@ -1454,7 +1437,15 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 
 		/** @param value The value for the collection's only element */
 		public SingletonCollection(E value) {
-			theElement = new SingletonElement(value);
+			theElement = createElement(value);
+		}
+
+		/**
+		 * @param value The value to create the element for
+		 * @return The singleton element for this collection
+		 */
+		protected SingletonElement createElement(E value) {
+			return new SingletonElement(value);
 		}
 
 		@Override
@@ -1520,14 +1511,6 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		@Override
 		public CollectionElement<E> getTerminalElement(boolean first) {
 			return theElement;
-		}
-
-		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			if (theElement.getElementId() == elementId)
-				return null;
-			else
-				throw new NoSuchElementException(String.valueOf(elementId));
 		}
 
 		@Override
@@ -1639,8 +1622,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			}
 
 			@Override
-			public BetterCollection<E> getCollection() {
-				return SingletonCollection.this;
+			public MutableCollectionElement<E> getAdjacent(boolean next) {
+				return null;
 			}
 
 			@Override
@@ -1705,8 +1688,9 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * Implements {@link BetterCollection#element()}
 	 * 
 	 * @param <E> The type of the collection
+	 * @param <CE> The sub-type of CollectionElement provided by the source collection
 	 */
-	class ElementCollection<E> extends AbstractIdentifiable implements BetterCollection<CollectionElement<E>> {
+	class ElementCollection<E, CE extends CollectionElement<E>> extends AbstractIdentifiable implements BetterCollection<CE> {
 		private final BetterCollection<E> theCollection;
 
 		public ElementCollection(BetterCollection<E> collection) {
@@ -1769,34 +1753,29 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> getElement(CollectionElement<E> value, boolean first) {
+		public CollectionElement<CE> getElement(CE value, boolean first) {
 			if (theCollection.getSourceElements(value.getElementId(), theCollection).isEmpty())
 				return null;
 			return wrap(value);
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> getElement(ElementId id) {
+		public CollectionElement<CE> getElement(ElementId id) {
 			return wrap(theCollection.getElement(id));
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> getTerminalElement(boolean first) {
+		public CollectionElement<CE> getTerminalElement(boolean first) {
 			return wrap(theCollection.getTerminalElement(first));
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> getAdjacentElement(ElementId elementId, boolean next) {
-			return wrap(theCollection.getAdjacentElement(elementId, next));
-		}
-
-		@Override
-		public MutableCollectionElement<CollectionElement<E>> mutableElement(ElementId id) {
+		public MutableCollectionElement<CE> mutableElement(ElementId id) {
 			return wrapMutable(theCollection.mutableElement(id));
 		}
 
 		@Override
-		public BetterList<CollectionElement<CollectionElement<E>>> getElementsBySource(ElementId sourceEl,
+		public BetterList<CollectionElement<CE>> getElementsBySource(ElementId sourceEl,
 			BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
@@ -1814,12 +1793,12 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public String canAdd(CollectionElement<E> value, ElementId after, ElementId before) {
+		public String canAdd(CE value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> addElement(CollectionElement<E> value, ElementId after, ElementId before,
+		public CollectionElement<CE> addElement(CE value, ElementId after, ElementId before,
 			boolean first) throws UnsupportedOperationException, IllegalArgumentException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
@@ -1830,7 +1809,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public CollectionElement<CollectionElement<E>> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
+		public CollectionElement<CE> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
 			Runnable afterRemove) {
 			return wrap(theCollection.move(valueEl, after, before, first, afterRemove));
 		}
@@ -1845,19 +1824,24 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			return BetterCollection.toString(this);
 		}
 
-		protected CollectionElement<CollectionElement<E>> wrap(CollectionElement<E> el) {
+		protected CollectionElement<CE> wrap(CollectionElement<E> el) {
 			return el == null ? null : new WrappedCollectionElement(el);
 		}
 
-		protected MutableCollectionElement<CollectionElement<E>> wrapMutable(CollectionElement<E> el) {
+		protected MutableCollectionElement<CE> wrapMutable(CollectionElement<E> el) {
 			return new MutableWrappedCollectionElement(el);
 		}
 
-		class WrappedCollectionElement implements CollectionElement<CollectionElement<E>> {
-			final CollectionElement<E> theElement;
+		class WrappedCollectionElement implements CollectionElement<CE> {
+			final CE theElement;
 
 			WrappedCollectionElement(CollectionElement<E> element) {
-				theElement = element;
+				theElement = (CE) element;
+			}
+
+			/** @return The wrapped collection element */
+			protected CE getWrapped() {
+				return theElement;
 			}
 
 			@Override
@@ -1866,19 +1850,24 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			}
 
 			@Override
-			public CollectionElement<E> get() {
+			public CE get() {
 				return theElement;
+			}
+
+			@Override
+			public CollectionElement<CE> getAdjacent(boolean next) {
+				return wrap(theElement.getAdjacent(next));
 			}
 		}
 
-		class MutableWrappedCollectionElement extends WrappedCollectionElement implements MutableCollectionElement<CollectionElement<E>> {
+		class MutableWrappedCollectionElement extends WrappedCollectionElement implements MutableCollectionElement<CE> {
 			MutableWrappedCollectionElement(CollectionElement<E> element) {
 				super(element);
 			}
 
 			@Override
-			public BetterCollection<CollectionElement<E>> getCollection() {
-				return ElementCollection.this;
+			public MutableCollectionElement<CE> getAdjacent(boolean next) {
+				return wrapMutable(theElement.getAdjacent(next));
 			}
 
 			@Override
@@ -1887,12 +1876,12 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			}
 
 			@Override
-			public String isAcceptable(CollectionElement<E> value) {
+			public String isAcceptable(CE value) {
 				return StdMsg.UNSUPPORTED_OPERATION;
 			}
 
 			@Override
-			public void set(CollectionElement<E> value) throws UnsupportedOperationException, IllegalArgumentException {
+			public void set(CE value) throws UnsupportedOperationException, IllegalArgumentException {
 				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 			}
 

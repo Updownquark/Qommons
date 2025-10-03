@@ -2,6 +2,7 @@ package org.qommons.collect;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
@@ -32,6 +33,7 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 
 		HashMapBuilder() {
 			theSetBuilder = BetterHashSet.build().withDescription("better-hash-map");
+			withEquivalence(Objects::hash, Objects::equals);
 		}
 
 		/**
@@ -49,8 +51,13 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 					else
 						return hasher.applyAsInt(entry);
 				}, (entry1, entry2) -> {
-					if (entry1 instanceof Map.Entry && entry2 instanceof Map.Entry)
-						return equals.test(((Map.Entry<?, ?>) entry1).getKey(), ((Map.Entry<?, ?>) entry2).getKey());
+					if (entry1 instanceof Map.Entry) {
+						if (entry2 instanceof Map.Entry)
+							return equals.test(((Map.Entry<?, ?>) entry1).getKey(), ((Map.Entry<?, ?>) entry2).getKey());
+						else
+							return equals.test(((Map.Entry<?, ?>) entry1).getKey(), entry2);
+					} else if (entry2 instanceof Map.Entry)
+						return equals.test(entry1, ((Map.Entry<?, ?>) entry2).getKey());
 					else
 						return equals.test(entry1, entry2);
 				});
@@ -132,12 +139,12 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 		return new HashMapBuilder<>();
 	}
 
-	private final BetterHashSet<Map.Entry<K, V>> theEntries;
+	private final BetterHashSet<Entry> theEntries;
 	private final KeySet theKeySet;
 
 	private BetterHashMap(BetterHashSet.HashSetBuilder<?> entryBuilder, Map<? extends K, ? extends V> values) {
 		theEntries = entryBuilder.build(values == null ? null : values.entrySet().stream()//
-		.<Map.Entry<K, V>> map(entry -> newEntry(entry.getKey(), entry.getValue())).collect(Collectors.toSet()));
+			.<Entry> map(entry -> newEntry(entry.getKey(), entry.getValue())).collect(Collectors.toSet()));
 		theKeySet = new KeySet();
 	}
 
@@ -177,20 +184,20 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 	 * @param value The initial value for the entry
 	 * @return The map entry for the key to use in this map
 	 */
-	public Map.Entry<K, V> newEntry(K key, V value) {
+	protected Entry newEntry(K key, V value) {
 		return new Entry(key, value);
 	}
 
 	@Override
 	public MapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
 		try (Transaction t = theEntries.lock(true, null)) {
-			Entry newEntry = (Entry) newEntry(key, value);
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(newEntry, true);
+			Entry newEntry = newEntry(key, value);
+			CollectionElement<Entry> entryEl = theEntries.getElement(newEntry, true);
 			if (entryEl != null) {
-				((Entry) entryEl.get()).mutable().setValue(value);
+				entryEl.get().mutable().setValue(value);
 			} else {
 				entryEl = theEntries.addElement(newEntry, first);
-				((Entry) entryEl.get()).setId(entryEl.getElementId());
+				entryEl.get().setElement(entryEl);
 			}
 			return handleFor(entryEl);
 		}
@@ -199,13 +206,13 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 	@Override
 	public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 		try (Transaction t = theEntries.lock(true, null)) {
-			Entry newEntry = (Entry) newEntry(key, value);
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(newEntry, true);
+			Entry newEntry = newEntry(key, value);
+			CollectionElement<Entry> entryEl = theEntries.getElement(newEntry, true);
 			if (entryEl != null) {
-				((Entry) entryEl.get()).mutable().setValue(value);
+				entryEl.get().mutable().setValue(value);
 			} else {
 				entryEl = theEntries.addElement(newEntry, after, before, first);
-				((Entry) entryEl.get()).setId(entryEl.getElementId());
+				entryEl.get().setElement(entryEl);
 			}
 			return handleFor(entryEl);
 		}
@@ -213,7 +220,7 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 
 	@Override
 	public MapEntryHandle<K, V> getEntry(K key) {
-		CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(theEntries.getHasher().applyAsInt(key),
+		CollectionElement<Entry> entryEl = theEntries.getElement(theEntries.getHasher().applyAsInt(key),
 			entry -> theEntries.getEquals().test(entry.getKey(), key));
 		return entryEl == null ? null : handleFor(entryEl);
 	}
@@ -221,7 +228,7 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 	@Override
 	public MapEntryHandle<K, V> getOrPutEntry(K key, Function<? super K, ? extends V> value, ElementId after, ElementId before,
 		boolean first, Runnable preAdd, Runnable postAdd) {
-		CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(//
+		CollectionElement<Entry> entryEl = theEntries.getOrAdd(//
 			theEntries.getHasher().applyAsInt(key), entry -> theEntries.getEquals().test(entry.getKey(), key), //
 			() -> {
 				V newValue = value.apply(key);
@@ -264,11 +271,11 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 	 * @param entry The element in the entry set
 	 * @return The map handle for the entry
 	 */
-	protected MapEntryHandle<K, V> handleFor(CollectionElement<? extends Map.Entry<K, V>> entry) {
+	protected MapEntryHandle<K, V> handleFor(CollectionElement<? extends Entry> entry) {
 		if (entry == null)
 			return null;
-		Entry e = (Entry) entry.get();
-		e.setId(entry.getElementId());
+		Entry e = entry.get();
+		e.setElement(entry);
 		return e;
 	}
 
@@ -285,13 +292,14 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 		return entrySet().toString();
 	}
 
-	class Entry extends BetterMapEntryImpl<K, V> {
+	/** Default Map entry implementation for this class */
+	protected class Entry extends BetterMapEntryImpl<K, V> {
 		Entry(K key, V value) {
 			super(key, value);
 		}
 
-		void setId(ElementId id) {
-			theId = id;
+		void setElement(CollectionElement<? extends Entry> element) {
+			theElement = element;
 		}
 
 		MutableMapEntryHandle<K, V> mutable() {
@@ -383,13 +391,9 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 		}
 
 		@Override
-		public CollectionElement<K> getAdjacentElement(ElementId elementId, boolean next) {
-			return handleFor(theEntries.getAdjacentElement(elementId, next));
-		}
-
-		@Override
 		public CollectionElement<K> getElement(K value, boolean first) {
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getElement(new SimpleMapEntry<>(value, null), first);
+			CollectionElement<Entry> entryEl = theEntries.getElement(theEntries.getHasher().applyAsInt(value),
+				entry -> theEntries.getEquals().test(entry, value));
 			return entryEl == null ? null : handleFor(entryEl);
 		}
 
@@ -400,7 +404,7 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 
 		@Override
 		public CollectionElement<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
-			CollectionElement<Map.Entry<K, V>> entryEl = theEntries.getOrAdd(newEntry(value, null), after, before, first, preAdd, postAdd);
+			CollectionElement<Entry> entryEl = theEntries.getOrAdd(newEntry(value, null), after, before, first, preAdd, postAdd);
 			return entryEl == null ? null : handleFor(entryEl);
 		}
 
@@ -447,11 +451,11 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 		@Override
 		public CollectionElement<K> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			CollectionElement<Map.Entry<K, V>> entry = theEntries.move(valueEl, after, before, first, afterRemove);
+			CollectionElement<Entry> entry = theEntries.move(valueEl, after, before, first, afterRemove);
 			if (entry.getElementId().equals(valueEl))
 				return getElement(valueEl);
-			Entry newEntry = (Entry) newEntry(entry.get().getKey(), entry.get().getValue());
-			newEntry.theId = entry.getElementId();
+			Entry newEntry = newEntry(entry.get().getKey(), entry.get().getValue());
+			newEntry.setElement(entry);
 			theEntries.mutableElement(entry.getElementId()).set(newEntry);
 			return newEntry.keyHandle();
 		}
@@ -473,13 +477,13 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 
 		@Override
 		public <X> boolean repair(ElementId element, RepairListener<K, X> listener) {
-			RepairListener<Map.Entry<K, V>, X> entryListener = listener == null ? null : new EntryRepairListener<>(listener);
+			RepairListener<Entry, X> entryListener = listener == null ? null : new EntryRepairListener<>(listener);
 			return theEntries.repair(element, entryListener);
 		}
 
 		@Override
 		public <X> boolean repair(RepairListener<K, X> listener) {
-			RepairListener<Map.Entry<K, V>, X> entryListener = listener == null ? null : new EntryRepairListener<>(listener);
+			RepairListener<Entry, X> entryListener = listener == null ? null : new EntryRepairListener<>(listener);
 			return theEntries.repair(entryListener);
 		}
 
@@ -498,7 +502,7 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 			return BetterSet.toString(this);
 		}
 
-		private class EntryRepairListener<X> implements RepairListener<Map.Entry<K, V>, X> {
+		private class EntryRepairListener<X> implements RepairListener<Entry, X> {
 			private final RepairListener<K, X> theKeyListener;
 
 			EntryRepairListener(org.qommons.collect.ValueStoredCollection.RepairListener<K, X> keyListener) {
@@ -506,17 +510,17 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 			}
 
 			@Override
-			public X removed(CollectionElement<Map.Entry<K, V>> element) {
+			public X removed(CollectionElement<Entry> element) {
 				return theKeyListener.removed(handleFor(element));
 			}
 
 			@Override
-			public void disposed(Map.Entry<K, V> value, X data) {
+			public void disposed(Entry value, X data) {
 				theKeyListener.disposed(value.getKey(), data);
 			}
 
 			@Override
-			public void transferred(CollectionElement<Map.Entry<K, V>> element, X data) {
+			public void transferred(CollectionElement<Entry> element, X data) {
 				theKeyListener.transferred(handleFor(element), data);
 			}
 		}

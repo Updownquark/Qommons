@@ -71,6 +71,48 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 		return (TreeBasedSet<K>) super.keySet();
 	}
 
+	@Override
+	public OrderedMultiEntry<K, V> getEntryById(ElementId keyId) {
+		return (OrderedMultiEntry<K, V>) super.getEntryById(keyId);
+	}
+
+	@Override
+	public OrderedMultiEntry<K, V> getOrPutEntry(K key, Function<? super K, ? extends Iterable<? extends V>> value, ElementId afterKey,
+		ElementId beforeKey, boolean first, Runnable preAdd, Runnable postAdd) {
+		return (OrderedMultiEntry<K, V>) super.getOrPutEntry(key, value, afterKey, beforeKey, first, preAdd, postAdd);
+	}
+
+	@Override
+	protected OrderedMultiEntry<K, V> entryFor(MapEntryHandle<K, BetterCollection<V>> mapEntry) {
+		return mapEntry == null ? null : new DefaultOrderedEntryHandle((OrderedMapEntry<K, BetterCollection<V>>) mapEntry);
+	}
+
+	class DefaultOrderedEntryHandle extends DefaultEntryHandle implements OrderedMultiEntry<K, V> {
+		protected DefaultOrderedEntryHandle(OrderedMapEntry<K, BetterCollection<V>> mapEntry) {
+			super(mapEntry);
+		}
+
+		@Override
+		protected OrderedMapEntry<K, BetterCollection<V>> getMapEntry() {
+			return (OrderedMapEntry<K, BetterCollection<V>>) super.getMapEntry();
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return getMapEntry().getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return getMapEntry().getElementsAfter();
+		}
+
+		@Override
+		public OrderedMultiEntry<K, V> getAdjacent(boolean next) {
+			return entryFor(getMapEntry().getAdjacent(next));
+		}
+	}
+
 	class BetterTreeMultiMapKeySet extends BetterMultiMapKeySet implements TreeBasedSet<K> {
 		protected BetterTreeMultiMapKeySet(BetterSet<K> backing) {
 			super(backing);
@@ -90,20 +132,6 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 		public BinaryTreeNode<K> getElement(int index) {
 			try (Transaction t = lock(false, null)) {
 				return getBacking().getElement(index);
-			}
-		}
-
-		@Override
-		public int getElementsBefore(ElementId id) {
-			try (Transaction t = lock(false, null)) {
-				return getBacking().getElementsBefore(id);
-			}
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
-			try (Transaction t = lock(false, null)) {
-				return getBacking().getElementsAfter(id);
 			}
 		}
 
@@ -142,11 +170,6 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 		}
 
 		@Override
-		public BinaryTreeNode<K> getAdjacentElement(ElementId elementId, boolean next) {
-			return (BinaryTreeNode<K>) super.getAdjacentElement(elementId, next);
-		}
-
-		@Override
 		public BinaryTreeNode<K> addElement(K value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			return (BinaryTreeNode<K>) super.addElement(value, after, before, first);
@@ -158,15 +181,16 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 		}
 
 		@Override
+		public BinaryTreeNode<K> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return (BinaryTreeNode<K>) super.move(valueEl, after, before, first, afterRemove);
+		}
+
+		@Override
 		public MutableBinaryTreeNode<K> mutableElement(ElementId id) {
 			MutableCollectionElement<K> mutable = super.mutableElement(id);
 			BinaryTreeNode<K> treeNode = getBacking().getElement(id);
 			return new MutableBinaryTreeNode<K>() {
-				@Override
-				public BetterCollection<K> getCollection() {
-					return BetterTreeMultiMapKeySet.this;
-				}
-
 				@Override
 				public String isEnabled() {
 					return mutable.isEnabled();
@@ -203,17 +227,13 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 				}
 
 				@Override
-				public int getNodesBefore() {
-					try (Transaction t = lock(false, null)) {
-						return treeNode.getNodesBefore();
-					}
+				public int getElementsBefore() {
+					return treeNode.getElementsBefore();
 				}
 
 				@Override
-				public int getNodesAfter() {
-					try (Transaction t = lock(false, null)) {
-						return treeNode.getNodesAfter();
-					}
+				public int getElementsAfter() {
+					return treeNode.getElementsAfter();
 				}
 
 				@Override
@@ -245,11 +265,9 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 				}
 
 				@Override
-				public MutableBinaryTreeNode<K> getClosest(boolean left) {
-					try (Transaction t = lock(false, null)) {
-						BinaryTreeNode<K> relative = treeNode.getClosest(left);
-						return relative == null ? null : mutableElement(relative.getElementId());
-					}
+				public MutableBinaryTreeNode<K> getAdjacent(boolean next) {
+					BinaryTreeNode<K> relative = treeNode.getAdjacent(next);
+					return relative == null ? null : mutableElement(relative.getElementId());
 				}
 
 				@Override
@@ -260,27 +278,21 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 
 				@Override
 				public MutableBinaryTreeNode<K> getSibling() {
-					try (Transaction t = lock(false, null)) {
-						BinaryTreeNode<K> relative = treeNode.getSibling();
-						return relative == null ? null : mutableElement(relative.getElementId());
-					}
+					BinaryTreeNode<K> relative = treeNode.getSibling();
+					return relative == null ? null : mutableElement(relative.getElementId());
 				}
 
 				@Override
 				public MutableBinaryTreeNode<K> get(int index, OptimisticContext ctx) {
-					try (Transaction t = lock(false, null)) {
-						BinaryTreeNode<K> relative = treeNode.get(index, ctx);
-						return relative == null ? null : mutableElement(relative.getElementId());
-					}
+					BinaryTreeNode<K> relative = treeNode.get(index, ctx);
+					return relative == null ? null : mutableElement(relative.getElementId());
 				}
 
 				@Override
 				public MutableBinaryTreeNode<K> findClosest(Comparable<BinaryTreeNode<K>> finder, boolean lesser, boolean strictly,
 					OptimisticContext ctx) {
-					try (Transaction t = lock(false, null)) {
-						BinaryTreeNode<K> relative = treeNode.findClosest(finder, lesser, strictly, ctx);
-						return relative == null ? null : mutableElement(relative.getElementId());
-					}
+					BinaryTreeNode<K> relative = treeNode.findClosest(finder, lesser, strictly, ctx);
+					return relative == null ? null : mutableElement(relative.getElementId());
 				}
 			};
 		}

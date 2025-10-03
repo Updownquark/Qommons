@@ -1,8 +1,8 @@
 package org.qommons.tree;
 
-import org.qommons.collect.BetterCollection;
 import org.qommons.collect.BetterMap;
 import org.qommons.collect.MutableMapEntryHandle;
+import org.qommons.collect.MutableOrderedMapEntry;
 import org.qommons.collect.OptimisticContext;
 
 /**
@@ -11,7 +11,7 @@ import org.qommons.collect.OptimisticContext;
  * @param <K> The key type of the map
  * @param <V> The value type of the map
  */
-public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, MutableBinaryTreeNode<V>, MutableMapEntryHandle<K, V> {
+public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, MutableBinaryTreeNode<V>, MutableOrderedMapEntry<K, V> {
 	@Override
 	MutableBinaryTreeEntry<K, V> getParent();
 
@@ -22,7 +22,7 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 	MutableBinaryTreeEntry<K, V> getRight();
 
 	@Override
-	MutableBinaryTreeEntry<K, V> getClosest(boolean left);
+	MutableBinaryTreeEntry<K, V> getAdjacent(boolean next);
 
 	@Override
 	default MutableBinaryTreeEntry<K, V> reverse() {
@@ -68,28 +68,23 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 		}
 
 		@Override
-		public BetterCollection<V> getCollection() {
-			return getWrapped().getCollection().reverse();
-		}
-
-		@Override
 		public MutableBinaryTreeEntry<K, V> getParent() {
 			return MutableBinaryTreeEntry.reverse((MutableBinaryTreeEntry<K, V>) super.getParent());
 		}
 
 		@Override
 		public MutableBinaryTreeEntry<K, V> getLeft() {
-			return MutableBinaryTreeEntry.reverse((MutableBinaryTreeEntry<K, V>) super.getLeft());
-		}
-
-		@Override
-		public MutableBinaryTreeEntry<K, V> getRight() {
 			return MutableBinaryTreeEntry.reverse((MutableBinaryTreeEntry<K, V>) super.getRight());
 		}
 
 		@Override
-		public MutableBinaryTreeEntry<K, V> getClosest(boolean left) {
-			return MutableBinaryTreeEntry.reverse((MutableBinaryTreeEntry<K, V>) super.getClosest(left));
+		public MutableBinaryTreeEntry<K, V> getRight() {
+			return MutableBinaryTreeEntry.reverse((MutableBinaryTreeEntry<K, V>) super.getLeft());
+		}
+
+		@Override
+		public MutableBinaryTreeEntry<K, V> getAdjacent(boolean next) {
+			return MutableBinaryTreeEntry.reverse((MutableBinaryTreeEntry<K, V>) super.getAdjacent(!next));
 		}
 
 		@Override
@@ -180,23 +175,23 @@ public interface MutableBinaryTreeEntry<K, V> extends BinaryTreeEntry<K, V>, Mut
 		}
 
 		@Override
-		public BinaryTreeEntry<K, V> getClosest(boolean left) {
-			return immutable(getWrapped().getClosest(left));
+		public BinaryTreeEntry<K, V> getAdjacent(boolean next) {
+			return immutable(getWrapped().getAdjacent(next));
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return getWrapped().getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return getWrapped().getElementsAfter();
 		}
 
 		@Override
 		public boolean getSide() {
 			return getWrapped().getSide();
-		}
-
-		@Override
-		public int getNodesBefore() {
-			return getWrapped().getNodesBefore();
-		}
-
-		@Override
-		public int getNodesAfter() {
-			return getWrapped().getNodesAfter();
 		}
 
 		@Override

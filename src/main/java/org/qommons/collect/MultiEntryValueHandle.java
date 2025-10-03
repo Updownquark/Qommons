@@ -12,8 +12,21 @@ public interface MultiEntryValueHandle<K, V> extends MapEntryHandle<K, V> {
 	ElementId getKeyId();
 
 	@Override
+	MultiEntryValueHandle<K, V> getAdjacent(boolean next);
+
+	@Override
 	default MultiEntryValueHandle<K, V> reverse() {
 		return new ReversedMultiMapEntryHandle<>(this);
+	}
+
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param entry The entry to reverse
+	 * @return The reversed entry (or null if entry was null)
+	 */
+	static <K, V> MultiEntryValueHandle<K, V> reverse(MultiEntryValueHandle<K, V> entry) {
+		return entry == null ? null : entry.reverse();
 	}
 
 	/**
@@ -43,18 +56,13 @@ public interface MultiEntryValueHandle<K, V> extends MapEntryHandle<K, V> {
 		}
 
 		@Override
+		public MultiEntryValueHandle<K, V> getAdjacent(boolean next) {
+			return MultiEntryValueHandle.reverse(getWrapped().getAdjacent(!next));
+		}
+
+		@Override
 		public MultiEntryValueHandle<K, V> reverse() {
 			return getWrapped();
 		}
-	}
-
-	/**
-	 * @param <K> The key type of the map
-	 * @param <V> The value type of the map
-	 * @param entry The entry to reverse
-	 * @return The reversed entry (or null if entry was null)
-	 */
-	static <K, V> MultiEntryValueHandle<K, V> reverse(MultiEntryValueHandle<K, V> entry) {
-		return entry == null ? null : entry.reverse();
 	}
 }

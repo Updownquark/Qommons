@@ -115,7 +115,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	 * @return The element that is the best found result of the search, or null if this list is empty or does not contain any element
 	 *         matching the given filter
 	 */
-	CollectionElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter);
+	ListElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter);
 
 	/**
 	 * Same as {@link #search(Comparable, SortedSearchFilter)} but flattens to a value
@@ -137,21 +137,21 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	}
 
 	@Override
-	default CollectionElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
+	default ListElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
 		if (after != null || before != null) {
 			// If the given elements constrain the search space, we can probably be faster than the general method below
 			try (Transaction t = lock(true, null)) {
 				ElementId best = first ? after : before;
 				ElementId worst = first ? before : after;
 				if (best != null) {
-					CollectionElement<E> bestEl = getElement(best);
+					ListElement<E> bestEl = getElement(best);
 					int comp = comparator().compare(value, bestEl.get());
 					if ((comp < 0) == first)
 						throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
 					while (true) {
 						if (comp == 0)
 							return bestEl;
-						bestEl = getAdjacentElement(bestEl.getElementId(), first);
+						bestEl = bestEl.getAdjacent(first);
 						if (bestEl == null || (worst != null && (bestEl.getElementId().compareTo(worst) > 0) == first))
 							break;
 						comp = comparator().compare(value, bestEl.get());
@@ -177,14 +177,14 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 						return getElement(addedEl);
 					}
 				} else {
-					CollectionElement<E> worstEl = getElement(worst);
+					ListElement<E> worstEl = getElement(worst);
 					int comp = comparator().compare(value, worstEl.get());
 					if ((comp > 0) == first)
 						throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
 					while (true) {
 						if (comp == 0)
 							return worstEl;
-						worstEl = getAdjacentElement(worstEl.getElementId(), !first);
+						worstEl = worstEl.getAdjacent(!first);
 						if (worstEl == null)
 							break;
 						comp = comparator().compare(value, worstEl.get());
@@ -211,7 +211,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			}
 		}
 		while (true) {
-			CollectionElement<E> found = search(searchFor(value, 0), BetterSortedList.SortedSearchFilter.PreferLess);
+			ListElement<E> found = search(searchFor(value, 0), BetterSortedList.SortedSearchFilter.PreferLess);
 			if (found == null) {
 				if (preAdd != null)
 					preAdd.run();
@@ -343,7 +343,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	}
 
 	@Override
-	default CollectionElement<E> getElement(E value, boolean first) {
+	default ListElement<E> getElement(E value, boolean first) {
 		return search(searchFor(value, 0), BetterSortedList.SortedSearchFilter.OnlyMatch);
 	}
 
@@ -460,7 +460,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		} else if (search.compareTo(found.get()) == 0)
 			return onMatchOrTerminal.apply(found);
 		else {
-			CollectionElement<E> next = getAdjacentElement(found.getElementId(), true);
+			CollectionElement<E> next = found.getAdjacent(true);
 			if (next == null)
 				return onMatchOrTerminal.apply(found);
 			else
@@ -665,7 +665,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+		public ListElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
 			return null;
 		}
 
@@ -714,10 +714,25 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
-			if (search.compareTo(getFirst()) == 0)
-				return getTerminalElement(true);
-			return null;
+		public ListElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+			int comp = search.compareTo(getFirst());
+			switch (filter) {
+			case OnlyMatch:
+				if (comp != 0)
+					return null;
+				break;
+			case Less:
+				if (comp > 0)
+					return null;
+				break;
+			case Greater:
+				if (comp < 0)
+					return null;
+				break;
+			default:
+				break;
+			}
+			return getTerminalElement(true);
 		}
 
 		@Override
@@ -795,7 +810,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+		public ListElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
 			if(isEmpty())
 				return null;
 			int index=indexFor(search);
@@ -1017,28 +1032,6 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
-			int wIndex = theWrapped.getElementsBefore(strip(id));
-			int minIdx = getMinIndex();
-			if (wIndex < minIdx)
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			if (wIndex >= getMaxIndex())
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return wIndex - minIdx;
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
-			int wIndex = theWrapped.getElementsBefore(strip(id));
-			int maxIdx = getMaxIndex();
-			if (wIndex >= maxIdx)
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			if (wIndex < getMinIndex())
-				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-			return maxIdx - wIndex - 1;
-		}
-
-		@Override
 		public Object[] toArray() {
 			Object[] array = new Object[size()];
 			for (int i = 0; i < array.length; i++)
@@ -1093,7 +1086,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+		public ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			if (isInRange(value) != 0)
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
@@ -1124,7 +1117,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+		public ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			valueEl = strip(valueEl);
 			after = strip(after);
@@ -1138,20 +1131,20 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public CollectionElement<E> getElement(int index) {
+		public ListElement<E> getElement(int index) {
 			return getElement(theWrapped.getElement(checkIndex(index, false)));
 		}
 
 		@Override
-		public CollectionElement<E> getElement(E value, boolean first) {
+		public ListElement<E> getElement(E value, boolean first) {
 			if (isInRange(value) != 0)
 				return null;
 			return getElement(theWrapped.getElement(value, first));
 		}
 
 		@Override
-		public CollectionElement<E> getElement(ElementId id) {
-			CollectionElement<E> el = theWrapped.getElement(strip(id));
+		public ListElement<E> getElement(ElementId id) {
+			ListElement<E> el = theWrapped.getElement(strip(id));
 			if (isInRange(el.get()) != 0)
 				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
 			return getElement(el);
@@ -1162,7 +1155,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
 			return QommonsUtils.filterMap(theWrapped.getElementsBySource(sourceEl, sourceCollection), el -> isInRange(el.get()) == 0,
-				el -> getElement(el));
+				el -> getElement((ListElement<E>) el));
 		}
 
 		@Override
@@ -1181,8 +1174,8 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public CollectionElement<E> getTerminalElement(boolean first) {
-			CollectionElement<E> wrapTerminal;
+		public ListElement<E> getTerminalElement(boolean first) {
+			ListElement<E> wrapTerminal;
 			if (first) {
 				if (from == null)
 					wrapTerminal = theWrapped.getTerminalElement(true);
@@ -1205,22 +1198,14 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			CollectionElement<E> el = theWrapped.getAdjacentElement(strip(elementId), next);
-			if (el == null || isInRange(el.get()) != 0)
-				return null;
-			return getElement(el);
-		}
-
-		@Override
-		public MutableCollectionElement<E> mutableElement(ElementId id) {
-			MutableCollectionElement<E> el = theWrapped.mutableElement(strip(id));
+		public MutableListElement<E> mutableElement(ElementId id) {
+			MutableListElement<E> el = theWrapped.mutableElement(strip(id));
 			return new BoundedMutableElement(el);
 		}
 
 		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
-			CollectionElement<E> wrapResult = theWrapped.search(boundSearch(search), filter);
+		public ListElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
+			ListElement<E> wrapResult = theWrapped.search(boundSearch(search), filter);
 			if (wrapResult == null)
 				return null;
 			int range = isInRange(wrapResult.get());
@@ -1318,7 +1303,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			return boundedId.theSourceId;
 		}
 
-		BoundedElement getElement(CollectionElement<E> element) {
+		BoundedElement getElement(ListElement<E> element) {
 			return element == null ? null : new BoundedElement(element);
 		}
 
@@ -1385,11 +1370,11 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			}
 		}
 
-		class BoundedElement implements CollectionElement<E> {
-			private final CollectionElement<E> theWrappedEl;
+		class BoundedElement implements ListElement<E> {
+			private final ListElement<E> theWrappedEl;
 			private BoundedElementId theId;
 
-			BoundedElement(CollectionElement<E> wrappedEl) {
+			BoundedElement(ListElement<E> wrappedEl) {
 				theWrappedEl = wrappedEl;
 			}
 
@@ -1407,6 +1392,31 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			@Override
 			public E get() {
 				return theWrappedEl.get();
+			}
+
+			@Override
+			public ListElement<E> getAdjacent(boolean next) {
+				ListElement<E> adj = theWrappedEl.getAdjacent(next);
+				if (adj == null) {//
+					return null;
+				} else if (next) {
+					if (to != null && to.compareTo(adj.get()) < 0)
+						return null;
+				} else {
+					if (from != null && from.compareTo(adj.get()) > 0)
+						return null;
+				}
+				return new BoundedElement(adj);
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return theWrappedEl.getElementsBefore() - getMinIndex();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return getMaxIndex() - theWrappedEl.getElementsBefore() - 1;
 			}
 
 			@Override
@@ -1433,19 +1443,29 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			}
 		}
 
-		class BoundedMutableElement extends BoundedElement implements MutableCollectionElement<E> {
-			BoundedMutableElement(MutableCollectionElement<E> wrappedEl) {
+		class BoundedMutableElement extends BoundedElement implements MutableListElement<E> {
+			BoundedMutableElement(MutableListElement<E> wrappedEl) {
 				super(wrappedEl);
 			}
 
 			@Override
-			MutableCollectionElement<E> getWrappedEl() {
-				return (MutableCollectionElement<E>) super.getWrappedEl();
+			MutableListElement<E> getWrappedEl() {
+				return (MutableListElement<E>) super.getWrappedEl();
 			}
 
 			@Override
-			public BetterCollection<E> getCollection() {
-				return BetterSubSequence.this;
+			public MutableListElement<E> getAdjacent(boolean next) {
+				MutableListElement<E> adj = getWrappedEl().getAdjacent(next);
+				if (adj == null) {//
+					return null;
+				} else if (next) {
+					if (to != null && to.compareTo(adj.get()) < 0)
+						return null;
+				} else {
+					if (from != null && from.compareTo(adj.get()) > 0)
+						return null;
+				}
+				return new BoundedMutableElement(adj);
 			}
 
 			@Override
@@ -1502,7 +1522,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 				// sub-sequence.
 				// It is for this reason that the repair API specifies that this method may be called even for elements that were not
 				// present in the sequence.
-				return theWrappedListener.removed(getElement(element));
+				return theWrappedListener.removed(getElement((ListElement<E>) element));
 			}
 
 			@Override
@@ -1519,7 +1539,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			@Override
 			public void transferred(CollectionElement<E> element, X data) {
 				if (isInRange(element.get()) == 0)
-					theWrappedListener.transferred(getElement(element), data);
+					theWrappedListener.transferred(getElement((ListElement<E>) element), data);
 			}
 		}
 	}
@@ -1584,8 +1604,8 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
-			return CollectionElement.reverse(getWrapped().search(reverse(search), filter.opposite()));
+		public ListElement<E> search(Comparable<? super E> search, BetterSortedList.SortedSearchFilter filter) {
+			return ListElement.reverse(getWrapped().search(reverse(search), filter.opposite()));
 		}
 
 		@Override

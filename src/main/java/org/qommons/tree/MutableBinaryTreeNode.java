@@ -2,6 +2,7 @@ package org.qommons.tree;
 
 import org.qommons.collect.BetterCollection;
 import org.qommons.collect.MutableCollectionElement;
+import org.qommons.collect.MutableListElement;
 import org.qommons.collect.OptimisticContext;
 
 /**
@@ -9,15 +10,16 @@ import org.qommons.collect.OptimisticContext;
  * 
  * @param <E> The type of value the nodes hold
  */
-public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableCollectionElement<E> {
+public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableListElement<E> {
 	@Override
 	MutableBinaryTreeNode<E> getParent();
 	@Override
 	MutableBinaryTreeNode<E> getLeft();
 	@Override
 	MutableBinaryTreeNode<E> getRight();
+
 	@Override
-	MutableBinaryTreeNode<E> getClosest(boolean left);
+	MutableBinaryTreeNode<E> getAdjacent(boolean next);
 
 	@Override
 	MutableBinaryTreeNode<E> getRoot();
@@ -77,8 +79,18 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		}
 
 		@Override
-		public BinaryTreeNode<E> getClosest(boolean left) {
-			return immutable(getWrapped().getClosest(left));
+		public BinaryTreeNode<E> getAdjacent(boolean next) {
+			return immutable(getWrapped().getAdjacent(next));
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return getWrapped().getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return getWrapped().getElementsAfter();
 		}
 
 		@Override
@@ -105,16 +117,6 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		public BinaryTreeNode<E> get(int index, OptimisticContext ctx) {
 			return immutable(getWrapped().get(index, ctx));
 		}
-
-		@Override
-		public int getNodesBefore() {
-			return getWrapped().getNodesBefore();
-		}
-
-		@Override
-		public int getNodesAfter() {
-			return getWrapped().getNodesAfter();
-		}
 	}
 
 	/**
@@ -133,11 +135,6 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		}
 
 		@Override
-		public BetterCollection<E> getCollection() {
-			return getWrapped().getCollection().reverse();
-		}
-
-		@Override
 		public MutableBinaryTreeNode<E> getParent() {
 			return MutableBinaryTreeNode.reverse((MutableBinaryTreeNode<E>) super.getParent());
 		}
@@ -153,8 +150,8 @@ public interface MutableBinaryTreeNode<E> extends BinaryTreeNode<E>, MutableColl
 		}
 
 		@Override
-		public MutableBinaryTreeNode<E> getClosest(boolean left) {
-			return MutableBinaryTreeNode.reverse((MutableBinaryTreeNode<E>) super.getClosest(!left));
+		public MutableBinaryTreeNode<E> getAdjacent(boolean next) {
+			return MutableBinaryTreeNode.reverse((MutableBinaryTreeNode<E>) super.getAdjacent(!next));
 		}
 
 		@Override

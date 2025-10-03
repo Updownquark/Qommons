@@ -14,8 +14,8 @@ import java.util.function.Supplier;
 public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 	K theKey;
 	V theValue;
-	/** The element ID of this entry */
-	protected ElementId theId; // Protected so implementations can set this
+	/** The element of this entry */
+	protected CollectionElement<? extends BetterMapEntryImpl<K, V>> theElement; // Protected so implementations can set this
 
 	private MutableMapEntryHandle<K, V> mutableHandle;
 	private CollectionElement<K> keyHandle;
@@ -32,7 +32,7 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 
 	@Override
 	public ElementId getElementId() {
-		return theId;
+		return theElement.getElementId();
 	}
 
 	@Override
@@ -43,6 +43,14 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 	@Override
 	public V get() {
 		return theValue;
+	}
+
+	@Override
+	public BetterMapEntryImpl<K, V> getAdjacent(boolean next) {
+		if (theElement == null)
+			throw new IllegalStateException();
+		CollectionElement<? extends BetterMapEntryImpl<K, V>> adj = theElement.getAdjacent(next);
+		return adj == null ? null : adj.get();
 	}
 
 	@Override
@@ -65,7 +73,7 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 	 * @param values Supplies the {@link BetterMap#values() values} collection for the map
 	 * @return The mutable handle for this map entry
 	 */
-	protected MutableMapEntryHandle<K, V> mutable(BetterSet<Map.Entry<K, V>> entrySet, Supplier<BetterCollection<V>> values) {
+	protected MutableMapEntryHandle<K, V> mutable(BetterSet<? extends Map.Entry<K, V>> entrySet, Supplier<BetterCollection<V>> values) {
 		if (mutableHandle == null) {
 			mutableHandle = createMutableHandle(entrySet, values);
 		}
@@ -79,7 +87,8 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 	 * @param values Supplies the {@link BetterMap#values() values} collection for the map
 	 * @return The mutable handle for this map entry
 	 */
-	protected MutableMapEntryHandle<K, V> createMutableHandle(BetterSet<Entry<K, V>> entrySet, Supplier<BetterCollection<V>> values) {
+	protected MutableMapEntryHandle<K, V> createMutableHandle(BetterSet<? extends Map.Entry<K, V>> entrySet,
+		Supplier<BetterCollection<V>> values) {
 		return new BetterMapMutableEntryHandleImpl<>(this, entrySet, values);
 	}
 
@@ -105,7 +114,7 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 	 * @param keySet Supplies the {@link BetterMap#keySet() key set}
 	 * @return The mutable element for this entry in the {@link BetterMap#keySet() key set}
 	 */
-	protected MutableCollectionElement<K> mutableKeyHandle(BetterSet<Map.Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
+	protected MutableCollectionElement<K> mutableKeyHandle(BetterSet<? extends Map.Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
 		if (mutableKeyHandle == null) {
 			mutableKeyHandle = createMutableKeyHandle(entrySet, keySet);
 		}
@@ -119,8 +128,9 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 	 * @param keySet Supplies the {@link BetterMap#keySet() key set}
 	 * @return The mutable element for this entry in the {@link BetterMap#keySet() key set}
 	 */
-	protected MutableCollectionElement<K> createMutableKeyHandle(BetterSet<Entry<K, V>> entrySet, Supplier<BetterSet<K>> keySet) {
-		MutableCollectionElement<Map.Entry<K, V>> mutableEntryEl = entrySet.mutableElement(theId);
+	protected MutableCollectionElement<K> createMutableKeyHandle(BetterSet<? extends Map.Entry<K, V>> entrySet,
+		Supplier<BetterSet<K>> keySet) {
+		MutableCollectionElement<? extends Map.Entry<K, V>> mutableEntryEl = entrySet.mutableElement(theElement.getElementId());
 		return new BetterMapEntryMutableKeyHandle<>(this, mutableEntryEl, keySet);
 	}
 
@@ -144,12 +154,18 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 
 		@Override
 		public ElementId getElementId() {
-			return theEntry.theId;
+			return theEntry.getElementId();
 		}
 
 		@Override
 		public K get() {
 			return theEntry.theKey;
+		}
+
+		@Override
+		public CollectionElement<K> getAdjacent(boolean next) {
+			BetterMapEntryImpl<K, ?> adj = theEntry.getAdjacent(next);
+			return adj == null ? null : adj.keyHandle();
 		}
 	}
 
@@ -175,8 +191,14 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		}
 
 		@Override
-		public BetterCollection<K> getCollection() {
-			return keySet.get();
+		public MutableCollectionElement<K> getAdjacent(boolean next) {
+			BetterMapEntryImpl<K, ?> adj = getEntry().getAdjacent(next);
+			if (adj == null)
+				return null;
+			else if (adj.mutableKeyHandle != null)
+				return adj.mutableKeyHandle;
+			else
+				return new BetterMapEntryMutableKeyHandle<>(adj, mutableEntryEl.getAdjacent(next), keySet);
 		}
 
 		@Override
@@ -225,7 +247,7 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 	 */
 	public static class BetterMapMutableEntryHandleImpl<K, V> implements MutableMapEntryHandle<K, V> {
 		private final BetterMapEntryImpl<K, V> theEntry;
-		private final MutableCollectionElement<Map.Entry<K, V>> theMutableEntryEl;
+		private final MutableCollectionElement<? extends Map.Entry<K, V>> theMutableEntryEl;
 		private final Supplier<BetterCollection<V>> theValues;
 
 		/**
@@ -233,10 +255,15 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		 * @param entrySet The {@link BetterMap#entrySet() entry set} for the map
 		 * @param values Supplies the {@link BetterMap#values() values} collection for the map
 		 */
-		public BetterMapMutableEntryHandleImpl(BetterMapEntryImpl<K, V> entry, BetterSet<Entry<K, V>> entrySet,
+		public BetterMapMutableEntryHandleImpl(BetterMapEntryImpl<K, V> entry, BetterSet<? extends Map.Entry<K, V>> entrySet,
+			Supplier<BetterCollection<V>> values) {
+			this(entry, entrySet.mutableElement(entry.getElementId()), values);
+		}
+
+		BetterMapMutableEntryHandleImpl(BetterMapEntryImpl<K, V> entry, MutableCollectionElement<? extends Map.Entry<K, V>> mutableEntryEl,
 			Supplier<BetterCollection<V>> values) {
 			theEntry = entry;
-			theMutableEntryEl = entrySet.mutableElement(theEntry.theId);
+			theMutableEntryEl = mutableEntryEl;
 			theValues = values;
 		}
 
@@ -246,13 +273,8 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		}
 
 		@Override
-		public BetterCollection<V> getCollection() {
-			return theValues.get();
-		}
-
-		@Override
 		public ElementId getElementId() {
-			return theEntry.theId;
+			return theEntry.getElementId();
 		}
 
 		@Override
@@ -263,6 +285,12 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		@Override
 		public V get() {
 			return theEntry.theValue;
+		}
+
+		@Override
+		public MutableMapEntryHandle<K, V> getAdjacent(boolean next) {
+			BetterMapEntryImpl<K, V> adj = theEntry.getAdjacent(next);
+			return adj == null ? null : new BetterMapMutableEntryHandleImpl<>(adj, theMutableEntryEl.getAdjacent(next), theValues);
 		}
 
 		@Override
@@ -278,7 +306,7 @@ public class BetterMapEntryImpl<K, V> implements MapEntryHandle<K, V> {
 		@Override
 		public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
 			theEntry.theValue = value;
-			theMutableEntryEl.set(theMutableEntryEl.get());
+			((MutableCollectionElement<Map.Entry<K, V>>) theMutableEntryEl).set(theMutableEntryEl.get());
 		}
 
 		@Override

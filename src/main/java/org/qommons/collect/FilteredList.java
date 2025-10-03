@@ -57,9 +57,9 @@ public class FilteredList<T> extends AbstractIdentifiable implements BetterList<
 	}
 
 	@Override
-	public CollectionElement<T> getElement(T value, boolean first) {
+	public ListElement<T> getElement(T value, boolean first) {
 		int index = 0;
-		for (CollectionElement<? extends T> filterValue : theWrapped.elements()) {
+		for (ListElement<? extends T> filterValue : theWrapped.elements()) {
 			if (!theFilter.get(index) && Objects.equals(filterValue.get(), value)) {
 				return new Element(filterValue, index);
 			}
@@ -69,20 +69,21 @@ public class FilteredList<T> extends AbstractIdentifiable implements BetterList<
 	}
 
 	@Override
-	public CollectionElement<T> getElement(ElementId id) {
-		int index = theWrapped.getElementsBefore(id);
+	public ListElement<T> getElement(ElementId id) {
+		ListElement<? extends T> wrapped = theWrapped.getElement(id);
+		int index = wrapped.getElementsBefore();
 		if (theFilter.get(index)) {
 			throw new NoSuchElementException(StdMsg.ELEMENT_REMOVED);
 		}
-		return new Element(theWrapped.getElement(id), index);
+		return new Element(wrapped, index);
 	}
 
 	@Override
-	public CollectionElement<T> getTerminalElement(boolean first) {
-		CollectionElement<? extends T> filterValue = theWrapped.getTerminalElement(first);
+	public ListElement<T> getTerminalElement(boolean first) {
+		ListElement<? extends T> filterValue = theWrapped.getTerminalElement(first);
 		int index = first ? 0 : theWrapped.size() - 1;
 		while (filterValue != null && theFilter.get(index)) {
-			filterValue = theWrapped.getAdjacentElement(filterValue.getElementId(), first);
+			filterValue = filterValue.getAdjacent(first);
 			if (first) {
 				index++;
 			} else {
@@ -93,23 +94,8 @@ public class FilteredList<T> extends AbstractIdentifiable implements BetterList<
 	}
 
 	@Override
-	public CollectionElement<T> getAdjacentElement(ElementId elementId, boolean next) {
-		CollectionElement<? extends T> filterValue = theWrapped.getAdjacentElement(elementId, next);
-		int index = theWrapped.getElementsBefore(elementId) + 1;
-		while (filterValue != null && theFilter.get(index)) {
-			filterValue = theWrapped.getAdjacentElement(filterValue.getElementId(), next);
-			if (next) {
-				index++;
-			} else {
-				index--;
-			}
-		}
-		return filterValue == null ? null : new Element(filterValue, index);
-	}
-
-	@Override
-	public MutableCollectionElement<T> mutableElement(ElementId id) {
-		return (MutableCollectionElement<T>) getElement(id);
+	public MutableListElement<T> mutableElement(ElementId id) {
+		return (MutableListElement<T>) getElement(id);
 	}
 
 	@Override
@@ -134,7 +120,7 @@ public class FilteredList<T> extends AbstractIdentifiable implements BetterList<
 	}
 
 	@Override
-	public CollectionElement<T> addElement(T value, ElementId after, ElementId before, boolean first)
+	public ListElement<T> addElement(T value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 		throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 	}
@@ -145,7 +131,7 @@ public class FilteredList<T> extends AbstractIdentifiable implements BetterList<
 	}
 
 	@Override
-	public CollectionElement<T> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
+	public ListElement<T> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
 			Runnable afterRemove) throws UnsupportedOperationException, IllegalArgumentException {
 		throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 	}
@@ -191,7 +177,7 @@ public class FilteredList<T> extends AbstractIdentifiable implements BetterList<
 	}
 
 	@Override
-	public CollectionElement<T> getElement(int index) throws IndexOutOfBoundsException {
+	public ListElement<T> getElement(int index) throws IndexOutOfBoundsException {
 		int sourceIndex = theFilter.indexOfNthClearBit(index);
 		if (sourceIndex < theWrapped.size()) {
 			return new Element(theWrapped.getElement(sourceIndex), sourceIndex);
@@ -202,18 +188,6 @@ public class FilteredList<T> extends AbstractIdentifiable implements BetterList<
 	@Override
 	public boolean isContentControlled() {
 		return true;
-	}
-
-	@Override
-	public int getElementsBefore(ElementId id) {
-		int index = theWrapped.getElementsBefore(id);
-		return index - theFilter.countBitsSetBetween(0, index);
-	}
-
-	@Override
-	public int getElementsAfter(ElementId id) {
-		int index = theWrapped.getElementsAfter(id);
-		return index - theFilter.countBitsSetBetween(index, theWrapped.size());
 	}
 
 	@Override
@@ -236,11 +210,11 @@ public class FilteredList<T> extends AbstractIdentifiable implements BetterList<
 		return BetterCollection.toString(this);
 	}
 
-	class Element implements MutableCollectionElement<T> {
-		private final CollectionElement<? extends T> theWrappedElement;
+	class Element implements MutableListElement<T> {
+		private final ListElement<? extends T> theWrappedElement;
 		private final int theIndex;
 
-		Element(CollectionElement<? extends T> wrappedElement, int index) {
+		Element(ListElement<? extends T> wrappedElement, int index) {
 			theWrappedElement = wrappedElement;
 			theIndex = index;
 		}
@@ -256,8 +230,30 @@ public class FilteredList<T> extends AbstractIdentifiable implements BetterList<
 		}
 
 		@Override
-		public BetterCollection<T> getCollection() {
-			return FilteredList.this;
+		public int getElementsBefore() {
+			int index = theWrappedElement.getElementsBefore();
+			return index - theFilter.countBitsSetBetween(0, index);
+		}
+
+		@Override
+		public int getElementsAfter() {
+			int index = theWrappedElement.getElementsBefore();
+			return index - theFilter.countBitsSetBetween(index, theWrapped.size());
+		}
+
+		@Override
+		public MutableListElement<T> getAdjacent(boolean next) {
+			ListElement<? extends T> filterValue = theWrappedElement.getAdjacent(next);
+			int index = theWrappedElement.getElementsBefore() + 1;
+			while (filterValue != null && theFilter.get(index)) {
+				filterValue = filterValue.getAdjacent(next);
+				if (next) {
+					index++;
+				} else {
+					index--;
+				}
+			}
+			return filterValue == null ? null : new Element(filterValue, index);
 		}
 
 		@Override

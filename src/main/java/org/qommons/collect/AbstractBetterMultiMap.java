@@ -404,7 +404,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 					theValueSize -= size;
 					theValues.dispose(value);
 					removedAny = true;
-					keyEl = theEntries.keySet().getAdjacentElement(keyEl.getElementId(), true);
+					keyEl = keyEl.getAdjacent(true);
 				} else {
 					int preSize = entry.getValue().size();
 					entry.getValue().clear();
@@ -420,14 +420,6 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 	@Override
 	public BetterSet<K> keySet() {
 		return theKeySet;
-	}
-
-	@Override
-	public BetterCollection<V> values() {
-		if (theValues instanceof ValueListSupplier)
-			return new BetterMultiMapValueList<>(this);
-		else
-			return BetterMultiMap.super.values();
 	}
 
 	@Override
@@ -505,7 +497,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		private final MapEntryHandle<K, BetterCollection<V>> theMapEntry;
 
 		/** @param mapEntry The key/values entry to wrap */
-		public DefaultEntryHandle(MapEntryHandle<K, BetterCollection<V>> mapEntry) {
+		protected DefaultEntryHandle(MapEntryHandle<K, BetterCollection<V>> mapEntry) {
 			theMapEntry = mapEntry;
 		}
 
@@ -530,6 +522,11 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		}
 
 		@Override
+		public MultiEntryHandle<K, V> getAdjacent(boolean next) {
+			return entryFor(theMapEntry.getAdjacent(next));
+		}
+
+		@Override
 		public int hashCode() {
 			return theMapEntry.hashCode();
 		}
@@ -545,8 +542,12 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		}
 	}
 
-	private MultiEntryHandle<K, V> entryFor(MapEntryHandle<K, BetterCollection<V>> mapEntry) {
-		return new DefaultEntryHandle(mapEntry);
+	/**
+	 * @param mapEntry The entry in the entry set to wrap
+	 * @return The multi-handle for the key entry
+	 */
+	protected MultiEntryHandle<K, V> entryFor(MapEntryHandle<K, BetterCollection<V>> mapEntry) {
+		return mapEntry == null ? null : new DefaultEntryHandle(mapEntry);
 	}
 
 	/** Implements {@link AbstractBetterMultiMap#keySet()} */
@@ -629,62 +630,8 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		}
 
 		@Override
-		public CollectionElement<K> getAdjacentElement(ElementId elementId, boolean next) {
-			return getBacking().getAdjacentElement(elementId, next);
-		}
-
-		@Override
 		public MutableCollectionElement<K> mutableElement(ElementId id) {
-			MutableCollectionElement<K> keyEl = getBacking().mutableElement(id);
-			return new MutableCollectionElement<K>() {
-				@Override
-				public ElementId getElementId() {
-					return id;
-				}
-
-				@Override
-				public K get() {
-					return keyEl.get();
-				}
-
-				@Override
-				public BetterCollection<K> getCollection() {
-					return BetterMultiMapKeySet.this;
-				}
-
-				@Override
-				public String isEnabled() {
-					return StdMsg.UNSUPPORTED_OPERATION;
-				}
-
-				@Override
-				public String isAcceptable(K value) {
-					return StdMsg.UNSUPPORTED_OPERATION;
-				}
-
-				@Override
-				public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
-					throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
-				}
-
-				@Override
-				public String canRemove() {
-					try (Transaction t = lock(false, null)) {
-						return keyEl.canRemove();
-					}
-				}
-
-				@Override
-				public void remove() throws UnsupportedOperationException {
-					try (Transaction t = lock(true, null)) {
-						BetterCollection<V> values = theEntries.getEntryById(id).get();
-						keyEl.remove();
-						theValueSize -= values.size();
-						theValues.dispose(values);
-						theStamp++;
-					}
-				}
-			};
+			return new MutableKeyElement(getBacking().mutableElement(id));
 		}
 
 		@Override
@@ -814,6 +761,63 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		@Override
 		public String toString() {
 			return BetterSet.toString(this);
+		}
+
+		class MutableKeyElement implements MutableCollectionElement<K> {
+			private final MutableCollectionElement<K> theKeyElement;
+
+			MutableKeyElement(MutableCollectionElement<K> keyElement) {
+				theKeyElement = keyElement;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return theKeyElement.getElementId();
+			}
+
+			@Override
+			public K get() {
+				return theKeyElement.get();
+			}
+
+			@Override
+			public MutableCollectionElement<K> getAdjacent(boolean next) {
+				MutableCollectionElement<K> adj = theKeyElement.getAdjacent(next);
+				return adj == null ? null : new MutableKeyElement(adj);
+			}
+
+			@Override
+			public String isEnabled() {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public String isAcceptable(K value) {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public void set(K value) throws UnsupportedOperationException, IllegalArgumentException {
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
+			public String canRemove() {
+				try (Transaction t = lock(false, null)) {
+					return theKeyElement.canRemove();
+				}
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				try (Transaction t = lock(true, null)) {
+					BetterCollection<V> values = theEntries.getEntryById(theKeyElement.getElementId()).get();
+					theKeyElement.remove();
+					theValueSize -= values.size();
+					theValues.dispose(values);
+					theStamp++;
+				}
+			}
 		}
 	}
 
@@ -981,81 +985,12 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		}
 
 		@Override
-		public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-			BetterCollection<E> wrapped = theWrapped.getBacking(false);
-			if (wrapped == null)
-				throw new NoSuchElementException();
-			return wrapped.getAdjacentElement(elementId, next);
-		}
-
-		@Override
 		public MutableCollectionElement<E> mutableElement(ElementId id) {
 			BetterCollection<E> wrapped = theWrapped.getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
 			MutableCollectionElement<E> wrappedEl = wrapped.mutableElement(id);
-			return new MutableCollectionElement<E>() {
-				@Override
-				public ElementId getElementId() {
-					return id;
-				}
-
-				@Override
-				public E get() {
-					return wrappedEl.get();
-				}
-
-				@Override
-				public BetterCollection<E> getCollection() {
-					return WrappingBetterCollection.this;
-				}
-
-				@Override
-				public String isEnabled() {
-					BetterCollection<E> wrapped2 = theWrapped.getBacking(false);
-					if (wrapped2 != wrapped)
-						return StdMsg.ELEMENT_REMOVED;
-					return wrappedEl.isEnabled();
-				}
-
-				@Override
-				public String isAcceptable(E value) {
-					BetterCollection<E> wrapped2 = theWrapped.getBacking(false);
-					if (wrapped2 != wrapped)
-						return StdMsg.ELEMENT_REMOVED;
-					return wrappedEl.isAcceptable(value);
-				}
-
-				@Override
-				public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-					BetterCollection<E> wrapped2 = theWrapped.getBacking(false);
-					if (wrapped2 != wrapped)
-						throw new IllegalStateException(StdMsg.ELEMENT_REMOVED);
-					wrappedEl.set(value);
-					theWrapped.changed(0);
-				}
-
-				@Override
-				public String canRemove() {
-					BetterCollection<E> wrapped2 = theWrapped.getBacking(false);
-					if (wrapped2 != wrapped)
-						return StdMsg.ELEMENT_REMOVED;
-					return wrappedEl.canRemove();
-				}
-
-				@Override
-				public void remove() throws UnsupportedOperationException {
-					try (Transaction t = lock(true, null)) {
-						BetterCollection<E> wrapped2 = theWrapped.getBacking(false);
-						if (wrapped2 != wrapped)
-							throw new IllegalStateException(StdMsg.ELEMENT_REMOVED);
-						wrappedEl.remove();
-						theWrapped.changed(-1);
-						if (isEmpty())
-							theWrapped.remove();
-					}
-				}
-			};
+			return new WrappedMutableElement(wrappedEl, wrapped);
 		}
 
 		@Override
@@ -1165,6 +1100,86 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 					getWrapped().remove();
 			}
 		}
+
+		class WrappedMutableElement implements MutableCollectionElement<E> {
+			private final MutableCollectionElement<E> theWrappedEl;
+			private final BetterCollection<E> theWrappedCollection;
+
+			WrappedMutableElement(MutableCollectionElement<E> wrappedEl, BetterCollection<E> wrappedCollection) {
+				theWrappedEl = wrappedEl;
+				theWrappedCollection = wrappedCollection;
+			}
+
+			protected MutableCollectionElement<E> getWrappedEl() {
+				return theWrappedEl;
+			}
+
+			protected BetterCollection<E> getWrappedCollection() {
+				return theWrappedCollection;
+			}
+
+			@Override
+			public ElementId getElementId() {
+				return theWrappedEl.getElementId();
+			}
+
+			@Override
+			public E get() {
+				return theWrappedEl.get();
+			}
+
+			@Override
+			public MutableCollectionElement<E> getAdjacent(boolean next) {
+				MutableCollectionElement<E> adj = theWrappedEl.getAdjacent(next);
+				return adj == null ? null : new WrappedMutableElement(adj, theWrappedCollection);
+			}
+
+			@Override
+			public String isEnabled() {
+				BetterCollection<E> wrapped2 = theWrapped.getBacking(false);
+				if (wrapped2 != theWrappedCollection)
+					return StdMsg.ELEMENT_REMOVED;
+				return theWrappedEl.isEnabled();
+			}
+
+			@Override
+			public String isAcceptable(E value) {
+				BetterCollection<E> wrapped2 = theWrapped.getBacking(false);
+				if (wrapped2 != theWrappedCollection)
+					return StdMsg.ELEMENT_REMOVED;
+				return theWrappedEl.isAcceptable(value);
+			}
+
+			@Override
+			public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
+				BetterCollection<E> wrapped2 = theWrapped.getBacking(false);
+				if (wrapped2 != theWrappedCollection)
+					throw new IllegalStateException(StdMsg.ELEMENT_REMOVED);
+				theWrappedEl.set(value);
+				theWrapped.changed(0);
+			}
+
+			@Override
+			public String canRemove() {
+				BetterCollection<E> wrapped2 = theWrapped.getBacking(false);
+				if (wrapped2 != theWrappedCollection)
+					return StdMsg.ELEMENT_REMOVED;
+				return theWrappedEl.canRemove();
+			}
+
+			@Override
+			public void remove() throws UnsupportedOperationException {
+				try (Transaction t = lock(true, null)) {
+					BetterCollection<E> wrapped2 = theWrapped.getBacking(false);
+					if (wrapped2 != theWrappedCollection)
+						throw new IllegalStateException(StdMsg.ELEMENT_REMOVED);
+					theWrappedEl.remove();
+					theWrapped.changed(-1);
+					if (isEmpty())
+						theWrapped.remove();
+				}
+			}
+		}
 	}
 
 	/**
@@ -1180,7 +1195,22 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		}
 
 		@Override
-		public CollectionElement<E> getElement(int index) throws IndexOutOfBoundsException {
+		public ListElement<E> getElement(E value, boolean first) {
+			return (ListElement<E>) super.getElement(value, first);
+		}
+
+		@Override
+		public ListElement<E> getElement(ElementId id) {
+			return (ListElement<E>) super.getElement(id);
+		}
+
+		@Override
+		public ListElement<E> getTerminalElement(boolean first) {
+			return (ListElement<E>) super.getTerminalElement(first);
+		}
+
+		@Override
+		public ListElement<E> getElement(int index) throws IndexOutOfBoundsException {
 			BetterList<E> wrapped = (BetterList<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
@@ -1193,19 +1223,24 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
-			BetterList<E> wrapped = (BetterList<E>) getWrapped().getBacking(false);
-			if (wrapped == null)
-				throw new NoSuchElementException();
-			return wrapped.getElementsBefore(id);
+		public ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return (ListElement<E>) super.addElement(value, after, before, first);
 		}
 
 		@Override
-		public int getElementsAfter(ElementId id) {
+		public ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			return (ListElement<E>) super.move(valueEl, after, before, first, afterRemove);
+		}
+
+		@Override
+		public MutableListElement<E> mutableElement(ElementId id) {
 			BetterList<E> wrapped = (BetterList<E>) getWrapped().getBacking(false);
 			if (wrapped == null)
 				throw new NoSuchElementException();
-			return wrapped.getElementsAfter(id);
+			MutableListElement<E> wrappedEl = wrapped.mutableElement(id);
+			return new WrappedMutableListElement(wrappedEl, wrapped);
 		}
 
 		@Override
@@ -1221,6 +1256,38 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		@Override
 		public String toString() {
 			return BetterCollection.toString(this);
+		}
+
+		class WrappedMutableListElement extends WrappedMutableElement implements MutableListElement<E> {
+			WrappedMutableListElement(MutableListElement<E> wrappedEl, BetterList<E> wrappedCollection) {
+				super(wrappedEl, wrappedCollection);
+			}
+
+			@Override
+			protected MutableListElement<E> getWrappedEl() {
+				return (MutableListElement<E>) super.getWrappedEl();
+			}
+
+			@Override
+			protected BetterList<E> getWrappedCollection() {
+				return (BetterList<E>) super.getWrappedCollection();
+			}
+
+			@Override
+			public MutableListElement<E> getAdjacent(boolean next) {
+				MutableListElement<E> adj = getWrappedEl().getAdjacent(next);
+				return adj == null ? null : new WrappedMutableListElement(adj, getWrappedCollection());
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return getWrappedEl().getElementsBefore();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return getWrappedEl().getElementsAfter();
+			}
 		}
 	}
 
@@ -1360,7 +1427,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		}
 
 		@Override
-		public CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+		public ListElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
 			BetterSortedList<E> wrapped = (BetterSortedList<E>) getWrapped().getBacking(false);
 			return wrapped == null ? null : wrapped.search(search, filter);
 		}
@@ -1390,68 +1457,6 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		@Override
 		public <T> T[] toArray(T[] a) {
 			return super.toArray(a);
-		}
-	}
-
-	/**
-	 * Implements {@link AbstractBetterMultiMap#values()} when the values are always lists
-	 * 
-	 * @param <K> The key type of the map
-	 * @param <V> The value type of the map
-	 */
-	protected static class BetterMultiMapValueList<K, V> extends BetterMultiMapValueCollection<K, V> implements BetterList<V> {
-		/** @param map The map to provide values of */
-		public BetterMultiMapValueList(AbstractBetterMultiMap<K, V> map) {
-			super(map);
-		}
-
-		@Override
-		public boolean isContentControlled() {
-			return true;
-		}
-
-		@Override
-		public int getElementsBefore(ElementId id) {
-			int count = 0;
-			MultiEntryHandle<K, V> entry;
-			if (id.isPresent()) {
-				entry = getMap().getEntryById(((MapValueId) id).getKeyId());
-				count = ((BetterList<V>) entry.getValues()).getElementsBefore(((MapValueId) id).getValueId());
-			}
-			entry = getMap().getAdjacentEntry(((MapValueId) id).getKeyId(), false);
-			while (entry != null) {
-				count += entry.getValues().size();
-				entry = getMap().getAdjacentEntry(entry.getElementId(), false);
-			}
-			return count;
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
-			int count = 0;
-			MultiEntryHandle<K, V> entry;
-			if (id.isPresent()) {
-				entry = getMap().getEntryById(((MapValueId) id).getKeyId());
-				count = ((BetterList<V>) entry.getValues()).getElementsAfter(((MapValueId) id).getValueId());
-			}
-			entry = getMap().getAdjacentEntry(((MapValueId) id).getKeyId(), true);
-			while (entry != null) {
-				count += entry.getValues().size();
-				entry = getMap().getAdjacentEntry(entry.getElementId(), true);
-			}
-			return count;
-		}
-
-		@Override
-		public CollectionElement<V> getElement(int index) throws IndexOutOfBoundsException {
-			int remaining = index;
-			for (MultiEntryHandle<K, V> entry : getMap().entrySet()) {
-				int valueSize = entry.getValues().size();
-				if (remaining < valueSize)
-					return entryFor(entry.getElementId(), ((BetterList<V>) entry.getValues()).getElement(remaining));
-				remaining -= valueSize;
-			}
-			throw new IndexOutOfBoundsException(index + " of " + (index - remaining));
 		}
 	}
 }

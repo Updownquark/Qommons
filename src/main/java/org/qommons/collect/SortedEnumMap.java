@@ -241,7 +241,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 	}
 
 	@Override
-	public MapEntryHandle<K, V> getEntry(K key) {
+	public OrderedMapEntry<K, V> getEntry(K key) {
 		return theEntries[key.ordinal()];
 	}
 
@@ -257,12 +257,12 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 	}
 
 	@Override
-	public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
+	public OrderedMapEntry<K, V> getEntryById(ElementId entryId) {
 		return getEntry(keyId(entryId).theKey);
 	}
 
 	@Override
-	public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
+	public MutableOrderedMapEntry<K, V> mutableEntry(ElementId entryId) {
 		return new MutableEntry((EnumEntry) getEntryById(entryId));
 	}
 
@@ -272,12 +272,12 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 	}
 
 	@Override
-	public MapEntryHandle<K, V> searchEntries(Comparable<? super Entry<K, V>> search, SortedSearchFilter filter) {
-		return (MapEntryHandle<K, V>) entrySet().search(search, filter);
+	public OrderedMapEntry<K, V> searchEntries(Comparable<? super Entry<K, V>> search, SortedSearchFilter filter) {
+		return (OrderedMapEntry<K, V>) entrySet().search(search, filter);
 	}
 
 	@Override
-	public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+	public OrderedMapEntry<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 		if (after != null && key.compareTo(keyId(after).theKey) < 0)
 			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
 		if (before != null && key.compareTo(keyId(before).theKey) > 0)
@@ -338,7 +338,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 	}
 
-	class EnumEntry implements MapEntryHandle<K, V> {
+	class EnumEntry implements OrderedMapEntry<K, V> {
 		private final KeyId theId;
 		private Object theValue;
 
@@ -373,6 +373,55 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
+		public int getElementsBefore() {
+			K key = theId.theKey;
+			int index = 0;
+			try (Transaction t = lock(false, null)) {
+				for (int i = 0; i < theKeys.length; i++) {
+					if (theKeys[i] == key)
+						return index;
+					else if (theEntries[i] != null)
+						index++;
+				}
+			}
+			throw new IllegalStateException();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			K key = theId.theKey;
+			int index = 0;
+			try (Transaction t = lock(false, null)) {
+				for (int i = theKeys.length - 1; i >= 0; i--) {
+					if (theKeys[i] == key)
+						return index;
+					else if (theEntries[i] != null)
+						index++;
+				}
+			}
+			throw new IllegalStateException();
+		}
+
+		@Override
+		public EnumEntry getAdjacent(boolean next) {
+			int index = theId.theKey.ordinal();
+			if (next) {
+				for (index++; index < theEntries.length; index++) {
+					EnumEntry entry = theEntries[index];
+					if (entry != null)
+						return entry;
+				}
+			} else {
+				for (index--; index >= 0; index--) {
+					EnumEntry entry = theEntries[index];
+					if (entry != null)
+						return entry;
+				}
+			}
+			return null;
+		}
+
+		@Override
 		public int hashCode() {
 			return theId.hashCode();
 		}
@@ -388,7 +437,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 	}
 
-	class MutableEntry implements MutableMapEntryHandle<K, V> {
+	class MutableEntry implements MutableOrderedMapEntry<K, V> {
 		private final EnumEntry theEntry;
 
 		MutableEntry(EnumEntry entry) {
@@ -401,8 +450,19 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public BetterCollection<V> getCollection() {
-			return values();
+		public int getElementsBefore() {
+			return theEntry.getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return theEntry.getElementsAfter();
+		}
+
+		@Override
+		public MutableOrderedMapEntry<K, V> getAdjacent(boolean next) {
+			EnumEntry adj = theEntry.getAdjacent(next);
+			return adj == null ? null : new MutableEntry(adj);
 		}
 
 		@Override
@@ -537,7 +597,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public CollectionElement<K> search(Comparable<? super K> search, SortedSearchFilter filter) {
+		public ListElement<K> search(Comparable<? super K> search, SortedSearchFilter filter) {
 			K[] keys = toArray();
 			if (keys.length == 0)
 				return null;
@@ -567,7 +627,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public CollectionElement<K> getElement(int index) throws IndexOutOfBoundsException {
+		public ListElement<K> getElement(int index) throws IndexOutOfBoundsException {
 			try (Transaction t = lock(false, null)) {
 				K[] keys = toArray();
 				return getElement(keys[index], true);
@@ -575,42 +635,12 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public int getElementsBefore(ElementId id) {
-			K key = keyId(id).theKey;
-			int index = 0;
-			try (Transaction t = lock(false, null)) {
-				for (int i = 0; i < theKeys.length; i++) {
-					if (theKeys[i] == key)
-						return index;
-					else if (theEntries[i] != null)
-						index++;
-				}
-			}
-			throw new IllegalStateException();
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
-			K key = keyId(id).theKey;
-			int index = 0;
-			try (Transaction t = lock(false, null)) {
-				for (int i = theKeys.length - 1; i >= 0; i--) {
-					if (theKeys[i] == key)
-						return index;
-					else if (theEntries[i] != null)
-						index++;
-				}
-			}
-			throw new IllegalStateException();
-		}
-
-		@Override
-		public CollectionElement<K> getElement(ElementId id) {
+		public ListElement<K> getElement(ElementId id) {
 			return new KeyElement(keyId(id));
 		}
 
 		@Override
-		public CollectionElement<K> getTerminalElement(boolean first) {
+		public ListElement<K> getTerminalElement(boolean first) {
 			if (first) {
 				for (EnumEntry entry : theEntries) {
 					if (entry != null)
@@ -627,26 +657,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public CollectionElement<K> getAdjacentElement(ElementId elementId, boolean next) {
-			int index = keyId(elementId).theKey.ordinal();
-			if (next) {
-				for (index++; index < theEntries.length; index++) {
-					EnumEntry entry = theEntries[index];
-					if (entry != null)
-						return new KeyElement(entry.getElementId());
-				}
-			} else {
-				for (index--; index >= 0; index--) {
-					EnumEntry entry = theEntries[index];
-					if (entry != null)
-						return new KeyElement(entry.getElementId());
-				}
-			}
-			return null;
-		}
-
-		@Override
-		public MutableCollectionElement<K> mutableElement(ElementId id) {
+		public MutableListElement<K> mutableElement(ElementId id) {
 			return new MutableKeyElement(keyId(id));
 		}
 
@@ -695,7 +706,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public CollectionElement<K> addElement(K value, ElementId after, ElementId before, boolean first)
+		public ListElement<K> addElement(K value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			if (after != null && value.compareTo(keyId(after).theKey) < 0)
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
@@ -774,7 +785,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 			return SortedEnumMap.this.isEmpty();
 		}
 
-		class KeyElement implements CollectionElement<K> {
+		class KeyElement implements ListElement<K> {
 			private final KeyId theId;
 
 			KeyElement(SortedEnumMap<K, V>.KeyId id) {
@@ -789,6 +800,55 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 			@Override
 			public K get() {
 				return theId.theKey;
+			}
+
+			@Override
+			public ListElement<K> getAdjacent(boolean next) {
+				int index = theId.theKey.ordinal();
+				if (next) {
+					for (index++; index < theEntries.length; index++) {
+						EnumEntry entry = theEntries[index];
+						if (entry != null)
+							return new KeyElement(entry.getElementId());
+					}
+				} else {
+					for (index--; index >= 0; index--) {
+						EnumEntry entry = theEntries[index];
+						if (entry != null)
+							return new KeyElement(entry.getElementId());
+					}
+				}
+				return null;
+			}
+
+			@Override
+			public int getElementsBefore() {
+				K key = theId.theKey;
+				int index = 0;
+				try (Transaction t = lock(false, null)) {
+					for (int i = 0; i < theKeys.length; i++) {
+						if (theKeys[i] == key)
+							return index;
+						else if (theEntries[i] != null)
+							index++;
+					}
+				}
+				throw new IllegalStateException();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				K key = theId.theKey;
+				int index = 0;
+				try (Transaction t = lock(false, null)) {
+					for (int i = theKeys.length - 1; i >= 0; i--) {
+						if (theKeys[i] == key)
+							return index;
+						else if (theEntries[i] != null)
+							index++;
+					}
+				}
+				throw new IllegalStateException();
 			}
 
 			@Override
@@ -807,14 +867,27 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 			}
 		}
 
-		class MutableKeyElement extends KeyElement implements MutableCollectionElement<K> {
+		class MutableKeyElement extends KeyElement implements MutableListElement<K> {
 			MutableKeyElement(SortedEnumMap<K, V>.KeyId id) {
 				super(id);
 			}
-
 			@Override
-			public BetterCollection<K> getCollection() {
-				return KeySet.this;
+			public MutableListElement<K> getAdjacent(boolean next) {
+				int index = getElementId().theKey.ordinal();
+				if (next) {
+					for (index++; index < theEntries.length; index++) {
+						EnumEntry entry = theEntries[index];
+						if (entry != null)
+							return new MutableKeyElement(entry.getElementId());
+					}
+				} else {
+					for (index--; index >= 0; index--) {
+						EnumEntry entry = theEntries[index];
+						if (entry != null)
+							return new MutableKeyElement(entry.getElementId());
+					}
+				}
+				return null;
 			}
 
 			@Override
@@ -911,21 +984,11 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public CollectionElement<Map.Entry<K, V>> getElement(int index) throws IndexOutOfBoundsException {
+		public ListElement<Map.Entry<K, V>> getElement(int index) throws IndexOutOfBoundsException {
 			try (Transaction t = lock(false, null)) {
 				K[] keys = theKeySet.toArray();
 				return new EntryElement(theEntries[keys[index].ordinal()]);
 			}
-		}
-
-		@Override
-		public int getElementsBefore(ElementId id) {
-			return theKeySet.getElementsBefore(id);
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
-			return theKeySet.getElementsAfter(id);
 		}
 
 		@Override
@@ -934,7 +997,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public CollectionElement<Map.Entry<K, V>> search(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
+		public ListElement<Map.Entry<K, V>> search(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
 			CollectionElement<K> found = theKeySet.search(k -> search.compareTo(getEntry(k)), filter);
 			return found == null ? null : getElement(found.getElementId());
 		}
@@ -945,12 +1008,12 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public CollectionElement<Map.Entry<K, V>> getElement(ElementId id) {
+		public ListElement<Map.Entry<K, V>> getElement(ElementId id) {
 			return new EntryElement((EnumEntry) getEntryById(id));
 		}
 
 		@Override
-		public CollectionElement<Map.Entry<K, V>> getTerminalElement(boolean first) {
+		public ListElement<Map.Entry<K, V>> getTerminalElement(boolean first) {
 			return entryElementFor(getTerminalEntry(first));
 		}
 
@@ -959,12 +1022,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public CollectionElement<Entry<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
-			return entryElementFor(getAdjacentEntry(elementId, next));
-		}
-
-		@Override
-		public MutableCollectionElement<Map.Entry<K, V>> mutableElement(ElementId id) {
+		public MutableListElement<Map.Entry<K, V>> mutableElement(ElementId id) {
 			return new MutableEntryElement((EnumEntry) getEntryById(id));
 		}
 
@@ -1005,7 +1063,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public CollectionElement<Map.Entry<K, V>> addElement(Map.Entry<K, V> value, ElementId after, ElementId before, boolean first)
+		public ListElement<Map.Entry<K, V>> addElement(Map.Entry<K, V> value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
@@ -1030,7 +1088,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 			return BetterSortedSet.super.toArray(a);
 		}
 
-		class EntryElement implements CollectionElement<Map.Entry<K, V>> {
+		class EntryElement implements ListElement<Map.Entry<K, V>> {
 			private final EnumEntry theEntry;
 
 			EntryElement(EnumEntry entry) {
@@ -1052,6 +1110,22 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 			}
 
 			@Override
+			public ListElement<Entry<K, V>> getAdjacent(boolean next) {
+				EnumEntry adj = theEntry.getAdjacent(next);
+				return adj == null ? null : new EntryElement(adj);
+			}
+
+			@Override
+			public int getElementsBefore() {
+				return theEntry.getElementsBefore();
+			}
+
+			@Override
+			public int getElementsAfter() {
+				return theEntry.getElementsAfter();
+			}
+
+			@Override
 			public int hashCode() {
 				return theEntry.hashCode();
 			}
@@ -1068,14 +1142,15 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 			}
 		}
 
-		class MutableEntryElement extends EntryElement implements MutableCollectionElement<Map.Entry<K, V>> {
-			MutableEntryElement(SortedEnumMap<K, V>.EnumEntry entry) {
+		class MutableEntryElement extends EntryElement implements MutableListElement<Map.Entry<K, V>> {
+			MutableEntryElement(EnumEntry entry) {
 				super(entry);
 			}
 
 			@Override
-			public BetterCollection<Map.Entry<K, V>> getCollection() {
-				return EntrySet.this;
+			public MutableListElement<Map.Entry<K, V>> getAdjacent(boolean next) {
+				EnumEntry adj = getEntry().getAdjacent(next);
+				return adj == null ? null : new MutableEntryElement(adj);
 			}
 
 			@Override
@@ -1142,7 +1217,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getElement(V value, boolean first) {
+		public OrderedMapEntry<K, V> getElement(V value, boolean first) {
 			try (Transaction t = lock(false, null)) {
 				if (first) {
 					for (int i = 0; i < theEntries.length; i++) {
@@ -1160,22 +1235,17 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getElement(ElementId id) {
+		public OrderedMapEntry<K, V> getElement(ElementId id) {
 			return SortedEnumMap.this.getEntryById(id);
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getTerminalElement(boolean first) {
+		public OrderedMapEntry<K, V> getTerminalElement(boolean first) {
 			return SortedEnumMap.this.getTerminalEntry(first);
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getAdjacentElement(ElementId elementId, boolean next) {
-			return SortedEnumMap.this.getAdjacentEntry(elementId, next);
-		}
-
-		@Override
-		public MutableMapEntryHandle<K, V> mutableElement(ElementId id) {
+		public MutableOrderedMapEntry<K, V> mutableElement(ElementId id) {
 			return SortedEnumMap.this.mutableEntry(id);
 		}
 
@@ -1215,7 +1285,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public CollectionElement<V> addElement(V value, ElementId after, ElementId before, boolean first)
+		public ListElement<V> addElement(V value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
@@ -1226,14 +1296,14 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public MapEntryHandle<K, V> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+		public OrderedMapEntry<K, V> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			theKeySet.move(valueEl, after, before, first, null); // Let the sorted set throw the exception
 			return getElement(valueEl);
 		}
 
 		@Override
-		public MapEntryHandle<K, V> getElement(int index) throws IndexOutOfBoundsException {
+		public OrderedMapEntry<K, V> getElement(int index) throws IndexOutOfBoundsException {
 			try (Transaction t = lock(false, null)) {
 				int i = 0;
 				for (int j = 0; j < theEntries.length; j++) {
@@ -1251,16 +1321,6 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		@Override
 		public boolean isContentControlled() {
 			return true;
-		}
-
-		@Override
-		public int getElementsBefore(ElementId id) {
-			return theKeySet.getElementsBefore(id);
-		}
-
-		@Override
-		public int getElementsAfter(ElementId id) {
-			return theKeySet.getElementsAfter(id);
 		}
 
 		@Override

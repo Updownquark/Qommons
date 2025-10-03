@@ -92,13 +92,13 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 	int indexOf(Object value);
 
 	@Override
-	default CollectionElement<E> getElement(E value, boolean first) {
+	default ListElement<E> getElement(E value, boolean first) {
 		int index = indexOf(value);
 		return index < 0 ? null : getElement(index);
 	}
 
 	@Override
-	default CollectionElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
+	default ListElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
 		int found = findByIndex(index -> search.compareTo(get(index)), filter);
 		return found < 0 ? null : getElement(found);
 	}
@@ -148,7 +148,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 	}
 
 	@Override
-	default CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+	default ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
 		throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 	}
@@ -385,51 +385,22 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			public abstract E get(int index);
 
 			@Override
-			public abstract MutableCollectionElement<E> getElement(int index) throws IndexOutOfBoundsException;
+			public abstract MutableListElement<E> getElement(int index) throws IndexOutOfBoundsException;
 
 			@Override
-			public int getElementsBefore(ElementId id) {
-				if (id instanceof IndexedElementId)
-					return ((IndexedElementId) id).index;
-				throw new NoSuchElementException();
-			}
-
-			@Override
-			public int getElementsAfter(ElementId id) {
-				return size() - getElementsBefore(id) - 1;
-			}
-
-			@Override
-			public CollectionElement<E> getElement(ElementId id) {
+			public ListElement<E> getElement(ElementId id) {
 				if (id instanceof IndexedElementId)
 					return getElement(((IndexedElementId) id).index);
 				throw new NoSuchElementException();
 			}
 
 			@Override
-			public CollectionElement<E> getTerminalElement(boolean first) {
+			public ListElement<E> getTerminalElement(boolean first) {
 				return getElement(first ? 0 : size() - 1);
 			}
 
 			@Override
-			public CollectionElement<E> getAdjacentElement(ElementId elementId, boolean next) {
-				if (elementId instanceof IndexedElementId) {
-					int index = ((IndexedElementId) elementId).index;
-					if (next) {
-						if (index == size() - 1)
-							return null;
-						return getElement(index + 1);
-					} else {
-						if (index == 0)
-							return null;
-						return getElement(index - 1);
-					}
-				}
-				throw new NoSuchElementException();
-			}
-
-			@Override
-			public MutableCollectionElement<E> mutableElement(ElementId id) {
+			public MutableListElement<E> mutableElement(ElementId id) {
 				if (id instanceof IndexedElementId)
 					return getElement(((IndexedElementId) id).index);
 				throw new NoSuchElementException();
@@ -476,16 +447,11 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 				return new Element(index);
 			}
 
-			class Element implements MutableCollectionElement<E> {
+			class Element implements MutableListElement<E> {
 				final IndexedElementId theId;
 
 				Element(int index) {
 					theId = IDS[index];
-				}
-
-				@Override
-				public BetterCollection<E> getCollection() {
-					return AbstractHPAS.this;
 				}
 
 				@Override
@@ -496,6 +462,30 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 				@Override
 				public E get() {
 					return AbstractHPAS.this.get(theId.index);
+				}
+
+				@Override
+				public int getElementsBefore() {
+					return theId.index;
+				}
+
+				@Override
+				public int getElementsAfter() {
+					return size() - theId.index - 1;
+				}
+
+				@Override
+				public MutableListElement<E> getAdjacent(boolean next) {
+					int index = theId.index;
+					if (next) {
+						if (index == size() - 1)
+							return null;
+						return getElement(index + 1);
+					} else {
+						if (index == 0)
+							return null;
+						return getElement(index - 1);
+					}
 				}
 
 				@Override
@@ -560,7 +550,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 
 		static class Singleton<E> extends AbstractHPAS<E> {
 			private final E theValue;
-			private final MutableCollectionElement<E> theElement;
+			private final MutableListElement<E> theElement;
 
 			Singleton(Comparator<? super E> sorting, E value) {
 				super(sorting);
@@ -576,7 +566,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public MutableCollectionElement<E> getElement(int index) throws IndexOutOfBoundsException {
+			public MutableListElement<E> getElement(int index) throws IndexOutOfBoundsException {
 				if (index == 0)
 					return theElement;
 				throw new IndexOutOfBoundsException(index + " of 1");
@@ -757,8 +747,8 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 		static class Double<E> extends AbstractHPAS<E> {
 			private final E theFirst;
 			private final E theSecond;
-			private final MutableCollectionElement<E> theFirstElement;
-			private final MutableCollectionElement<E> theSecondElement;
+			private final MutableListElement<E> theFirstElement;
+			private final MutableListElement<E> theSecondElement;
 
 			Double(Comparator<? super E> sorting, E first, E second) {
 				super(sorting);
@@ -781,7 +771,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public MutableCollectionElement<E> getElement(int index) throws IndexOutOfBoundsException {
+			public MutableListElement<E> getElement(int index) throws IndexOutOfBoundsException {
 				switch (index) {
 				case 0:
 					return theFirstElement;
@@ -979,12 +969,12 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 
 		static abstract class ArrayBackedHPAS<E> extends AbstractHPAS<E> {
 			protected final Object[] theValues;
-			private final MutableCollectionElement<E>[] theElements;
+			private final MutableListElement<E>[] theElements;
 
 			ArrayBackedHPAS(Comparator<? super E> sorting, Object[] values) {
 				super(sorting);
 				theValues = values;
-				theElements = new MutableCollectionElement[values.length];
+				theElements = new MutableListElement[values.length];
 				for (int i = 0; i < values.length; i++)
 					theElements[i] = createElement(i);
 			}
@@ -1038,7 +1028,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public MutableCollectionElement<E> getElement(int index) throws IndexOutOfBoundsException {
+			public MutableListElement<E> getElement(int index) throws IndexOutOfBoundsException {
 				return theElements[index];
 			}
 
@@ -1456,14 +1446,14 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public MapEntryHandle<K, V> getEntry(int index) {
+			public OrderedMapEntry<K, V> getEntry(int index) {
 				if (theEntries[index] == null)
 					theEntries[index] = new Entry(index);
 				return theEntries[index];
 			}
 
 			@Override
-			public MapEntryHandle<K, V> getEntry(K key) {
+			public OrderedMapEntry<K, V> getEntry(K key) {
 				int index = theKeySet.indexOf(key);
 				if (index < 0)
 					return null;
@@ -1471,15 +1461,16 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
-				int index = theKeySet.getElementsBefore(entryId);
+			public OrderedMapEntry<K, V> getEntryById(ElementId entryId) {
+				ListElement<K> keyEl = theKeySet.getElement(entryId);
+				int index = keyEl.getElementsBefore();
 				if (index < 0)
 					return null;
 				return getEntry(index);
 			}
 
 			@Override
-			public MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
+			public OrderedMapEntry<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
 				int found = theKeySet.findByIndex(index -> search.compareTo(getEntry(index)), filter);
 				if (found < 0)
 					return null;
@@ -1487,8 +1478,9 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
-				int index = theKeySet.getElementsBefore(entryId);
+			public MutableOrderedMapEntry<K, V> mutableEntry(ElementId entryId) {
+				ListElement<K> keyEl = theKeySet.getElement(entryId);
+				int index = keyEl.getElementsBefore();
 				return new MutableEntry(index);
 			}
 
@@ -1501,7 +1493,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+			public OrderedMapEntry<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 				int index = theKeySet.indexOf(key);
 				if (index < 0)
 					return null;
@@ -1539,7 +1531,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 				return entrySet().toString();
 			}
 
-			class Entry implements MapEntryHandle<K, V> {
+			class Entry implements OrderedMapEntry<K, V> {
 				K key;
 				final int theIndex;
 
@@ -1565,6 +1557,29 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 				}
 
 				@Override
+				public int getElementsBefore() {
+					return theIndex;
+				}
+
+				@Override
+				public int getElementsAfter() {
+					return size() - theIndex - 1;
+				}
+
+				@Override
+				public OrderedMapEntry<K, V> getAdjacent(boolean next) {
+					if (next) {
+						if (theIndex == size() - 1)
+							return null;
+						return new MutableEntry(theIndex + 1);
+					} else {
+						if (theIndex == 0)
+							return null;
+						return new MutableEntry(theIndex - 1);
+					}
+				}
+
+				@Override
 				public int hashCode() {
 					return theIndex;
 				}
@@ -1580,14 +1595,22 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 				}
 			}
 
-			class MutableEntry extends Entry implements MutableMapEntryHandle<K, V> {
+			class MutableEntry extends Entry implements MutableOrderedMapEntry<K, V> {
 				MutableEntry(int index) {
 					super(index);
 				}
 
 				@Override
-				public BetterCollection<V> getCollection() {
-					return values();
+				public MutableOrderedMapEntry<K, V> getAdjacent(boolean next) {
+					if (next) {
+						if (theIndex == size() - 1)
+							return null;
+						return new MutableEntry(theIndex + 1);
+					} else {
+						if (theIndex == 0)
+							return null;
+						return new MutableEntry(theIndex - 1);
+					}
 				}
 
 				@Override
@@ -1625,7 +1648,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public MapEntryHandle<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
+			public OrderedMapEntry<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
 				return theWrapped.searchEntries(search, filter);
 			}
 
@@ -1635,22 +1658,22 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
-			public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
+			public OrderedMapEntry<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 			}
 
 			@Override
-			public MapEntryHandle<K, V> getEntry(K key) {
+			public OrderedMapEntry<K, V> getEntry(K key) {
 				return theWrapped.getEntry(key);
 			}
 
 			@Override
-			public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
+			public OrderedMapEntry<K, V> getEntryById(ElementId entryId) {
 				return theWrapped.getEntryById(entryId);
 			}
 
 			@Override
-			public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
+			public MutableOrderedMapEntry<K, V> mutableEntry(ElementId entryId) {
 				return new UnmodifiableMutableElement(getEntryById(entryId));
 			}
 
@@ -1704,10 +1727,10 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 				return entrySet().toString();
 			}
 
-			class UnmodifiableMutableElement implements MutableMapEntryHandle<K, V> {
-				private final MapEntryHandle<K, V> theWrappedElement;
+			class UnmodifiableMutableElement implements MutableOrderedMapEntry<K, V> {
+				private final OrderedMapEntry<K, V> theWrappedElement;
 
-				UnmodifiableMutableElement(MapEntryHandle<K, V> wrapped) {
+				UnmodifiableMutableElement(OrderedMapEntry<K, V> wrapped) {
 					theWrappedElement = wrapped;
 				}
 
@@ -1727,8 +1750,19 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 				}
 
 				@Override
-				public BetterCollection<V> getCollection() {
-					return UnmodifiableHPAMap.this.values();
+				public int getElementsBefore() {
+					return theWrappedElement.getElementsBefore();
+				}
+
+				@Override
+				public int getElementsAfter() {
+					return theWrappedElement.getElementsAfter();
+				}
+
+				@Override
+				public MutableOrderedMapEntry<K, V> getAdjacent(boolean next) {
+					OrderedMapEntry<K, V> adj = theWrappedElement.getAdjacent(next);
+					return adj == null ? null : new UnmodifiableMutableElement(adj);
 				}
 
 				@Override

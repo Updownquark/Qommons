@@ -23,9 +23,6 @@ public interface TreeBasedList<E> extends SplitSpliterable<E> {
 	BinaryTreeNode<E> getTerminalElement(boolean first);
 
 	@Override
-	BinaryTreeNode<E> getAdjacentElement(ElementId elementId, boolean next);
-
-	@Override
 	MutableBinaryTreeNode<E> mutableElement(ElementId id);
 
 	@Override

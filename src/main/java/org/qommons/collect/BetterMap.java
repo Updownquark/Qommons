@@ -140,18 +140,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 	}
 
 	/**
-	 * @param entryId The entry to get the adjacent entry for
-	 * @param next Whether to get the next or previous entry
-	 * @return The adjacent entry, or null if the given entry is terminal in the given direction
-	 */
-	default MapEntryHandle<K, V> getAdjacentEntry(ElementId entryId, boolean next) {
-		try (Transaction t = lock(false, null)) {
-			CollectionElement<K> keyEl = keySet().getAdjacentElement(entryId, next);
-			return keyEl == null ? null : getEntryById(keyEl.getElementId());
-		}
-	}
-
-	/**
 	 * @param entryId The element ID to get the handle for
 	 * @return The mutable handle for the entry in this map with the given ID
 	 */
@@ -475,30 +463,17 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 
 	@Override
 	default V computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-		while (true) {
+		try (Transaction t = lock(true, null)) {
 			MapEntryHandle<K, V> handle = getEntry(key);
 			if (handle != null) {
-				MutableMapEntryHandle<K, V> mutableEntry;
-				try {
-					mutableEntry = mutableEntry(handle.getElementId());
-				} catch (IllegalArgumentException e) {
-					continue;
-				}
+				MutableMapEntryHandle<K, V> mutableEntry = mutableEntry(handle.getElementId());
 				V oldValue = mutableEntry.get();
 				V newValue = remappingFunction.apply(key, oldValue);
-				if (newValue != null) {
-					do {
-						if (mutableEntry.compareAndSet(oldValue, newValue))
-							return newValue;
-					} while (mutableEntry.getElementId().isPresent());
-				} else {
-					try {
-						mutableEntry.remove();
-						return null;
-					} catch (IllegalStateException e) {
-						continue;
-					}
-				}
+				if (newValue == null)
+					mutableEntry.remove();
+				else
+					mutableEntry.set(newValue);
+				return newValue;
 			} else
 				return null;
 		}
@@ -506,43 +481,33 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 
 	@Override
 	default V compute(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-		while (true) {
+		try (Transaction t = lock(true, null)) {
 			ValueHolder<V> value = new ValueHolder<>();
 			MapEntryHandle<K, V> entry = getOrPutEntry(key, k -> {
 				V newValue = remappingFunction.apply(k, null);
 				value.accept(newValue);
 				return newValue;
 			}, null, null, false, null, null);
-			if (value.isPresent()) {
-				if (value.get() == null) {// Should not add
+			if (entry == null)
+				return null; // Not added. I didn't specify in the API what should happen if the value function returns null.
+			else if (value.isPresent()) {
+				if (value.get() == null) {// Value returned null, meaning this should not be added
 					try {
 						mutableEntry(entry.getElementId()).remove();
 					} catch (IllegalArgumentException e) {
 						return null;
 					}
 				}
-				return value.get();// Added
-			}
-			MutableMapEntryHandle<K, V> mutableEntry;
-			try {
-				mutableEntry = mutableEntry(entry.getElementId());
-			} catch (IllegalArgumentException e) {
-				continue;
-			}
-			V oldValue = mutableEntry.get();
-			V newValue = remappingFunction.apply(key, oldValue);
-			if (newValue != null) {
-				do {
-					if (mutableEntry.compareAndSet(oldValue, newValue))
-						return newValue;
-				} while (mutableEntry.getElementId().isPresent());
+				return value.get();
 			} else {
-				try {
-					mutableEntry.remove();
-					return null;
-				} catch (IllegalStateException e) {
-					continue;
-				}
+				V newValue = remappingFunction.apply(entry.getKey(), entry.getValue());
+				if (newValue == entry.getValue())
+					return newValue;
+				else if (newValue == null)
+					mutableEntry(entry.getElementId()).remove();
+				else
+					mutableEntry(entry.getElementId()).set(newValue);
+				return newValue;
 			}
 		}
 	}
@@ -876,19 +841,12 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		}
 
 		@Override
-		public CollectionElement<Entry<K, V>> getTerminalElement(boolean first) {
-			CollectionElement<K> keyEl = theMap.keySet().getTerminalElement(first);
-			return keyEl == null ? null : getElement(keyEl.getElementId());
+		public CollectionElement<Map.Entry<K, V>> getTerminalElement(boolean first) {
+			return entryFor(theMap.getTerminalEntry(first));
 		}
 
 		@Override
-		public CollectionElement<Entry<K, V>> getAdjacentElement(ElementId elementId, boolean next) {
-			CollectionElement<K> keyEl = theMap.keySet().getAdjacentElement(elementId, next);
-			return keyEl == null ? null : getElement(keyEl.getElementId());
-		}
-
-		@Override
-		public CollectionElement<Entry<K, V>> getElement(Entry<K, V> value, boolean first) {
+		public CollectionElement<Map.Entry<K, V>> getElement(Map.Entry<K, V> value, boolean first) {
 			if (value == null)
 				return null;
 			MapEntryHandle<K, V> entry = theMap.getEntry(value.getKey());
@@ -896,12 +854,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		}
 
 		@Override
-		public CollectionElement<Entry<K, V>> getElement(ElementId id) {
-			return new EntryElement(theMap.getEntryById(id));
+		public CollectionElement<Map.Entry<K, V>> getElement(ElementId id) {
+			return entryFor(theMap.getEntryById(id));
 		}
 
 		@Override
-		public BetterList<CollectionElement<Entry<K, V>>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
+		public BetterList<CollectionElement<Map.Entry<K, V>>> getElementsBySource(ElementId sourceEl,
+			BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
 			return QommonsUtils.map2(theMap.keySet().getElementsBySource(sourceEl, sourceCollection),
@@ -922,31 +881,32 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		}
 
 		@Override
-		public CollectionElement<Entry<K, V>> getOrAdd(Entry<K, V> value, ElementId after, ElementId before, boolean first, Runnable preAdd,
+		public CollectionElement<Map.Entry<K, V>> getOrAdd(Map.Entry<K, V> value, ElementId after, ElementId before, boolean first,
+			Runnable preAdd,
 			Runnable postAdd) {
 			MapEntryHandle<K, V> entry = theMap.getOrPutEntry(value.getKey(), k -> value.getValue(), after, before, first, preAdd, postAdd);
 			return entry == null ? null : getElement(entry.getElementId());
 		}
 
 		@Override
-		public MutableCollectionElement<Entry<K, V>> mutableElement(ElementId id) {
+		public MutableCollectionElement<Map.Entry<K, V>> mutableElement(ElementId id) {
 			return new MutableEntryElement(theMap.mutableEntry(id));
 		}
 
 		@Override
-		public String canAdd(Entry<K, V> value, ElementId after, ElementId before) {
+		public String canAdd(Map.Entry<K, V> value, ElementId after, ElementId before) {
 			return theMap.keySet().canAdd(value.getKey(), after, before);
 		}
 
 		@Override
-		public CollectionElement<Entry<K, V>> addElement(Entry<K, V> value, ElementId after, ElementId before, boolean first)
+		public CollectionElement<Map.Entry<K, V>> addElement(Map.Entry<K, V> value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			CollectionElement<K> keyEl = theMap.keySet().addElement(value.getKey(), after, before, first);
 			if (keyEl == null)
 				return null;
 			MutableMapEntryHandle<K, V> mapEntry = theMap.mutableEntry(keyEl.getElementId());
 			mapEntry.setValue(value.getValue());
-			return new EntryElement(mapEntry);
+			return entryFor(mapEntry);
 		}
 
 		@Override
@@ -955,7 +915,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		}
 
 		@Override
-		public CollectionElement<Entry<K, V>> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
+		public CollectionElement<Map.Entry<K, V>> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
 			Runnable afterRemove) throws UnsupportedOperationException, IllegalArgumentException {
 			return getElement(theMap.keySet().move(valueEl, after, before, first, afterRemove).getElementId());
 		}
@@ -976,14 +936,14 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		}
 
 		@Override
-		public <X> boolean repair(ElementId element, RepairListener<Entry<K, V>, X> listener) {
+		public <X> boolean repair(ElementId element, RepairListener<Map.Entry<K, V>, X> listener) {
 			MapRepairListener<K, V, EntryRepairTracker<K, V, X>> mapListener = listener == null ? null
 				: new EntryRepairListener<>(listener);
 			return theMap.repair(element, mapListener);
 		}
 
 		@Override
-		public <X> boolean repair(RepairListener<Entry<K, V>, X> listener) {
+		public <X> boolean repair(RepairListener<Map.Entry<K, V>, X> listener) {
 			MapRepairListener<K, V, EntryRepairTracker<K, V, X>> mapListener = listener == null ? null
 				: new EntryRepairListener<>(listener);
 			return theMap.repair(mapListener);
@@ -1004,10 +964,14 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 			return BetterCollection.toString(this);
 		}
 
-		class EntryElement implements CollectionElement<Map.Entry<K, V>> {
+		protected CollectionElement<Map.Entry<K, V>> entryFor(MapEntryHandle<K, V> entry) {
+			return entry == null ? null : new EntryElement(entry);
+		}
+
+		protected class EntryElement implements CollectionElement<Map.Entry<K, V>> {
 			private final MapEntryHandle<K, V> theEntry;
 
-			EntryElement(MapEntryHandle<K, V> entry) {
+			protected EntryElement(MapEntryHandle<K, V> entry) {
 				theEntry = entry;
 			}
 
@@ -1061,6 +1025,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 			}
 
 			@Override
+			public CollectionElement<Map.Entry<K, V>> getAdjacent(boolean next) {
+				return entryFor(theEntry.getAdjacent(next));
+			}
+
+			@Override
 			public int hashCode() {
 				return theEntry.hashCode();
 			}
@@ -1081,8 +1050,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 			}
 		}
 
-		class MutableEntryElement extends EntryElement implements MutableCollectionElement<Map.Entry<K, V>> {
-			MutableEntryElement(MutableMapEntryHandle<K, V> entry) {
+		protected class MutableEntryElement extends EntryElement implements MutableCollectionElement<Map.Entry<K, V>> {
+			protected MutableEntryElement(MutableMapEntryHandle<K, V> entry) {
 				super(entry);
 			}
 
@@ -1092,8 +1061,9 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 			}
 
 			@Override
-			public BetterCollection<Entry<K, V>> getCollection() {
-				return BetterEntrySet.this;
+			public MutableCollectionElement<Map.Entry<K, V>> getAdjacent(boolean next) {
+				MutableMapEntryHandle<K, V> adj = getEntry().getAdjacent(next);
+				return adj == null ? null : new MutableEntryElement(adj);
 			}
 
 			@Override
@@ -1139,7 +1109,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 
 			@Override
 			public EntryRepairTracker<K, V, X> removed(MapEntryHandle<K, V> element) {
-				return new EntryRepairTracker<>(element.getKey(), element.getValue(), theWrapped.removed(new EntryElement(element)));
+				return new EntryRepairTracker<>(element.getKey(), element.getValue(), theWrapped.removed(entryFor(element)));
 			}
 
 			@Override
@@ -1228,12 +1198,6 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		}
 
 		@Override
-		public CollectionElement<V> getAdjacentElement(ElementId elementId, boolean next) {
-			CollectionElement<K> keyEl = theMap.keySet().getAdjacentElement(elementId, next);
-			return keyEl == null ? null : theMap.getEntryById(keyEl.getElementId());
-		}
-
-		@Override
 		public String canAdd(V value, ElementId after, ElementId before) {
 			return StdMsg.UNSUPPORTED_OPERATION;
 		}
@@ -1267,7 +1231,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 				while (el != null) {
 					if (Objects.equals(el.get(), value))
 						return el;
-					el = getAdjacentElement(el.getElementId(), first);
+					el = el.getAdjacent(first);
 				}
 				return null;
 			}
@@ -1442,6 +1406,11 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 			}
 
 			@Override
+			public MapEntryHandle<K, V> getAdjacent(boolean next) {
+				return null;
+			}
+
+			@Override
 			public String toString() {
 				return SingletonMap.this.toString();
 			}
@@ -1449,8 +1418,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 
 		class MutableEntry implements MutableMapEntryHandle<K, V> {
 			@Override
-			public BetterCollection<V> getCollection() {
-				return SingletonMap.this.values();
+			public MutableMapEntryHandle<K, V> getAdjacent(boolean next) {
+				return null;
 			}
 
 			@Override

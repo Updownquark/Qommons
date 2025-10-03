@@ -1,7 +1,7 @@
 package org.qommons.tree;
 
 import org.qommons.collect.BetterCollection;
-import org.qommons.collect.CollectionElement;
+import org.qommons.collect.ListElement;
 import org.qommons.collect.OptimisticContext;
 
 /**
@@ -9,7 +9,7 @@ import org.qommons.collect.OptimisticContext;
  * 
  * @param <E> The type of values in the collection
  */
-public interface BinaryTreeNode<E> extends CollectionElement<E> {
+public interface BinaryTreeNode<E> extends ListElement<E> {
 	/** @return The node that is this node's parent in the tree structure */
 	BinaryTreeNode<E> getParent();
 
@@ -19,11 +19,8 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	/** @return This node's right child in the tree structure */
 	BinaryTreeNode<E> getRight();
 
-	/**
-	 * @param left Whether to get the closest node on the left or right
-	 * @return The closest (in value) node to this node on one side or the other
-	 */
-	BinaryTreeNode<E> getClosest(boolean left);
+	@Override
+	BinaryTreeNode<E> getAdjacent(boolean next);
 
 	/** @return The size of this sub-tree */
 	int size();
@@ -124,12 +121,6 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 		return null;
 	}
 
-	/** @return The number of nodes stored before this node in the tree */
-	int getNodesBefore();
-
-	/** @return The number of nodes stored after this node in the tree */
-	int getNodesAfter();
-
 	@Override
 	default BinaryTreeNode<E> reverse() {
 		return new ReversedBinaryTreeNode<>(this);
@@ -140,7 +131,7 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 	 * 
 	 * @param <E> The type of the node
 	 */
-	class ReversedBinaryTreeNode<E> extends ReversedCollectionElement<E> implements BinaryTreeNode<E> {
+	class ReversedBinaryTreeNode<E> extends ReversedListElement<E> implements BinaryTreeNode<E> {
 		public ReversedBinaryTreeNode(BinaryTreeNode<E> wrap) {
 			super(wrap);
 		}
@@ -166,23 +157,13 @@ public interface BinaryTreeNode<E> extends CollectionElement<E> {
 		}
 
 		@Override
-		public BinaryTreeNode<E> getClosest(boolean left) {
-			return BinaryTreeNode.reverse(getWrapped().getClosest(!left));
+		public BinaryTreeNode<E> getAdjacent(boolean next) {
+			return BinaryTreeNode.reverse(getWrapped().getAdjacent(!next));
 		}
 
 		@Override
 		public int size() {
 			return getWrapped().size();
-		}
-
-		@Override
-		public int getNodesBefore() {
-			return getWrapped().getNodesAfter();
-		}
-
-		@Override
-		public int getNodesAfter() {
-			return getWrapped().getNodesBefore();
 		}
 
 		@Override

@@ -101,7 +101,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	}
 
 	@Override
-	default CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+	default ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 		throws UnsupportedOperationException, IllegalArgumentException {
 		if (after != null && valueEl.compareTo(after) < 0)
 			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
@@ -169,7 +169,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		} else if (search.compareTo(found.get()) == 0)
 			return onMatchOrTerminal.apply(found);
 		else {
-			CollectionElement<E> next = getAdjacentElement(found.getElementId(), true);
+			CollectionElement<E> next = found.getAdjacent(true);
 			if (next == null)
 				return onMatchOrTerminal.apply(found);
 			else

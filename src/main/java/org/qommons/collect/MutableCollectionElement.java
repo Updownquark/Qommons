@@ -1,10 +1,5 @@
 package org.qommons.collect;
 
-import java.util.Objects;
-import java.util.function.Function;
-
-import org.qommons.Transaction;
-
 /**
  * Represents an element in a collection that contains a value (retrieved via {@link #get()}) that may {@link #isAcceptable(Object)
  * possibly} be {@link #set(Object) replaced} or (again {@link #canRemove() possibly}) {@link #remove() removed} during iteration.
@@ -26,8 +21,8 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		static String ELEMENT_REMOVED = "Element has been removed";
 	}
 
-	/** @return The collection that this element belongs to */
-	BetterCollection<E> getCollection();
+	@Override
+	MutableCollectionElement<E> getAdjacent(boolean next);
 
 	/** @return null if {@link #set(Object)} may succeed for some values, or a message describing why it is unsupported */
 	String isEnabled();
@@ -48,40 +43,6 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 	 * @throws IllegalArgumentException If some property of the argument prevents it being a replacement for this element's value
 	 */
 	void set(E value) throws UnsupportedOperationException, IllegalArgumentException;
-
-	/**
-	 * @param map The function to apply to this element's current value
-	 * @return The previous value of this element
-	 * @throws UnsupportedOperationException If the operation is unsupported, independent of the argument
-	 * @throws IllegalArgumentException If some property of the result prevents it being a replacement for this element's value
-	 */
-	default E transform(Function<? super E, ? extends E> map) throws UnsupportedOperationException, IllegalArgumentException {
-		E oldValue;
-		do {
-			oldValue=get();
-		} while (!compareAndSet(oldValue, map.apply(oldValue)));
-		return oldValue;
-	}
-
-	/**
-	 * Replaces this element's value with the given value (second argument) if the current value equals the first argument
-	 * 
-	 * @param expected The value to check against this element's current value
-	 * @param value The value to replace this element's value with
-	 * @return Whether the operation succeeded
-	 * @throws UnsupportedOperationException If the operation is unsupported, independent of the argument
-	 * @throws IllegalArgumentException If some property of the argument prevents it being a replacement for this element's value
-	 */
-	default boolean compareAndSet(E expected, E value) throws UnsupportedOperationException, IllegalArgumentException {
-		try (Transaction t = getCollection().lock(true, null)) {
-			E oldValue = get();
-			if (Objects.equals(oldValue, expected)) {
-				set(value);
-				return true;
-			} else
-				return false;
-		}
-	}
 
 	/** @return null if this element can be removed. Non-null indicates a message describing why removal is prevented. */
 	String canRemove();
@@ -131,6 +92,11 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		}
 
 		@Override
+		public CollectionElement<E> getAdjacent(boolean next) {
+			return immutable(theWrapped.getAdjacent(next));
+		}
+
+		@Override
 		public int compareTo(CollectionElement<E> o) {
 			return theWrapped.compareTo(strip(o));
 		}
@@ -173,8 +139,8 @@ public interface MutableCollectionElement<E> extends CollectionElement<E> {
 		}
 
 		@Override
-		public BetterCollection<E> getCollection() {
-			return getWrapped().getCollection().reverse();
+		public MutableCollectionElement<E> getAdjacent(boolean next) {
+			return MutableCollectionElement.reverse(getWrapped().getAdjacent(!next));
 		}
 
 		@Override
