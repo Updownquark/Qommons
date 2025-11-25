@@ -7,6 +7,8 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.attribute.FileTime;
 import java.util.*;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -26,6 +28,7 @@ import org.qommons.io.BetterFile;
 import org.qommons.io.CountingInputStream;
 import org.qommons.io.FileUtils;
 import org.qommons.io.MiniFileUtils;
+import org.qommons.io.XmlSerialWriter;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.Text;
@@ -80,7 +83,7 @@ public class QuarkJarPatcher {
 	 */
 	private static Map<Class<?>, String> getBundledClasses() {
 		return QommonsUtils.<Class<?>, String> buildMap(null)//
-			.with(Patch.class, "").with(PatchFileSet.class, "")//
+			.with(Patch.class, "").with(PatchFileSet.class, "").with(PatchFile.class, "")//
 			.with(CountingInputStream.class, "")//
 			.with(MiniFileUtils.class, "Zip extraction utility class")//
 			.with(MiniFileUtils.ArchiveEntry.class, "").with(MiniFileUtils.ArchiveEntry.Default.class, "")//
@@ -112,6 +115,21 @@ public class QuarkJarPatcher {
 
 	/** Represents a patch to be applied to an application */
 	public static class Patch {
+		/** The name of the XML element that should be the root of a patch file */
+		public static final String PATCH = "patch";
+		/** The name of the XML attribute where the name of the application should be specified */
+		public static final String APP_NAME = "app-name";
+		/** The name of the XML attribute where the version of the application should be specified */
+		public static final String TARGET_VERSION = "target-version";
+		/** The name of the XML attribute where the name of the patch should be specified */
+		public static final String PATCH_NAME = "patch-name";
+		/** The name of the XML attribute where the author of the patch should be specified */
+		public static final String AUTHOR = "author";
+		/** The name of the XML attribute where the date of the patch should be specified */
+		public static final String PATCH_DATE = "patch-date";
+		/** The name of the XML elements where file locations to look for installed application directories may be specified */
+		public static final String LOOK_IN = "look-in";
+
 		private final String theAppName;
 		private final String theTargetVersion;
 		private final String thePatchName;
@@ -183,24 +201,84 @@ public class QuarkJarPatcher {
 		public List<String> getLookInDirs() {
 			return theLookInDirs;
 		}
+
+		/**
+		 * Parses patch content from an XML element
+		 * 
+		 * @param rootElement The XML element to parse
+		 * @return The parsed patch content
+		 * @throws IllegalArgumentException If the XML element could not be parsed as a patch
+		 */
+		public static final Patch parse(Element rootElement) throws IllegalArgumentException {
+			return parse(rootElement, PatchFileSet::parse);
+		}
+
+		/**
+		 * Parses a patch from XML
+		 * 
+		 * @param rootElement The root XML element to parse
+		 * @param fileSetParser The parser for parsing {@link PatchFileSet}s from XML elements
+		 * @return The parsed patch
+		 * @throws IllegalArgumentException If the patch could not be parsed
+		 */
+		protected static final Patch parse(Element rootElement, Function<Element, PatchFileSet> fileSetParser)
+			throws IllegalArgumentException {
+			if (!PATCH.equals(rootElement.getNodeName()))
+				throw new IllegalArgumentException("Expected '" + PATCH + "' as root element, not '" + rootElement.getNodeName() + "'");
+			String appName = rootElement.getAttribute(APP_NAME);
+			String targetVersion = rootElement.getAttribute(TARGET_VERSION);
+			String patchName = rootElement.getAttribute(PATCH_NAME);
+			String author = rootElement.getAttribute(AUTHOR);
+			String date = rootElement.getAttribute(PATCH_DATE);
+			String description = getElementText(rootElement);
+			List<PatchFileSet> contents = new ArrayList<>();
+			List<String> lookInDirs = new ArrayList<>();
+			for (int i = 0; i < rootElement.getChildNodes().getLength(); i++) {
+				Node child = rootElement.getChildNodes().item(i);
+				if (child.getNodeType() == Node.ELEMENT_NODE) {
+					switch (child.getNodeName()) {
+					case PatchFileSet.FILE_SET:
+						contents.add(fileSetParser.apply((Element) child));
+						break;
+					case LOOK_IN:
+						lookInDirs.add(getElementText((Element) child));
+						break;
+					default:
+						throw new IllegalArgumentException("Unexpected element '" + child.getNodeName() + " in patch configuration");
+					}
+				}
+			}
+			return new Patch(appName, targetVersion, patchName, author, date, description, Collections.unmodifiableList(contents),
+				Collections.unmodifiableList(lookInDirs));
+		}
 	}
 
 	/** An archive file or directory to update in a patch */
 	public static class PatchFileSet {
+		/** The name of the XML element containing a set of files to replace when the patch is applied */
+		public static final String FILE_SET = "file-set";
+		/** The name of the XML attribute where the target directory or archive that the patch will modify should be specified */
+		public static final String TARGET = "target";
+		/** The name of the XML attribute where the target directory containing the files to construct the patch should be specified */
+		public static final String SOURCE = "source";
+		/** The name of the XML element containing a file to replace when the patch is applied */
+		public static final String FILE = "file";
+		/** The name of the XML attribute where an alternate storage name in the patch archive may be specified */
+		public static final String STORE_AS = "store-as";
+
 		private final String theUpdateTarget;
 		private final String theSourceDir;
-		private final Map<String, String> theFileSetContents;
+		private final Set<PatchFile> theFiles;
 
 		/**
 		 * @param updateTarget The installation directory or archive file to be updated
 		 * @param sourceDir The path to the source directory containing the patch contents to be packaged
-		 * @param fileSetContents The paths to the files that need to be replaced in the installation: keys are the paths for the resources
-		 *        as installed; values are the paths of the resources as stored in the patch
+		 * @param files The files that need to be replaced in the installation
 		 */
-		public PatchFileSet(String updateTarget, String sourceDir, Map<String, String> fileSetContents) {
+		public PatchFileSet(String updateTarget, String sourceDir, Set<PatchFile> files) {
 			theUpdateTarget = updateTarget;
 			theSourceDir = sourceDir;
-			theFileSetContents = fileSetContents;
+			theFiles = files;
 		}
 
 		/** @return The installation directory or archive file to be updated */
@@ -213,12 +291,265 @@ public class QuarkJarPatcher {
 			return theSourceDir;
 		}
 
+		/** @return The resources in this file set */
+		public Set<PatchFile> getFiles() {
+			return theFiles;
+		}
+
 		/**
-		 * @return The paths to the files that need to be replaced in the installation: keys are the paths for the resources as installed;
-		 *         values are the paths of the resources as stored in the patch
+		 * @param element The XML element to parse
+		 * @return The parsed {@link PatchFileSet}
 		 */
-		public Map<String, String> getFileSetContents() {
-			return theFileSetContents;
+		public static PatchFileSet parse(Element element) {
+			return parse(element, Collections.emptySet());
+		}
+
+		private static PatchFileSet parse(Element element, Set<String> otherAcceptableElements) {
+			String target = element.getAttribute(TARGET);
+			String source = element.getAttribute(SOURCE);
+			Set<PatchFile> files = new LinkedHashSet<>();
+			for (int i = 0; i < element.getChildNodes().getLength(); i++) {
+				Node child = element.getChildNodes().item(i);
+				if (child.getNodeType() == Node.ELEMENT_NODE) {
+					if (FILE.equals(child.getNodeName())) {
+						String resource = getElementText((Element) child);
+						String storeAs = ((Element) child).getAttribute(STORE_AS);
+						if (storeAs == null || storeAs.isEmpty())
+							storeAs = resource;
+						files.add(new PatchFile(resource, storeAs));
+					} else if (otherAcceptableElements.contains(child.getNodeName())) { //
+					} else
+						throw new IllegalArgumentException(
+							"Unexpected element '" + child.getNodeName() + " in file-set of patch configuration");
+				}
+			}
+			return new PatchFileSet(target, source, Collections.unmodifiableSet(files));
+		}
+	}
+
+	static String getElementText(Element element) {
+		StringBuilder content = null;
+		for (int i = 0; i < element.getChildNodes().getLength(); i++) {
+			Node child = element.getChildNodes().item(i);
+			if (child.getNodeType() == Node.TEXT_NODE) {
+				if (!((Text) child).isElementContentWhitespace()) {
+					String elText = ((Text) child).getWholeText();
+					int end = -1;
+					for (int j = 0; j < elText.length(); j++) {
+						if (!Character.isWhitespace(elText.charAt(j))) {
+							end = j;
+						}
+					}
+					if (end >= 0) {
+						if (content == null)
+							content = new StringBuilder();
+						else
+							content.append('\n');
+						content.append(elText, 0, end + 1);
+					}
+				}
+			}
+		}
+		return content == null ? null : content.toString();
+	}
+
+	/** Represents a file to be replaced when a patch is applied. Path names are relative to the owning {@link PatchFileSet}. */
+	public static class PatchFile {
+		/** The path of the resource in the source directory and when replaced in the target directory */
+		public final String resourceName;
+		/** The path of the resource as stored in the patch archive */
+		public final String archiveEntry;
+
+		/**
+		 * @param resourceName The path for the resource in the source directory and when replaced in the target directory
+		 * @param archiveEntry The path for the resource as stored in the patch archive
+		 */
+		public PatchFile(String resourceName, String archiveEntry) {
+			this.resourceName = resourceName;
+			this.archiveEntry = archiveEntry;
+		}
+
+		@Override
+		public int hashCode() {
+			return resourceName.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof PatchFile))
+				return false;
+			return resourceName.equals(((PatchFile) obj).resourceName);
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder(resourceName);
+			if (archiveEntry != null)
+				str.append(" (as ").append(archiveEntry).append(')');
+			return str.toString();
+		}
+	}
+
+	/** A {@link PatchFileSet} parsed for the purpose of creating a new patch */
+	public static class CreationPatchFileSet extends PatchFileSet {
+		private static final Set<String> PATTERN = Collections.singleton("pattern");
+
+		private final List<PatchFilePattern> thePatterns;
+
+		/**
+		 * @param updateTarget The installation directory or archive file to be updated
+		 * @param sourceDir The path to the source directory containing the patch contents to be packaged
+		 * @param files The files that need to be replaced in the installation
+		 * @param patterns Patterns for matching files en masse
+		 */
+		public CreationPatchFileSet(String updateTarget, String sourceDir, Set<PatchFile> files, List<PatchFilePattern> patterns) {
+			super(updateTarget, sourceDir, files);
+			thePatterns = patterns;
+		}
+
+		/** @return File patterns for matching files en masse */
+		public List<PatchFilePattern> getPatterns() {
+			return thePatterns;
+		}
+
+		/**
+		 * @param element The XML element to parse
+		 * @return A {@link PatchFileSet} or {@link CreationPatchFileSet} parsed with the knowledge that the element may specify "pattern"
+		 *         elements
+		 */
+		public static Patch parsePatchWithPatterns(Element element) {
+			return Patch.parse(element, CreationPatchFileSet::parse);
+		}
+
+		public static PatchFileSet parse(Element element) {
+			PatchFileSet base = PatchFileSet.parse(element, PATTERN);
+			List<PatchFilePattern> patterns = null;
+			for (int i = 0; i < element.getChildNodes().getLength(); i++) {
+				Node child = element.getChildNodes().item(i);
+				if (child.getNodeType() == Node.ELEMENT_NODE) {
+					if ("pattern".equals(child.getNodeName())) {
+						String directory = ((Element) child).getAttribute("directory");
+						if ("".equals(directory))
+							directory = null;
+						String patternStr = getElementText((Element) child);
+						String inSubDirS = ((Element) child).getAttribute("sub-directories");
+						String storeIn = ((Element) child).getAttribute("store-in");
+						if ("".equals(storeIn))
+							storeIn = null;
+						Pattern pattern = Pattern.compile(patternStr);
+						boolean inSubDir;
+						if (inSubDirS == null || inSubDirS.isEmpty())
+							inSubDir = false;
+						else {
+							switch (inSubDirS) {
+							case "true":
+								inSubDir = true;
+								break;
+							case "false":
+								inSubDir = false;
+								break;
+							default:
+								throw new IllegalArgumentException("'sub-directories' must be 'true' or 'false'");
+							}
+						}
+						if (patterns == null)
+							patterns = new ArrayList<>();
+						patterns.add(new PatchFilePattern(directory, pattern, inSubDir, storeIn));
+					}
+				}
+			}
+			if (patterns == null)
+				return base;
+			return new CreationPatchFileSet(base.getUpdateTarget(), base.getSourceDir(), base.getFiles(),
+				Collections.unmodifiableList(patterns));
+		}
+	}
+
+	/** A pattern that may match any number of files in a source directory */
+	public static class PatchFilePattern {
+		/** The path to the sub-directory (relative to the {@link CreationPatchFileSet}) to match files in */
+		public final String directory;
+		/** The regex pattern for the names of files to match */
+		public final Pattern pattern;
+		/** Whether to also search in sub-directories for files */
+		public final boolean inSubDirs;
+		/** An alternate name for the folder to store the files in in the patch archive */
+		public final String storeIn;
+
+		/**
+		 * @param directory The path to the sub-directory (relative to the {@link CreationPatchFileSet}) to match files in
+		 * @param pattern The regex pattern for the names of files to match
+		 * @param inSubDirs Whether to also search in sub-directories for files
+		 * @param storeIn An alternate name for the folder to store the files in in the patch archive
+		 */
+		public PatchFilePattern(String directory, Pattern pattern, boolean inSubDirs, String storeIn) {
+			this.directory = directory;
+			this.pattern = pattern;
+			this.inSubDirs = inSubDirs;
+			this.storeIn = storeIn;
+		}
+
+		/**
+		 * Searches through a source directory for files matching this pattern
+		 * 
+		 * @param searchRoot The {@link CreationPatchFileSet} root to search in
+		 * @param onFound A callback to call for each matching file. First argument is the file, second argument is the PatchFile to store
+		 *        the file as in the patch.
+		 */
+		public void search(BetterFile searchRoot, BiConsumer<BetterFile, PatchFile> onFound) {
+			BetterFile dir = directory == null ? searchRoot : searchRoot.at(directory);
+			if (!dir.isDirectory()) {
+				System.err.println(dir.getPath() + " is not " + (dir.exists() ? "a directory" : "found"));
+				return;
+			}
+			StringBuilder resourcePath = new StringBuilder();
+			StringBuilder storePath = new StringBuilder();
+			if (directory != null) {
+				resourcePath.append(directory);
+				if (directory.endsWith("/") || directory.endsWith("\\"))
+					resourcePath.setLength(resourcePath.length() - 1);
+			}
+			if (storeIn != null) {
+				storePath.append(storeIn);
+				if (storeIn.endsWith("/") || storeIn.endsWith("\\"))
+					storePath.setLength(storePath.length() - 1);
+			} else
+				storePath.append(resourcePath);
+			if (0 == search(dir, resourcePath, storePath, onFound)) {
+				System.err.println("No files matching " + pattern + " found" + (directory == null ? "" : (" in " + directory)));
+			}
+		}
+
+		private int search(BetterFile dir, StringBuilder resourcePath, StringBuilder storePath, BiConsumer<BetterFile, PatchFile> onFound) {
+			resourcePath.append('/');
+			storePath.append('/');
+			int preRsrcLen = resourcePath.length();
+			int preStoreLen = storePath.length();
+			int found = 0;
+			for (BetterFile file : dir.listFiles()) {
+				if (file.isFile() && pattern.matcher(file.getName()).matches()) {
+					found++;
+					resourcePath.append(file.getName());
+					storePath.append(file.getName());
+					onFound.accept(file, new PatchFile(resourcePath.toString(), storePath.toString()));
+					resourcePath.setLength(preRsrcLen);
+					storePath.setLength(preStoreLen);
+				} else if (inSubDirs) {
+					resourcePath.append(file.getName());
+					storePath.append(file.getName());
+					found += search(file, resourcePath, storePath, onFound);
+					resourcePath.setLength(preRsrcLen);
+					storePath.setLength(preStoreLen);
+				}
+			}
+			return found;
+		}
+
+		@Override
+		public String toString() {
+			return directory + "/" + pattern;
 		}
 	}
 
@@ -322,7 +653,7 @@ public class QuarkJarPatcher {
 							} catch (ParserConfigurationException | SAXException e) {
 								throw new IOException("Could not read XML", e);
 							}
-							patch[0] = parsePatch(patchRoot);
+							patch[0] = Patch.parse(patchRoot);
 							f.delete();
 
 							System.out.println("Read configuration for " + patch[0].getAppName() + " patch " + patch[0].getPatchName());
@@ -336,8 +667,10 @@ public class QuarkJarPatcher {
 							}
 							status("Extracting patch contents", null, -1, status, progress, uiDirty);
 
-							for (PatchFileSet fs : patch[0].getPatchContents())
-								patchContents.addAll(fs.getFileSetContents().values());
+							for (PatchFileSet fs : patch[0].getPatchContents()) {
+								for (PatchFile file : fs.getFiles())
+									patchContents.add(file.archiveEntry);
+							}
 							progress[0] = 0;
 							progress[1] = patchContents.size();
 							status(null, null, 0, status, progress, uiDirty);
@@ -397,8 +730,8 @@ public class QuarkJarPatcher {
 				for (int i = 0; i < targets.length; i++) {
 					if (patch[0].getPatchContents().get(i).getUpdateTarget() == null) {
 						targets[i] = installDir;
-						for (String content : patch[0].getPatchContents().get(i).getFileSetContents().values())
-							totalLength += extractedFiles.get(content).length();
+						for (PatchFile file : patch[0].getPatchContents().get(i).getFiles())
+							totalLength += extractedFiles.get(file.archiveEntry).length();
 					} else {
 						targets[i] = new File(installDir, patch[0].getPatchContents().get(i).getUpdateTarget());
 						if (!targets[i].exists())
@@ -417,20 +750,21 @@ public class QuarkJarPatcher {
 				for (int i = 0; i < targets.length; i++) {
 					status("Applying patch target " + targets[i].getName(), null, Math.round(fileContentSoFar * 1000.0f / totalLength),
 						status, progress, uiDirty);
+					PatchFileSet fileSet = patch[0].getPatchContents().get(i);
 					if (targets[i].isDirectory()) { // Just replace the target files
-						for (Map.Entry<String, String> content : patch[0].getPatchContents().get(i).getFileSetContents().entrySet()) {
-							status[1] = content.getKey();
-							File targetFile = new File(targets[i], content.getKey());
+						for (PatchFile file : fileSet.getFiles()) {
+							status[1] = file.resourceName;
+							File targetFile = new File(targets[i], file.resourceName);
 							File parent = targetFile.getParentFile();
 							if (!parent.exists() && !parent.mkdirs())
 								throw new IOException("Could not create " + parent.getAbsolutePath());
-							File patchFile = extractedFiles.remove(content.getValue());
+							File patchFile = extractedFiles.remove(file.archiveEntry);
 							try (CountingInputStream in = new CountingInputStream(new BufferedInputStream(new FileInputStream(patchFile))); //
 								OutputStream out = new BufferedOutputStream(new FileOutputStream(targetFile))) {
 								int read = in.read(buffer);
 								while (read >= 0) {
 									out.write(buffer, 0, read);
-									status(null, content.getKey(),
+									status(null, file.resourceName,
 										Math.round((fileContentSoFar + in.getPosition()) * 1000.0f / totalLength), status, progress,
 										uiDirty);
 									read = in.read(buffer);
@@ -448,18 +782,20 @@ public class QuarkJarPatcher {
 						File replacement = File.createTempFile(//
 							lastDot >= 0 ? targetName.substring(0, lastDot) : targetName, //
 							lastDot >= 0 ? targetName.substring(lastDot) : null);
+						Map<String, PatchFile> filesByName = new HashMap<>();
+						for (PatchFile file : fileSet.getFiles())
+							filesByName.put(file.resourceName, file);
 						// For progress, assume 90% of the work is parsing the target zip file and creating the replacement
 						try (
 							CountingInputStream targetIn = new CountingInputStream(
 								new BufferedInputStream(new FileInputStream(targets[i])));
 							ZipOutputStream zipOut = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(replacement)))) {
 							long fcsf = fileContentSoFar, tl = totalLength;
-							PatchFileSet fileSet = patch[0].getPatchContents().get(i);
 							MiniFileUtils.extractZip(targetIn, entry -> {
 								status[1] = entry.getPath();
 								status(null, entry.getPath(), progress[0], status, progress, uiDirty);
-								String patchPath = fileSet.getFileSetContents().get(entry.getPath());
-								File patchFile = patchPath == null ? null : extractedFiles.remove(patchPath);
+								PatchFile patchPath = filesByName.get(entry.getPath());
+								File patchFile = patchPath == null ? null : extractedFiles.remove(patchPath.archiveEntry);
 								ZipEntry zipEntry = new ZipEntry(entry.getPath());
 								if (patchFile != null) {
 									zipEntry.setLastModifiedTime(FileTime.fromMillis(patchFile.lastModified()));
@@ -485,11 +821,11 @@ public class QuarkJarPatcher {
 									progress, uiDirty);
 							}, null);
 							// Now insert added files
-							for (Map.Entry<String, String> content : patch[0].getPatchContents().get(i).getFileSetContents().entrySet()) {
-								File patchFile = extractedFiles.remove(content.getValue());
+							for (PatchFile file : fileSet.getFiles()) {
+								File patchFile = extractedFiles.remove(file.archiveEntry);
 								if (patchFile == null)
 									continue; // Already replaced
-								ZipEntry entry = new ZipEntry(content.getKey());
+								ZipEntry entry = new ZipEntry(file.resourceName);
 								status[1] = entry.getName();
 								status(null, entry.getName(), progress[0], status, progress, uiDirty);
 								entry.setLastModifiedTime(FileTime.fromMillis(patchFile.lastModified()));
@@ -650,7 +986,8 @@ public class QuarkJarPatcher {
 				File file = new File(patchFileLocation);
 				patchConfigFile = FileUtils.better(file);
 			}
-			patch = parsePatch(QommonsConfig.getRootElement(new BufferedInputStream(patchStream = patchConfigFile.read())));
+			patch = CreationPatchFileSet
+				.parsePatchWithPatterns(QommonsConfig.getRootElement(new BufferedInputStream(patchStream = patchConfigFile.read())));
 		} catch (FileNotFoundException e) {
 			throw new IOException("No such patch file found: " + patchFileLocation, e);
 		} catch (IOException e) {
@@ -665,6 +1002,40 @@ public class QuarkJarPatcher {
 				}
 			}
 		}
+
+		BetterFile patcherClassFile = FileUtils.getClassFile(QuarkJarPatcher.class);
+		BetterFile searchRoot = patcherClassFile.getParent().getParent().getParent(); // class root
+		if (!searchRoot.getName().endsWith(".jar")) // If we're not in a jar, use the Qommons project root
+			searchRoot = searchRoot.getParent().getParent().getParent(); // Qommons/target/classes
+
+		// The patch file needs to be the first file in the archive so the application code only needs to read the archive once.
+		// The application code doesn't know anything about patterns, so we need to find all pattern-matched files for each file set first,
+		// then add those files to the patch.
+		Map<PatchFile, BetterFile>[] patternMatchedFiles = new Map[patch.getPatchContents().size()];
+		for (int i = 0; i < patch.getPatchContents().size(); i++) {
+			if (!(patch.getPatchContents().get(i) instanceof CreationPatchFileSet)) {
+				patternMatchedFiles[i] = Collections.emptyMap();
+			} else {
+				CreationPatchFileSet fileSet = (CreationPatchFileSet) patch.getPatchContents().get(i);
+				BetterFile fileSetRoot = fileSet.getSourceDir() == null ? null : searchRoot.at(fileSet.getSourceDir());
+				if (fileSetRoot != null && !fileSetRoot.isDirectory())
+					throw new IllegalArgumentException("No directory found for patch file set at " + fileSetRoot.getPath());
+				Map<PatchFile, BetterFile> fileSetMatches = new HashMap<>();
+				for (PatchFilePattern pattern : fileSet.getPatterns()) {
+					System.out.println("For pattern " + pattern + ":");
+					pattern.search(fileSetRoot, (file, patchFile) -> {
+						System.out.println("\t" + patchFile.resourceName);
+						fileSetMatches.put(patchFile, file);
+					});
+				}
+				if (!fileSetMatches.isEmpty())
+					patternMatchedFiles[i] = fileSetMatches;
+				else
+					patternMatchedFiles[i] = Collections.emptyMap();
+			}
+		}
+		boolean hasPatterns = !Arrays.stream(patternMatchedFiles).allMatch(Map::isEmpty);
+
 		String patchFileName = patchConfigFile.getName();
 		if (!patchFileName.endsWith(".patch")) { // Needed to be recognized by the patch application code
 			patchFileName += ".patch";
@@ -673,17 +1044,54 @@ public class QuarkJarPatcher {
 		try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(patchFile)))) {
 			zip.setLevel(9);
 			zip.setComment(patch.getPatchDescription());
+
 			// First, the patch file itself
 			ZipEntry entry = new ZipEntry(patchFileName); // Put in the root of the patch file
 			entry.setLastModifiedTime(FileTime.fromMillis(patchConfigFile.getLastModified()));
 			entry.setComment("The specification file for the patch");
 			zip.putNextEntry(entry);
-			try (InputStream in = patchConfigFile.read()) {
-				MiniFileUtils.copy(in, zip);
+			if (hasPatterns) {
+				// Write a new patch file containing the pattern-matched files
+				Writer writer = new OutputStreamWriter(zip);
+				XmlSerialWriter.createDocument(writer)//
+					.writeWhitespace("\n\n")//
+					.writeRoot(Patch.PATCH, root -> {
+						root//
+							.addAttribute(Patch.APP_NAME, patch.getAppName())//
+							.addAttribute(Patch.TARGET_VERSION, patch.getTargetVersion())//
+							.addAttribute(Patch.PATCH_NAME, patch.getPatchName())//
+							.addAttribute(Patch.AUTHOR, patch.getPatchAuthor())//
+							.addAttribute(Patch.PATCH_DATE, patch.getPatchDate());
+						if (patch.getPatchDescription() != null)
+							root.addContent(patch.getPatchDescription()).addContent("\n\n");
+						for (String lookIn : patch.getLookInDirs())
+							root.addChild(Patch.LOOK_IN, lookInEl -> lookInEl.addContent(lookIn));
+						for (int i = 0; i < patternMatchedFiles.length; i++) {
+							PatchFileSet fileSet = patch.getPatchContents().get(i);
+							int fi = i;
+							root.addChild(PatchFileSet.FILE_SET, fsEl -> {
+								fsEl//
+									.addAttribute(PatchFileSet.TARGET, fileSet.getUpdateTarget())//
+									.addAttribute(PatchFileSet.SOURCE, fileSet.getSourceDir());
+								for (PatchFile file : IterableUtils.concat(fileSet.getFiles(), patternMatchedFiles[fi].keySet())) {
+									fsEl.addChild(PatchFileSet.FILE, fileEl -> {
+										if (!file.archiveEntry.equals(file.resourceName))
+											fileEl.addAttribute(PatchFileSet.STORE_AS, file.archiveEntry);
+										fileEl.addContent(file.resourceName);
+									});
+								}
+							});
+						}
+					});
+				writer.flush();
+			} else { // Just copy the patch file input, comments and all
+				try (InputStream in = patchConfigFile.read()) {
+					MiniFileUtils.copy(in, zip);
+				}
 			}
 
 			// Now this class file and the few dependency classes we need
-			BetterFile patcherClassFile = bundleClass(QuarkJarPatcher.class, "The patch file application class", zip);
+			bundleClass(QuarkJarPatcher.class, "The patch file application class", zip);
 			for (Map.Entry<Class<?>, String> dependency : getBundledClasses().entrySet())
 				bundleClass(dependency.getKey(), dependency.getValue(), zip);
 
@@ -697,30 +1105,37 @@ public class QuarkJarPatcher {
 			w.flush();
 
 			// Now the actual patch contents
-			BetterFile searchRoot = patcherClassFile.getParent().getParent().getParent(); // class root
-			if (!searchRoot.getName().endsWith(".jar")) // If we're not in a jar, use the Qommons project root
-				searchRoot = searchRoot.getParent().getParent().getParent(); // Qommons/target/classes
-			for (PatchFileSet fileSet : patch.getPatchContents()) {
+			for (int i = 0; i < patch.getPatchContents().size(); i++) {
+				PatchFileSet fileSet = patch.getPatchContents().get(i);
 				BetterFile fileSetRoot = fileSet.getSourceDir() == null ? null : searchRoot.at(fileSet.getSourceDir());
 				if (fileSetRoot != null && !fileSetRoot.isDirectory())
 					throw new IllegalArgumentException("No directory found for patch file set at " + fileSetRoot.getPath());
-				for (Map.Entry<String, String> content : fileSet.getFileSetContents().entrySet()) {
+				for (PatchFile file : fileSet.getFiles()) {
 					BetterFile found;
 					try {
 						if (fileSetRoot != null)
-							found = fileSetRoot.at(content.getKey());
+							found = fileSetRoot.at(file.resourceName);
 						else {
-							URL foundUrl = QuarkJarPatcher.class.getResource("/" + content.getKey()); // See if it's on the classpath
+							URL foundUrl = QuarkJarPatcher.class.getResource("/" + file.resourceName); // See if it's on the classpath
 							if (foundUrl == null)
 								throw new FileNotFoundException("No such resource on classpath");
 							found = FileUtils.ofUrl(foundUrl);
 						}
 					} catch (IOException e) {
 						throw new IOException(
-							"Could not locate or read resource '" + content.getKey() + "' for patch file set " + fileSet.getUpdateTarget(),
+							"Could not locate or read resource '" + file.resourceName + "' for patch file set " + fileSet.getUpdateTarget(),
 							e);
 					}
-					entry = new ZipEntry(content.getValue());
+					entry = new ZipEntry(file.archiveEntry);
+					entry.setLastModifiedTime(FileTime.fromMillis(found.getLastModified()));
+					zip.putNextEntry(entry);
+					try (InputStream in = found.read()) {
+						MiniFileUtils.copy(in, zip);
+					}
+				}
+				for (Map.Entry<PatchFile, BetterFile> patternMatchedFile : patternMatchedFiles[i].entrySet()) {
+					entry = new ZipEntry(patternMatchedFile.getKey().archiveEntry);
+					BetterFile found = patternMatchedFile.getValue();
 					entry.setLastModifiedTime(FileTime.fromMillis(found.getLastModified()));
 					zip.putNextEntry(entry);
 					try (InputStream in = found.read()) {
@@ -747,81 +1162,5 @@ public class QuarkJarPatcher {
 			MiniFileUtils.copy(in, zip);
 		}
 		return classFile;
-	}
-
-	/**
-	 * Parses patch content from an XML element
-	 * 
-	 * @param rootElement The XML element to parse
-	 * @return The parsed patch content
-	 * @throws IllegalArgumentException If the XML element could not be parsed as a patch
-	 */
-	public static final Patch parsePatch(Element rootElement) throws IllegalArgumentException {
-		if (!"patch".equals(rootElement.getNodeName()))
-			throw new IllegalArgumentException("Expected 'patch' as root element, not '" + rootElement.getNodeName() + "'");
-		String appName = rootElement.getAttribute("app-name");
-		String targetVersion = rootElement.getAttribute("target-version");
-		String patchName = rootElement.getAttribute("patch-name");
-		String author = rootElement.getAttribute("author");
-		String date = rootElement.getAttribute("patch-date");
-		String description = getElementText(rootElement);
-		List<PatchFileSet> contents = new ArrayList<>();
-		List<String> lookInDirs = new ArrayList<>();
-		for (int i = 0; i < rootElement.getChildNodes().getLength(); i++) {
-			Node child = rootElement.getChildNodes().item(i);
-			switch (child.getNodeType()) {
-			case Node.ELEMENT_NODE:
-				switch (child.getNodeName()) {
-				case "file-set":
-					contents.add(parseFileSet((Element) child));
-					break;
-				case "look-in":
-					lookInDirs.add(getElementText((Element) child));
-					break;
-				default:
-					throw new IllegalArgumentException("Unexpected element '" + child.getNodeName() + " in patch configuration");
-				}
-				break;
-			case Node.TEXT_NODE:
-				if (!((Text) child).isElementContentWhitespace())
-					description += ((Text) child).getWholeText();
-				break;
-			}
-		}
-		return new Patch(appName, targetVersion, patchName, author, date, description, Collections.unmodifiableList(contents),
-			Collections.unmodifiableList(lookInDirs));
-	}
-
-	private static PatchFileSet parseFileSet(Element element) {
-		String target = element.getAttribute("target");
-		String source = element.getAttribute("source");
-		Map<String, String> contents = new LinkedHashMap<>();
-		for (int i = 0; i < element.getChildNodes().getLength(); i++) {
-			Node child = element.getChildNodes().item(i);
-			if (child.getNodeType() == Node.ELEMENT_NODE) {
-				if ("file".equals(child.getNodeName())) {
-					String resource = getElementText((Element) child);
-					String storeAs = ((Element) child).getAttribute("store-as");
-					if (storeAs == null || storeAs.isEmpty())
-						storeAs = resource;
-					contents.put(resource, storeAs);
-				} else
-					throw new IllegalArgumentException(
-						"Unexpected element '" + child.getNodeName() + " in file-set of patch configuration");
-			}
-		}
-		return new PatchFileSet(target, source, Collections.unmodifiableMap(contents));
-	}
-
-	private static String getElementText(Element element) {
-		String content = "";
-		for (int i = 0; i < element.getChildNodes().getLength(); i++) {
-			Node child = element.getChildNodes().item(i);
-			if (child.getNodeType() == Node.TEXT_NODE) {
-				if (!((Text) child).isElementContentWhitespace())
-					content += ((Text) child).getWholeText();
-			}
-		}
-		return content;
 	}
 }

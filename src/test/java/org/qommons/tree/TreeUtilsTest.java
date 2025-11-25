@@ -12,6 +12,7 @@ import org.qommons.LambdaUtils;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.ListElement;
+import org.qommons.collect.OptimisticContext;
 import org.qommons.collect.ValueStoredCollection;
 import org.qommons.testing.QommonsTestUtils;
 import org.qommons.testing.TestHelper;
@@ -99,7 +100,7 @@ public class TreeUtilsTest {
 		test(tree, alphaBet('z'));
 	}
 
-	/** Tests {@link RedBlackNode#compare(RedBlackNode, RedBlackNode, java.util.function.BooleanSupplier)} */
+	/** Tests {@link RedBlackNode#compare(RedBlackNode, RedBlackNode, OptimisticContext)} */
 	@Test
 	@SuppressWarnings("static-method")
 	public void testTreeNodeCompare() {
@@ -141,7 +142,7 @@ public class TreeUtilsTest {
 		}
 	}
 
-	/** Barrage-tests {@link RedBlackNode#splitBetween(RedBlackNode, RedBlackNode, java.util.function.BooleanSupplier)} */
+	/** Barrage-tests {@link RedBlackNode#splitBetween(RedBlackNode, RedBlackNode, OptimisticContext)} */
 	@Test
 	@SuppressWarnings("static-method")
 	public void testTreeNodeSplit() {
@@ -236,28 +237,28 @@ public class TreeUtilsTest {
 	private void checkIntegrity(RedBlackTree<Integer> tree) {
 		checkIntegrity(tree.getRoot());
 		RedBlackNode<Integer> node = tree.getFirst();
-		Assert.assertEquals(Integer.valueOf(0), node.getValue());
-		RedBlackNode<Integer> next = node.getClosest(false);
+		Assert.assertEquals(Integer.valueOf(0), node.get());
+		RedBlackNode<Integer> next = node.getAdjacent(true);
 		int count = 1;
 		while (next != null) {
-			Assert.assertEquals("[" + count + "]", node.getValue() + 1, next.getValue().intValue());
+			Assert.assertEquals("[" + count + "]", node.get() + 1, next.get().intValue());
 			node = next;
 			count++;
-			next = node.getClosest(false);
+			next = node.getAdjacent(true);
 		}
 		Assert.assertEquals(tree.size(), count);
-		Assert.assertEquals(tree.getLast().getValue(), node.getValue());
+		Assert.assertEquals(tree.getLast().get(), node.get());
 
 		count = 1;
-		RedBlackNode<Integer> prev = node.getClosest(true);
+		RedBlackNode<Integer> prev = node.getAdjacent(false);
 		while (prev != null) {
-			Assert.assertEquals("[" + count + "]", node.getValue() - 1, prev.getValue().intValue());
+			Assert.assertEquals("[" + count + "]", node.get() - 1, prev.get().intValue());
 			node = prev;
 			count++;
-			prev = node.getClosest(true);
+			prev = node.getAdjacent(false);
 		}
 		Assert.assertEquals(tree.size(), count);
-		Assert.assertEquals(tree.getFirst().getValue(), node.getValue());
+		Assert.assertEquals(tree.getFirst().get(), node.get());
 	}
 
 	private void checkIntegrity(RedBlackNode<?> node) {

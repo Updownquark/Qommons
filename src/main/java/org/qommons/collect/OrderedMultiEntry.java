@@ -1,5 +1,12 @@
 package org.qommons.collect;
 
+/**
+ * A sub-type of {@link MultiEntryHandle} that knows its absolute position in the map's entry set, not just its order relative to other
+ * entries
+ * 
+ * @param <K> The key-type of the entry
+ * @param <V> The value-type of the entry
+ */
 public interface OrderedMultiEntry<K, V> extends MultiEntryHandle<K, V>, ListElement<K> {
 	@Override
 	OrderedMultiEntry<K, V> getAdjacent(boolean next);
@@ -25,7 +32,8 @@ public interface OrderedMultiEntry<K, V> extends MultiEntryHandle<K, V>, ListEle
 	 * @param <K> The key type of the entry
 	 * @param <V> The value type of the entry
 	 */
-	class ReversedOrderedMultiEntry<K, V> extends ReversedMultiEntryHandle<K, V> implements OrderedMultiEntry<K, V> {
+	public class ReversedOrderedMultiEntry<K, V> extends ReversedMultiEntryHandle<K, V> implements OrderedMultiEntry<K, V> {
+		/** @param wrapped The entry to wrap */
 		public ReversedOrderedMultiEntry(OrderedMultiEntry<K, V> wrapped) {
 			super(wrapped);
 		}

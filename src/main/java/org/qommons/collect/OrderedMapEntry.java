@@ -1,5 +1,12 @@
 package org.qommons.collect;
 
+/**
+ * A sub-type of {@link MapEntryHandle} that knows its absolute position in the map's entry set, not just its order relative to other
+ * entries
+ * 
+ * @param <K> The key-type of the entry
+ * @param <V> The value-type of the entry
+ */
 public interface OrderedMapEntry<K, V> extends MapEntryHandle<K, V>, ListElement<V> {
 	@Override
 	OrderedMapEntry<K, V> getAdjacent(boolean next);
@@ -20,12 +27,13 @@ public interface OrderedMapEntry<K, V> extends MapEntryHandle<K, V>, ListElement
 	}
 
 	/**
-	 * A {@link MapEntryHandle} that is reversed
+	 * Default implementation of {@link OrderedMapEntry#reverse()}
 	 * 
 	 * @param <K> The key type of the entry
 	 * @param <V> The value type of the entry
 	 */
-	class ReversedOrderedMapEntry<K, V> extends ReversedListElement<V> implements OrderedMapEntry<K, V> {
+	public class ReversedOrderedMapEntry<K, V> extends ReversedListElement<V> implements OrderedMapEntry<K, V> {
+		/** @param wrapped The entry to wrap */
 		public ReversedOrderedMapEntry(OrderedMapEntry<K, V> wrapped) {
 			super(wrapped);
 		}

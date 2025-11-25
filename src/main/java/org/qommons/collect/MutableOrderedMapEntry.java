@@ -1,5 +1,12 @@
 package org.qommons.collect;
 
+/**
+ * A sub-type of {@link MutableMapEntryHandle} that knows its absolute position in the map's entry set, not just its order relative to other
+ * entries
+ * 
+ * @param <K> The key-type of the entry
+ * @param <V> The value-type of the entry
+ */
 public interface MutableOrderedMapEntry<K, V> extends OrderedMapEntry<K, V>, MutableMapEntryHandle<K, V>, MutableListElement<V> {
 	@Override
 	MutableOrderedMapEntry<K, V> getAdjacent(boolean next);
@@ -9,11 +16,24 @@ public interface MutableOrderedMapEntry<K, V> extends OrderedMapEntry<K, V>, Mut
 		return new ReversedMutableOrderedEntry<>(this);
 	}
 
-	static <K, V> MutableOrderedMapEntry<K, V> reverse(MutableOrderedMapEntry<K, V> element) {
-		return element == null ? null : element.reverse();
+	/**
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type of the entry
+	 * @param entry The entry to reverse
+	 * @return The reversed entry, or null if entry was null
+	 */
+	static <K, V> MutableOrderedMapEntry<K, V> reverse(MutableOrderedMapEntry<K, V> entry) {
+		return entry == null ? null : entry.reverse();
 	}
 
-	static class ReversedMutableOrderedEntry<K, V> extends ReversedOrderedMapEntry<K, V> implements MutableOrderedMapEntry<K, V> {
+	/**
+	 * Default implementation of {@link OrderedMapEntry#reverse()}
+	 * 
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type of the entry
+	 */
+	public static class ReversedMutableOrderedEntry<K, V> extends ReversedOrderedMapEntry<K, V> implements MutableOrderedMapEntry<K, V> {
+		/** @param wrapped The entry to wrap */
 		public ReversedMutableOrderedEntry(MutableOrderedMapEntry<K, V> wrapped) {
 			super(wrapped);
 		}

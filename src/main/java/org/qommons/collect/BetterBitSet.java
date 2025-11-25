@@ -855,6 +855,67 @@ public class BetterBitSet implements Cloneable {
 	}
 
 	/**
+	 * This really weird method finds the index of the next set bit for which <code>index%divisor==modulus</code>. I created it for use by
+	 * {@link StateSet} and probably no one else will ever use it.
+	 * 
+	 * @param fromIndex The index to start searching from
+	 * @param divisor The divisor for the index test
+	 * @param modulus The modulus for the index test
+	 * @return The next set bit for which <code>index%divisor==modulus</code>
+	 */
+	public int nextSetBitMatching(int fromIndex, int divisor, int modulus) {
+		if (fromIndex < 0)
+			throw new IndexOutOfBoundsException("fromIndex < 0: " + fromIndex);
+
+		checkInvariants();
+
+		int fromMod = fromIndex % divisor;
+		if (fromMod == modulus) { // No change
+		} else if (fromMod > modulus) {
+			fromIndex = (fromIndex / divisor + 1) * divisor + modulus;
+		} else {
+			fromIndex = fromIndex / divisor * divisor + modulus;
+		}
+
+		int u = wordIndex(fromIndex);
+		if (u >= wordsInUse)
+			return -1;
+
+		long word = words[u] & (WORD_MASK << fromIndex);
+
+		int indexAtWord = u * BITS_PER_WORD;
+		while (true) {
+			if (word != 0) {
+				int wordIndex = Long.numberOfTrailingZeros(word);
+				int index = indexAtWord + wordIndex;
+				int indexMod = index % divisor;
+				while (true) {
+					if (indexMod == modulus)
+						return index;
+					int shift;
+					if (indexMod > modulus)
+						shift = wordIndex + divisor - indexMod + modulus;
+					else
+						shift = wordIndex + modulus - indexMod;
+					if (shift >= BITS_PER_WORD)
+						break;
+					word &= WORD_MASK << shift;
+					if (word == 0) {
+						break;
+					}
+					wordIndex = Long.numberOfTrailingZeros(word);
+					index = indexAtWord + wordIndex;
+					indexMod = index % divisor;
+				}
+			}
+			if (++u == wordsInUse)
+				return -1;
+			word = words[u];
+			indexAtWord += BITS_PER_WORD;
+		}
+	}
+
+	/**
 	 * Returns the index of the first bit that is set to {@code false} that occurs on or after the specified starting index.
 	 *
 	 * @param fromIndex the index to start checking from (inclusive)
@@ -1011,6 +1072,120 @@ public class BetterBitSet implements Cloneable {
 		for (int i = 0; i < wordsInUse; i++)
 			sum += Long.bitCount(words[i]);
 		return sum;
+	}
+
+	/**
+	 * Allows retrieval of up to 64 bits at once
+	 * 
+	 * @param start The index of the first bit to retrieve
+	 * @param length The number of bits to retrieve
+	 * @param copyTo A long to OR the bits into (in the <code>length</code> lowest bits)
+	 * @return <code>copyTo</code> after the bits from this bit set have been OR'd into it
+	 */
+	public long getBits(int start, int length, long copyTo) {
+		if (start < 0)
+			throw new IndexOutOfBoundsException("start: " + start);
+		else if (length < 0 || length > BITS_PER_WORD)
+			throw new IndexOutOfBoundsException("length: " + start + " (Max=" + BITS_PER_WORD + ")");
+		else if (length == 0)
+			return copyTo;
+		int startWordIndex = wordIndex(start);
+		if (startWordIndex >= wordsInUse)
+			return copyTo;
+
+		boolean wordAligned = ((start & BIT_INDEX_MASK) == 0);
+		if (wordAligned) {
+			if (length == BITS_PER_WORD)
+				copyTo = words[startWordIndex];
+			else
+				copyTo |= (words[startWordIndex] & ~(WORD_MASK << length));
+			return copyTo;
+		}
+		int startBitOffset = start - (startWordIndex * BITS_PER_WORD);
+		int firstWordBitCount = BITS_PER_WORD - startBitOffset;
+		long firstWordMask = (WORD_MASK << startBitOffset);
+		boolean hasSecondWord;
+		if (length <= firstWordBitCount) {
+			hasSecondWord = false;
+			firstWordMask &= (WORD_MASK >>> (firstWordBitCount - length));
+		} else
+			hasSecondWord = startWordIndex + 1 < wordsInUse;
+		if (!hasSecondWord) {
+			copyTo |= (words[startWordIndex] & firstWordMask) >>> startBitOffset;
+			return copyTo;
+		}
+		copyTo |= (words[startWordIndex] & firstWordMask) >>> startBitOffset;
+		int secondWordBitCount = length - firstWordBitCount;
+		long secondWordMask = WORD_MASK >>> (BITS_PER_WORD - secondWordBitCount);
+		copyTo |= (words[startWordIndex + 1] & secondWordMask) << firstWordBitCount;
+		return copyTo;
+	}
+
+	/**
+	 * Allows setting up to 64 bits at once
+	 * 
+	 * @param start The index of the first bit to set
+	 * @param length The number of bits to set
+	 * @param bits The values of the replacement bits. Only the lowest <code>length</code> bits will be used.
+	 * @return The values of the bits at the given positions before the replacement
+	 */
+	public long getAndSetBits(int start, int length, long bits) {
+		if (start < 0)
+			throw new IndexOutOfBoundsException("start: " + start);
+		else if (length < 0 || length > BITS_PER_WORD)
+			throw new IndexOutOfBoundsException("length: " + start + " (Max=" + BITS_PER_WORD + ")");
+		else if (length == 0)
+			return 0;
+
+		int startWordIndex = wordIndex(start);
+		boolean wordAligned = ((start & BIT_INDEX_MASK) == 0);
+		long ret;
+		if (wordAligned) {
+			expandTo(startWordIndex);
+			if (length == BITS_PER_WORD) {
+				ret = words[startWordIndex];
+				words[startWordIndex] = bits;
+			} else {
+				long currentWordMask = WORD_MASK >>> (BITS_PER_WORD - length);
+				ret = words[startWordIndex] & currentWordMask;
+				words[startWordIndex] = (words[startWordIndex] & ~currentWordMask) | (bits & currentWordMask);
+			}
+		} else {
+			int startBitOffset = start - (startWordIndex * BITS_PER_WORD);
+			int firstWordBitCount = BITS_PER_WORD - startBitOffset;
+			long bitsMask = WORD_MASK >>> (BITS_PER_WORD - length);
+			long firstWordMask = bitsMask << startBitOffset;
+			boolean hasFirstWord = startWordIndex < wordsInUse;
+			if (hasFirstWord)
+				ret = (words[startWordIndex] & firstWordMask) >>> startBitOffset;
+			else
+				ret = 0;
+			boolean hasSecondWord;
+			long secondWordBits, secondWordMask;
+			if (length <= firstWordBitCount) {
+				hasSecondWord = false;
+				secondWordBits = secondWordMask = 0;
+			} else {
+				hasSecondWord = startWordIndex + 1 < wordsInUse;
+				secondWordBits = (bits & bitsMask) >>> firstWordBitCount;
+				int secondWordBitCount = length - firstWordBitCount;
+				secondWordMask = WORD_MASK >>> (BITS_PER_WORD - secondWordBitCount);
+			}
+			if (secondWordBits == 0) {
+				if (!hasFirstWord)
+					expandTo(startWordIndex);
+			} else if (!hasSecondWord)
+				expandTo(startWordIndex + 1);
+
+			words[startWordIndex] = (words[startWordIndex] & ~firstWordMask) | ((bits & bitsMask) << startBitOffset);
+			if (hasSecondWord)
+				ret |= (words[startWordIndex + 1] & secondWordMask) << firstWordBitCount;
+			if (hasSecondWord || secondWordBits != 0)
+				words[startWordIndex + 1] = (words[startWordIndex + 1] & ~secondWordMask) | secondWordBits;
+		}
+
+		checkInvariants();
+		return ret;
 	}
 
 	/**
@@ -1571,6 +1746,70 @@ public class BetterBitSet implements Cloneable {
 
 		b.append('}');
 		return b.toString();
+	}
+
+	/**
+	 * <p>
+	 * Prints this bit set as a sequence of 0's and 1's, with optional delimiters to separate groups of powers of 10.
+	 * </p>
+	 * <p>
+	 * For example, take a bit set with 1,145 1 bits in it. Calling this method with delimiters " ", "\n", "\n____" will yield:<br />
+	 * 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111<br />
+	 * 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111<br />
+	 * 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111<br />
+	 * 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111<br />
+	 * 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111<br />
+	 * 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111<br />
+	 * 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111<br />
+	 * 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111<br />
+	 * 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111<br />
+	 * 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111<br />
+	 * ____1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111 1111111111<br />
+	 * 1111111111 1111111111 1111111111 1111111111 11111
+	 * </p>
+	 * <p>
+	 * Any number of delimiters may be used. Any of the delimiters may be null to skip delimiting that power of 10.
+	 * </p>
+	 * 
+	 * @param str The StringBuilder to print into. If null, a new one will be created.
+	 * @param delimiters The delimiters for each power of 10
+	 * @return The string builder with the contents of this bit set appended
+	 */
+	public StringBuilder printBits(StringBuilder str, CharSequence... delimiters) {
+		if (str == null)
+			str = new StringBuilder();
+		int length = length();
+		int[] pow10s = new int[delimiters.length];
+		int index = 0;
+		for (int word = 0; word < wordsInUse; word++) {
+			for (long mask = 1; mask != 0; mask <<= 1) {
+				str.append((words[word] & mask) == 0 ? '0' : '1');
+				index++;
+				if (index == length)
+					break;
+				CharSequence delimiter = getPow10Delimiter(delimiters, pow10s);
+				if (delimiter != null)
+					str.append(delimiter);
+			}
+		}
+		return str;
+	}
+
+	private static CharSequence getPow10Delimiter(CharSequence[] delimiters, int[] pow10s) {
+		if (delimiters.length == 0)
+			return null;
+		for (int i = 0; i < delimiters.length; i++) {
+			int pow10 = pow10s[i] + 1;
+			if (pow10 != 10) {
+				pow10s[i] = pow10;
+				if (i == 0)
+					return null;
+				else
+					return delimiters[i - 1];
+			} else
+				pow10s[i] = 0;
+		}
+		return delimiters[delimiters.length - 1];
 	}
 
 	/**

@@ -2,7 +2,13 @@ package org.qommons.tree;
 
 
 import java.util.*;
+import java.util.function.Function;
 
+import org.qommons.Stamped;
+import org.qommons.Transactable;
+import org.qommons.collect.BetterCollection;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
 import org.qommons.collect.OptimisticContext;
 
 /**
@@ -10,11 +16,29 @@ import org.qommons.collect.OptimisticContext;
  * 
  * @param <E> The type of values stored in the tree
  */
-public class RedBlackTree<E> implements Iterable<E> {
+public class RedBlackTree<E> implements Iterable<E>, Stamped {
 	private RedBlackNode<E> theRoot;
 	RedBlackNode<E> theFirst;
 	RedBlackNode<E> theLast;
 	volatile long theStructureStamp;
+	private CollectionLockingStrategy theLocking;
+	private Function<RedBlackNode<E>, ElementId> theIdGen;
+
+	/**
+	 * Provides features that allow nodes in this tree to satisfy the {@link BetterCollection} API
+	 * 
+	 * @param locking The locking strategy for this tree
+	 * @param idGen The {@link ElementId} generator for nodes in the tree
+	 */
+	public void forBetterApi(CollectionLockingStrategy locking, Function<RedBlackNode<E>, ElementId> idGen) {
+		theLocking = locking;
+		theIdGen = idGen;
+	}
+
+	@Override
+	public long getStamp() {
+		return theStructureStamp;
+	}
 
 	/** @return The number of nodes in this tree */
 	public int size() {
@@ -80,13 +104,27 @@ public class RedBlackTree<E> implements Iterable<E> {
 			theRoot = new RedBlackNode<>(this, value);
 			return theRoot;
 		}
-		RedBlackNode<E> found = theRoot.findClosest(n -> compare.compare(value, n.getValue()), false, false, OptimisticContext.TRUE);
-		int comp = compare.compare(value, found.getValue());
+		RedBlackNode<E> found = theRoot.findClosest(n -> compare.compare(value, n.get()), false, false, OptimisticContext.TRUE);
+		int comp = compare.compare(value, found.get());
 		if (distinct && comp == 0)
 			return null;
 		RedBlackNode<E> newNode = new RedBlackNode<>(this, value);
 		found.add(newNode, comp < 0);
 		return newNode;
+	}
+
+	ElementId getId(RedBlackNode<E> node) {
+		if (theIdGen != null)
+			return theIdGen.apply(node);
+		else
+			return null;
+	}
+
+	int doOptimistically(int init, Transactable.OptimisticIntOperation operation) {
+		if (theLocking != null)
+			return theLocking.doOptimistically(init, operation);
+		else
+			return operation.apply(init, new Transactable.StampedContext(this));
 	}
 
 	/** @return An independent copy of this tree */
@@ -139,24 +177,24 @@ public class RedBlackTree<E> implements Iterable<E> {
 		X nodeData = listener == null ? null : listener.removed(node);
 		// Now figure out if the rest of the tree seems ok. We won't check every single node, but just the node's immediate surroundings.
 		// If more than one node is out of place, we need to do a full tree repair to be safe.
-		RedBlackNode<E> closest = node.getClosest(true);
+		RedBlackNode<E> closest = node.getAdjacent(false);
 		if (closest == null) {
-			RedBlackNode<E> other = node.getClosest(false);
+			RedBlackNode<E> other = node.getAdjacent(true);
 			if (other != null)
 				closest = other;
 			else
 				return true;
 		}
-		RedBlackNode<E> left = closest.getClosest(true);
-		RedBlackNode<E> right = closest.getClosest(false);
-		if ((left == null || check(left.getValue(), closest.getValue(), compare, distinct))//
-			&& (right == null || check(closest.getValue(), right.getValue(), compare, distinct))) {
+		RedBlackNode<E> left = closest.getAdjacent(false);
+		RedBlackNode<E> right = closest.getAdjacent(true);
+		if ((left == null || check(left.get(), closest.get(), compare, distinct))//
+			&& (right == null || check(closest.get(), right.get(), compare, distinct))) {
 			// Looks like it was just the single node that was corrupt, so we're done
 		} else
 			repairSubTree(theRoot, compare, distinct, listener); // Full tree repair
 
 		// Attempt to re-add the original node
-		E nodeValue = node.getValue();
+		E nodeValue = node.get();
 		node = insert(nodeValue, compare, distinct);
 		if (listener != null) {
 			if (node != null)
@@ -191,12 +229,12 @@ public class RedBlackTree<E> implements Iterable<E> {
 			if (!valid) {
 				X datum = listener == null ? null : listener.removed(node);
 				node.delete();
-				RedBlackNode<E> newNode = insert(node.getValue(), compare, distinct);
+				RedBlackNode<E> newNode = insert(node.get(), compare, distinct);
 				if (listener != null) {
 					if (newNode != null)
 						listener.transferred(newNode, datum);
 					else
-						listener.disposed(node.getValue(), datum);
+						listener.disposed(node.get(), datum);
 				}
 			}
 			return valid;
@@ -209,10 +247,10 @@ public class RedBlackTree<E> implements Iterable<E> {
 		RedBlackNode<E> rightMost = node;
 		while (rightMost.getRight() != null)
 			rightMost = rightMost.getRight();
-		boolean hasOuterLeftBound = leftMost.getClosest(true) != null;
-		E outerLeftBound = hasOuterLeftBound ? leftMost.getClosest(true).getValue() : null;
-		boolean hasOuterRightBound = rightMost.getClosest(false) != null;
-		E outerRightBound = hasOuterRightBound ? rightMost.getClosest(false).getValue() : null;
+		boolean hasOuterLeftBound = leftMost.getAdjacent(false) != null;
+		E outerLeftBound = hasOuterLeftBound ? leftMost.getAdjacent(false).get() : null;
+		boolean hasOuterRightBound = rightMost.getAdjacent(true) != null;
+		E outerRightBound = hasOuterRightBound ? rightMost.getAdjacent(true).get() : null;
 
 		boolean hasInnerLeftBound = false;
 		E innerLeftBound = null;
@@ -223,25 +261,25 @@ public class RedBlackTree<E> implements Iterable<E> {
 		BitSet toMove = new BitSet(node.size());
 		int index = 0;
 		while (true) {
-			if (hasOuterLeftBound && !check(outerLeftBound, n.getValue(), compare, distinct)) {
+			if (hasOuterLeftBound && !check(outerLeftBound, n.get(), compare, distinct)) {
 				toMove.set(index);
 				removeFromSubTree++;
-			} else if (hasOuterRightBound && !check(n.getValue(), outerRightBound, compare, distinct)) {
+			} else if (hasOuterRightBound && !check(n.get(), outerRightBound, compare, distinct)) {
 				toMove.set(index);
 				removeFromSubTree++;
 			} else if (hasInnerLeftBound) {
-				if (!check(innerLeftBound, n.getValue(), compare, distinct))
+				if (!check(innerLeftBound, n.get(), compare, distinct))
 					moveWithinSubTree++;
 				else
-					innerLeftBound = n.getValue();
+					innerLeftBound = n.get();
 			} else {
 				hasInnerLeftBound = true;
-				innerLeftBound = n.getValue();
+				innerLeftBound = n.get();
 			}
 			if (n == rightMost)
 				break;
 			else {
-				n = n.getClosest(false);
+				n = n.getAdjacent(true);
 				index++;
 			}
 		}
@@ -259,27 +297,27 @@ public class RedBlackTree<E> implements Iterable<E> {
 			// Now mark the subtree-valid nodes that need to be moved
 			boolean movePrimary = moveWithinSubTree > (node.size() - removeFromSubTree) / 2;
 			if (movePrimary) {
-				n = n.getClosest(false);
+				n = n.getAdjacent(true);
 				index = 1;
-				if (!toMove.get(0) && !check(leftMost.getValue(), n.getValue(), compare, distinct))
+				if (!toMove.get(0) && !check(leftMost.get(), n.get(), compare, distinct))
 					toMove.set(0);
 			}
 			hasInnerLeftBound = false;
 			while (true) {
 				if (toMove.get(index)) {// Doesn't belong in the subtree; ignore
 				} else if (hasInnerLeftBound) {
-					if (!check(innerLeftBound, n.getValue(), compare, distinct))
+					if (!check(innerLeftBound, n.get(), compare, distinct))
 						toMove.set(index);
 					else
-						innerLeftBound = n.getValue();
+						innerLeftBound = n.get();
 				} else {
 					hasInnerLeftBound = true;
-					innerLeftBound = n.getValue();
+					innerLeftBound = n.get();
 				}
 				if (n == rightMost)
 					break;
 				else {
-					n = n.getClosest(false);
+					n = n.getAdjacent(true);
 					index++;
 				}
 			}
@@ -295,13 +333,13 @@ public class RedBlackTree<E> implements Iterable<E> {
 		n = leftMost;
 		index = 0;
 		while (true) {
-			RedBlackNode<E> next = n.getClosest(false); // Grab next first, since we may be about to remove n
+			RedBlackNode<E> next = n.getAdjacent(true); // Grab next first, since we may be about to remove n
 			if (toMove.get(index)) {
 				n.delete();
 				// If one is not null, the other will be too. I'm suppressing a warning here
 				if (listener != null && listenerData != null)
 					listenerData.add(listener.removed(n));
-				toReAdd.add(n.getValue());
+				toReAdd.add(n.get());
 			}
 			if (n == rightMost)
 				break;
@@ -333,8 +371,8 @@ public class RedBlackTree<E> implements Iterable<E> {
 	}
 
 	private static <E> boolean check(RedBlackNode<E> node, Comparator<? super E> compare, boolean distinct) {
-		return (node.getClosest(true) == null || check(node.getClosest(true).getValue(), node.getValue(), compare, distinct))//
-			&& (node.getClosest(false) == null || check(node.getValue(), node.getClosest(false).getValue(), compare, distinct));
+		return (node.getAdjacent(false) == null || check(node.getAdjacent(false).get(), node.get(), compare, distinct))//
+			&& (node.getAdjacent(true) == null || check(node.get(), node.getAdjacent(true).get(), compare, distinct));
 	}
 
 	private static <E> boolean check(E leftVal, E rightVal, Comparator<? super E> compare, boolean distinct) {
@@ -363,7 +401,7 @@ public class RedBlackTree<E> implements Iterable<E> {
 				if (nextNode == null)
 					nextNode = getTerminal(isForward);
 				else
-					nextNode = nextNode.getClosest(!isForward);
+					nextNode = nextNode.getAdjacent(isForward);
 				isOnNext = true;
 			}
 			return nextNode != null;
@@ -375,7 +413,7 @@ public class RedBlackTree<E> implements Iterable<E> {
 				throw new NoSuchElementException();
 			isOnNext = false;
 			lastNode = nextNode;
-			return nextNode.getValue();
+			return nextNode.get();
 		}
 
 		@Override

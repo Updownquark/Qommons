@@ -1,10 +1,6 @@
 package org.qommons.collect;
 
-import java.util.AbstractCollection;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
 import java.util.function.Function;
 
 import org.qommons.*;
@@ -25,8 +21,9 @@ import org.qommons.Lockable.CoreId;
  * <ol>
  * <li>If it is not the root of its hierarchy, a read lock will be obtained on all its ancestors.</li>
  * <li>The local read/write lock will be obtained.
- * <li></li>The read/write lock of all its descendants will be obtained.</li>
  * </ol>
+ * The child locks are not notified and are only <i>effectively</i> locked at the same level on the same thread as the parent, since the
+ * first thing a child lock does when attempting a lock is obtain the lock from the parent.
  * </p>
  * 
  * <p>
@@ -35,47 +32,33 @@ import org.qommons.Lockable.CoreId;
  * </p>
  */
 public class HierarchicalTransactable implements CausalLock {
-	public interface LockListener {
-		void preLock(boolean write);
-
-		void onLock(boolean write);
-	}
-
 	private final HierarchicalTransactable theParent;
 	private final Function<? super HierarchicalTransactable, ? extends CausalLock> theLockMaker;
 
-	private final int theDepth;
 	private final CausalLock myLock;
-	private final List<HierarchicalTransactable> theChildren;
-	private final ListenerList<LockListener> theListeners;
-	// private final List<HierarchicalLockTransaction> theLocks;
-	private boolean isRemoved;
 
 	HierarchicalTransactable(HierarchicalTransactable parent, Function<? super HierarchicalTransactable, ? extends CausalLock> lockMaker) {
 		theParent = parent;
-		if (parent == null) {
-			theDepth = 0;
-		} else {
-			theDepth = parent.theDepth + 1;
-		}
 		theLockMaker = lockMaker;
 		this.myLock = theLockMaker.apply(this);
-		theListeners = ListenerList.build().build();
-		theChildren = new ArrayList<>();
-		// theLocks = new ArrayList<>();
 	}
 
 	/** @return The currently active causes of write locks. This value may not be unmodifiable for performance purposes. */
 	@Override
 	public Collection<Cause> getCurrentCauses() {
-		return myLock.getCurrentCauses();
+		if(theParent!=null)
+			return IterableUtils.concat(theParent.getCurrentCauses(), myLock.getCurrentCauses());
+		else
+			return myLock.getCurrentCauses();
 	}
 
 	@Override
 	public Causable getRootCausable() {
-		Causable parentC = theParent == null ? null : theParent.getRootCausable();
-		if (parentC != null)
-			return parentC;
+		if (theParent != null) {
+			Causable parentC = theParent.getRootCausable();
+			if (parentC != null)
+				return parentC;
+		}
 		return myLock.getRootCausable();
 	}
 
@@ -89,16 +72,10 @@ public class HierarchicalTransactable implements CausalLock {
 		return myLock.doOptimistically(init, operation);
 	}
 
-	public Runnable addListener(LockListener listener) {
-		return theListeners.add(listener, true);
-	}
-
 	/** @return A Transactable that locks this transactable as its parent */
 	public HierarchicalTransactable createChild() {
 		try (Transaction t = lock(false, true, null)) {
-			HierarchicalTransactable newChild = new HierarchicalTransactable(this, theLockMaker);
-			theChildren.add(newChild);
-			return newChild;
+			return new HierarchicalTransactable(this, theLockMaker);
 		}
 	}
 
@@ -108,24 +85,7 @@ public class HierarchicalTransactable implements CausalLock {
 	 */
 	public HierarchicalTransactable createChild(Function<? super HierarchicalTransactable, ? extends CausalLock> lockMaker) {
 		try (Transaction t = lock(false, true, null)) {
-			HierarchicalTransactable newChild = new HierarchicalTransactable(this, lockMaker);
-			theChildren.add(newChild);
-			return newChild;
-		}
-	}
-
-	/** Removes this transactable from its parent */
-	public void remove() {
-		if (theParent == null || isRemoved)
-			return;
-		try (Transaction t = theParent.lock(false, true, null)) {
-			if (isRemoved)
-				return;
-			isRemoved = true;
-			// while (!theLocks.isEmpty())
-			// theLocks.remove(theLocks.size() - 1).closeParent();
-			int index = theParent.theChildren.indexOf(this);
-			theParent.theChildren.remove(index);
+			return new HierarchicalTransactable(this, lockMaker);
 		}
 	}
 
@@ -146,14 +106,17 @@ public class HierarchicalTransactable implements CausalLock {
 
 	@Override
 	public CoreId getCoreId() {
-		return accumulateCores(myLock.getCoreId(), Ternian.NONE);
+		if (theParent == null)
+			return myLock.getCoreId();
+		else
+			return theParent.getCoreId().and(myLock.getCoreId());
 	}
 
 	private Transaction lock(boolean justTry, boolean write, Object cause) {
 		boolean success = false;
 		// First, obtain a read lock on the parent if applicable
 		Transaction parentT;
-		if (theParent == null || isRemoved)
+		if (theParent == null)
 			parentT = Transaction.NONE;
 		else {
 			parentT = theParent.lock(justTry, false, cause);
@@ -168,16 +131,6 @@ public class HierarchicalTransactable implements CausalLock {
 		Transaction myT;
 		try {
 			do {
-				if (!theListeners.isEmpty()) {
-					// Clean the state before each lock attempt
-					try {
-						theListeners.forEach(//
-							l -> l.preLock(write));
-					} catch (Throwable e) {
-						e.printStackTrace();
-					}
-				}
-
 				myT = myLock.tryLock(write, cause);
 			} while (!justTry && myT == null);
 			success = myT != null;
@@ -188,21 +141,10 @@ public class HierarchicalTransactable implements CausalLock {
 			}
 		}
 
-		if (!theListeners.isEmpty()) {
-			try {
-				theListeners.forEach(//
-					l -> l.onLock(write));
-			} catch (Throwable e) {
-				e.printStackTrace();
-			}
-		}
-
-		HierarchicalLockTransaction release = new HierarchicalLockTransaction(parentT, myT);
-		// theLocks.add(release);
-		return release;
+		return new HierarchicalLockTransaction(parentT, myT);
 	}
 
-	class HierarchicalLockTransaction implements Transaction {
+	static class HierarchicalLockTransaction implements Transaction {
 		private final Transaction theParentLock;
 		private final Transaction theLocalLock;
 		private boolean isClosed;
@@ -218,7 +160,6 @@ public class HierarchicalTransactable implements CausalLock {
 			if (isClosed)
 				return;
 			isClosed = true;
-			// theLocks.remove(this);
 			theLocalLock.close();
 			if (!isParentClosed) {
 				isParentClosed = true;
@@ -234,44 +175,11 @@ public class HierarchicalTransactable implements CausalLock {
 		}
 	}
 
-	private CoreId accumulateCores(CoreId core, Ternian fromBelow) {
-		if (theParent != null && !isRemoved && fromBelow != Ternian.TRUE)
-			core = theParent.accumulateCores(core, Ternian.FALSE);
-		if (fromBelow != Ternian.FALSE) {
-			// This method is not protected by any locks, but this call is thread safe for ArrayList
-			Object[] children = theChildren.toArray();
-			for (Object child : children)
-				core = ((HierarchicalTransactable) child).accumulateCores(core, Ternian.TRUE);
-		}
-		return core;
-	}
-
 	/**
 	 * @param lockCreator The function to create locks from parent locks
 	 * @return The new hierarchical transactable
 	 */
 	public static HierarchicalTransactable create(Function<? super HierarchicalTransactable, ? extends CausalLock> lockCreator) {
 		return new HierarchicalTransactable(null, lockCreator);
-	}
-
-	static class FlattenedCollection<T> extends AbstractCollection<T> {
-		private final Collection<? extends Collection<? extends T>> theCollections;
-
-		public FlattenedCollection(Collection<? extends Collection<? extends T>> collections) {
-			theCollections = collections;
-		}
-
-		@Override
-		public Iterator<T> iterator() {
-			return IterableUtils.flatten(theCollections).iterator();
-		}
-
-		@Override
-		public int size() {
-			int size = 0;
-			for (Collection<? extends T> coll : theCollections)
-				size += coll.size();
-			return size;
-		}
 	}
 }

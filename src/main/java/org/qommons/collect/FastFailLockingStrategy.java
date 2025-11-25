@@ -119,7 +119,7 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 		}
 
 		@Override
-		public boolean getAsBoolean() {
+		public boolean isOperationValid() {
 			if (failed)
 				return false;
 			long newStamp = getStamp();

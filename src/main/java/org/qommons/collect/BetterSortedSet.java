@@ -1,6 +1,10 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.NavigableSet;
+import java.util.Spliterator;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -306,6 +310,8 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	 * @return An immutable sorted list with the given values
 	 */
 	public static <E> BetterSortedSet<E> of(Comparator<? super E> compare, Collection<? extends E> values) {
+		if (values == null)
+			return empty(compare);
 		switch (values.size()) {
 		case 0:
 			return empty(compare);
@@ -323,7 +329,16 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	 * @return An immutable sorted list with the given values
 	 */
 	public static <E> BetterSortedSet<E> of(Comparator<? super E> compare, E... values) {
-		return of(compare, Arrays.asList(values));
+		if (values == null)
+			return empty(compare);
+		switch (values.length) {
+		case 0:
+			return empty(compare);
+		case 1:
+			return single(values[0], compare);
+		default:
+			return new ConstantSortedSet<>(compare, values);
+		}
 	}
 
 	/**
@@ -455,6 +470,14 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		 */
 		public ConstantSortedSet(Comparator<? super E> sorting, Collection<? extends E> values) {
 			super(sorting, values, true);
+		}
+
+		/**
+		 * @param sorting The sorting for the set
+		 * @param values The values for the set
+		 */
+		public ConstantSortedSet(Comparator<? super E> sorting, E... values) {
+			super(sorting, true, values);
 		}
 
 		@Override

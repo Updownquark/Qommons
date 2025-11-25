@@ -776,4 +776,37 @@ public interface Transactable extends ThreadConstrained {
 			return theLockable.getCoreId();
 		}
 	}
+
+	/** A simple {@link OptimisticContext} for a {@link Stamped} subject */
+	static class StampedContext implements OptimisticContext {
+		private final Stamped theSubject;
+		private long theStamp;
+		private boolean failed;
+
+		public StampedContext(Stamped subject) {
+			theSubject = subject;
+			theStamp = theSubject.getStamp();
+		}
+
+		public boolean isValidOrReset() {
+			long stamp = theSubject.getStamp();
+			if (theStamp == stamp)
+				return true;
+			else {
+				theStamp = stamp;
+				failed = false;
+				return false;
+			}
+		}
+
+		@Override
+		public boolean isOperationValid() {
+			if (failed)
+				return false;
+			else if (theSubject.getStamp() == theStamp)
+				return true;
+			failed = true;
+			return false;
+		}
+	}
 }

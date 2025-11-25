@@ -1497,6 +1497,18 @@ public class OsgiBundleSet {
 		}
 	}
 
+	/** @return The DS Configuration names by which this application was initialized. */
+	public static BetterList<String> getDSConfiguration() {
+		String systemProp = System.getProperty(CONFIGURATION_SYSTEM_PROPERTY);
+		if (systemProp != null && !systemProp.isEmpty()) {
+			List<String> dsConfig = new ArrayList<>();
+			for (String config : systemProp.split(","))
+				dsConfig.add(config.trim());
+			return BetterList.of(dsConfig);
+		} else
+			return BetterList.empty();
+	}
+
 	/**
 	 * Main method
 	 *

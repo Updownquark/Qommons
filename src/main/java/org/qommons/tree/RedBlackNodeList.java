@@ -67,6 +67,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	protected RedBlackNodeList(Function<Object, CollectionLockingStrategy> locker, String description) {
 		theLocker = locker.apply(this);
 		theTree = new RedBlackTree<>();
+		theTree.forBetterApi(theLocker, NodeId::new);
 		initIdentity(Identifiable.baseId(description, this));
 	}
 
@@ -79,6 +80,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	protected RedBlackNodeList(Function<Object, CollectionLockingStrategy> locker, Object identity) {
 		theLocker = locker.apply(this);
 		theTree = new RedBlackTree<>();
+		theTree.forBetterApi(theLocker, NodeId::new);
 		initIdentity(identity);
 	}
 
@@ -121,7 +123,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 
 	@Override
 	public BinaryTreeNode<E> getRoot() {
-		return wrap(theTree.getRoot());
+		return theTree.getRoot();
 	}
 
 	/**
@@ -131,7 +133,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	public BinaryTreeNode<E> getNode(int index) {
 		if (theTree.getRoot() == null)
 			throw new IndexOutOfBoundsException(index + " of 0");
-		return theLocker.doOptimistically(null, (init, ctx) -> wrap(theTree.getRoot().get(index, ctx)));
+		return theLocker.doOptimistically(null, (init, ctx) -> theTree.getRoot().get(index, ctx));
 	}
 
 	/** For unit tests. Ensures the integrity of the collection. */
@@ -187,7 +189,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 
 	@Override
 	public BinaryTreeNode<E> getTerminalElement(boolean first) {
-		return wrap(theTree.getTerminal(first));
+		return theTree.getTerminal(first);
 	}
 
 	/**
@@ -224,7 +226,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 
 	@Override
 	public BinaryTreeNode<E> getElement(ElementId id) {
-		return wrap(checkNode(id, true).theNode);
+		return checkNode(id, true).theNode;
 	}
 
 	@Override
@@ -232,7 +234,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 		RedBlackNode<E> root = theTree.getRoot();
 		if (root == null)
 			throw new IndexOutOfBoundsException(index + " of 0");
-		return theLocker.doOptimistically(null, (init, ctx) -> wrap(root.get(index, ctx)));
+		return theLocker.doOptimistically(null, (init, ctx) -> root.get(index, ctx));
 	}
 
 	@Override
@@ -277,7 +279,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	@Override
 	public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
-		return wrap(addNode(value, after, before, first));
+		return addNode(value, after, before, first);
 	}
 
 	/**
@@ -333,7 +335,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	@Override
 	public BinaryTreeNode<E> splitBetween(ElementId element1, ElementId element2) {
 		return theLocker.doOptimistically(null,
-			(init, ctx) -> wrap(RedBlackNode.splitBetween(((NodeId) element1).theNode, ((NodeId) element2).theNode, ctx)));
+			(init, ctx) -> RedBlackNode.splitBetween(((NodeId) element1).theNode, ((NodeId) element2).theNode, ctx));
 	}
 
 	/**
@@ -534,7 +536,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 
 		@Override
 		public X removed(RedBlackNode<E> node) {
-			return theWrapped == null ? null : theWrapped.removed(wrap(node));
+			return theWrapped == null ? null : theWrapped.removed(node);
 		}
 
 		@Override
@@ -546,7 +548,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 		@Override
 		public void transferred(RedBlackNode<E> node, X data) {
 			if (theWrapped != null)
-				theWrapped.transferred(wrap(node), data);
+				theWrapped.transferred(node, data);
 		}
 	}
 
@@ -582,24 +584,16 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	}
 
 	private NodeId checkNode(ElementId id, boolean requirePresent) {
-		if (id == null)
-			throw new NullPointerException();
-		if (!(id instanceof RedBlackNodeList.NodeId))
+		try {
+			NodeId nodeId = (NodeId) id;
+			if (nodeId.theNode.getTree() != theTree)
+				throw new IllegalArgumentException(StdMsg.NOT_FOUND);
+			if (requirePresent && !nodeId.isPresent())
+				throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
+			return nodeId;
+		} catch (ClassCastException e) {
 			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-		NodeId nodeId = (NodeId) id;
-		if (nodeId.theNode.getTree() != theTree)
-			throw new IllegalArgumentException(StdMsg.NOT_FOUND);
-		if (requirePresent && !nodeId.isPresent())
-			throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
-		return nodeId;
-	}
-
-	private NodeWrapper wrap(RedBlackNode<E> node) {
-		if (node == null)
-			return null;
-		if (node.wrapper == null)
-			node.wrapper = new NodeWrapper(node);
-		return (NodeWrapper) node.wrapper;
+		}
 	}
 
 	private MutableNodeWrapper wrapMutable(RedBlackNode<E> node) {
@@ -635,11 +629,11 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 						return RedBlackNode.compare(theNode, nodeId.theNode, ctx);
 					} else {
 						// A couple little optimizations for common uses
-						if (nodeId.theNode.getClosest(true) == theNode)
+						if (nodeId.theNode.getAdjacent(false) == theNode)
 							return -1;
-						else if (nodeId.theNode.getClosest(false) == theNode)
+						else if (nodeId.theNode.getAdjacent(true) == theNode)
 							return 1;
-						int compare = theNode.getNodesBefore(ctx) - nodeId.theNode.getNodesBefore(ctx);
+						int compare = theNode.getElementsBefore(ctx) - nodeId.theNode.getElementsBefore(ctx);
 						compare = compare + 1;
 						if (compare == 0)
 							compare = -1;
@@ -647,11 +641,11 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 					}
 				} else {
 					// A couple little optimizations for common uses
-					if (theNode.getClosest(true) == nodeId.theNode)
+					if (theNode.getAdjacent(false) == nodeId.theNode)
 						return 1;
-					else if (theNode.getClosest(false) == nodeId.theNode)
+					else if (theNode.getAdjacent(true) == nodeId.theNode)
 						return -1;
-					int compare = theNode.getNodesBefore(ctx) - nodeId.theNode.getNodesBefore(ctx);
+					int compare = theNode.getElementsBefore(ctx) - nodeId.theNode.getElementsBefore(ctx);
 					// We can assume the other ID is present, because tree nodes cannot be compared
 					// if the tree has been changed since the node was removed.
 					// So if one node has been removed and then another one has been removed, this call is invalid
@@ -678,85 +672,19 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 		public String toString() {
 			String index = theLocker.doOptimistically("", (init, ctx) -> {
 				if (theNode.isPresent())
-					return "" + theNode.getNodesBefore(ctx);
+					return "" + theNode.getElementsBefore(ctx);
 				else
 					return "removed";
 			});
-			return new StringBuilder().append('[').append(index).append("]: ").append(theNode.getValue()).toString();
+			return new StringBuilder().append('[').append(index).append("]: ").append(theNode.get()).toString();
 		}
 	}
 
-	class NodeWrapper implements BinaryTreeNode<E> {
-		final RedBlackNode<E> theNode;
-		NodeId theId;
+	class MutableNodeWrapper implements MutableBinaryTreeNode<E> {
+		private final RedBlackNode<E> theNode;
 
-		NodeWrapper(RedBlackNode<E> node) {
+		MutableNodeWrapper(RedBlackNode<E> node) {
 			theNode = node;
-		}
-
-		@Override
-		public ElementId getElementId() {
-			if (theId == null)
-				theId = new NodeId(theNode);
-			return theId;
-		}
-
-		@Override
-		public E get() {
-			return theNode.getValue();
-		}
-
-		@Override
-		public BinaryTreeNode<E> getParent() {
-			return wrap(theNode.getParent());
-		}
-
-		@Override
-		public BinaryTreeNode<E> getLeft() {
-			return wrap(theNode.getLeft());
-		}
-
-		@Override
-		public BinaryTreeNode<E> getRight() {
-			return wrap(theNode.getRight());
-		}
-
-		@Override
-		public BinaryTreeNode<E> getAdjacent(boolean next) {
-			return wrap(theNode.getClosest(!next));
-		}
-
-		@Override
-		public int getElementsBefore() {
-			return theLocker.doOptimistically(0, //
-				(init, ctx) -> theNode.getNodesBefore(ctx));
-		}
-
-		@Override
-		public int getElementsAfter() {
-			return theLocker.doOptimistically(0, //
-				(init, ctx) -> theNode.getNodesAfter(ctx));
-		}
-
-		@Override
-		public BinaryTreeNode<E> getRoot() {
-			return wrap(theNode.getRoot());
-		}
-
-		@Override
-		public boolean getSide() {
-			return theNode.getSide();
-		}
-
-		@Override
-		public BinaryTreeNode<E> getSibling() {
-			return wrap(theNode.getSibling());
-		}
-
-		@Override
-		public BinaryTreeNode<E> get(int index, OptimisticContext ctx) {
-			return theLocker.doOptimistically(null, //
-				(init, ctx2) -> wrap(theNode.get(index, OptimisticContext.and(ctx, ctx2))));
 		}
 
 		@Override
@@ -765,24 +693,28 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 		}
 
 		@Override
-		public int hashCode() {
-			return theNode.hashCode();
+		public boolean getSide() {
+			return theNode.getSide();
 		}
 
 		@Override
-		public boolean equals(Object obj) {
-			return obj instanceof RedBlackNodeList.NodeWrapper && theNode.equals(((RedBlackNodeList<?>.NodeWrapper) obj).theNode);
+		public int getElementsBefore() {
+			return theLocker.doOptimistically(0, (__, ctx) -> theNode.getElementsBefore(ctx));
 		}
 
 		@Override
-		public String toString() {
-			return getElementId().toString();
+		public int getElementsAfter() {
+			return theLocker.doOptimistically(0, (__, ctx) -> theNode.getElementsAfter(ctx));
 		}
-	}
 
-	class MutableNodeWrapper extends NodeWrapper implements MutableBinaryTreeNode<E> {
-		MutableNodeWrapper(RedBlackNode<E> node) {
-			super(node);
+		@Override
+		public ElementId getElementId() {
+			return theNode.getElementId();
+		}
+
+		@Override
+		public E get() {
+			return theNode.get();
 		}
 
 		@Override
@@ -802,7 +734,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 
 		@Override
 		public MutableBinaryTreeNode<E> getAdjacent(boolean next) {
-			return wrapMutable(theNode.getClosest(!next));
+			return wrapMutable(theNode.getAdjacent(next));
 		}
 
 		@Override
@@ -824,7 +756,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 		public MutableBinaryTreeNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly,
 			OptimisticContext ctx) {
 			return theLocker.doOptimistically(null,
-				(init, ctx2) -> mutableNodeFor(super.findClosest(finder, lesser, strictly, OptimisticContext.and(ctx, ctx2))));
+				(init, ctx2) -> mutableNodeFor(theNode.findClosest(finder, lesser, strictly, OptimisticContext.and(ctx, ctx2))));
 		}
 
 		@Override

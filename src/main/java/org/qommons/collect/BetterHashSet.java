@@ -947,18 +947,18 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 				else
 					return 0;
 			}, true, false, ctx);
-			if (!ctx.getAsBoolean() || node == null || node.get().hashCode() != hashCode)
+			if (!ctx.isOperationValid() || node == null || node.get().hashCode() != hashCode)
 				return null;
 			BinaryTreeNode<HashEntry> node2 = node;
-			while (ctx.getAsBoolean() && node2 != null && node2.get().hashCode() == hashCode) {
+			while (ctx.isOperationValid() && node2 != null && node2.get().hashCode() == hashCode) {
 				if (equals.test(node2.get().get()))
 					return node2.get();
 				node2 = node2.getAdjacent(false);
 			}
-			if (!ctx.getAsBoolean())
+			if (!ctx.isOperationValid())
 				return null;
 			node2 = node.getAdjacent(true);
-			while (ctx.getAsBoolean() && node2 != null && node2.get().hashCode() == hashCode) {
+			while (ctx.isOperationValid() && node2 != null && node2.get().hashCode() == hashCode) {
 				if (equals.test(node2.get().get()))
 					return node2.get();
 				node2 = node2.getAdjacent(true);

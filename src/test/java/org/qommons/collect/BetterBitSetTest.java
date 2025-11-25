@@ -19,7 +19,7 @@ public class BetterBitSetTest {
 		TestHelper.createTester(BetterBitSetTester.class)//
 			.withPlacemarks("op")//
 			.withFailurePersistence(true).revisitKnownFailures(true).withDebug(true)//
-			.withRandomCases(25).withMaxProgressInterval(Duration.ofMillis(500)).withMaxCaseDuration(Duration.ofSeconds(5))//
+			.withRandomCases(25).withMaxProgressInterval(Duration.ofMillis(1000)).withMaxCaseDuration(Duration.ofSeconds(5))//
 			.execute().throwErrorIfFailed();
 	}
 
@@ -132,11 +132,46 @@ public class BetterBitSetTest {
 						}
 						Assert.assertEquals(indexes.length, j);
 					})//
+					.or(.1, () -> { // Set a bunch of bits at once
+						int length = helper.getInt(0, 65);
+						int index = helper.getInt(0, Math.max(100, target.length() - 50));
+						long value = helper.getAnyLong();
+						long expected = 0;
+						long mask = 1;
+						for (int j = 0; j < length; j++) {
+							if (target.get(index + j))
+								expected |= mask;
+							mask <<= 1;
+						}
+						if (helper.isReproducing()) {
+							StringBuilder str = new StringBuilder("bulk setting ");
+							mask = 1L;
+							for (int j = 0; j < length; j++) {
+								str.append((value & mask) == 0 ? '0' : '1');
+								mask <<= 1;
+							}
+							str.append('(').append(length).append(") @").append(index);
+							System.out.println(str.toString());
+						}
+						long result = target.getAndSetBits(index, length, value);
+						Assert.assertEquals(expected, result);
+						mask = 1;
+						for (int j = 0; j < length; j++) {
+							boolean expectedBit = ((value & mask) != 0);
+							Assert.assertEquals(expectedBit, target.get(index + j));
+							mask <<= 1;
+						}
+					})//
 					.execute("op");
-				if (helper.isReproducing())
+				if (helper.isReproducing()) {
 					System.out.println(
-						"Left (" + theLeft.cardinality() + "):" + theLeft + "\nRight (" + theRight.cardinality() + "):" + theRight);
+						"Left (" + theLeft.cardinality() + "):" + theLeft + "\n\t" + theLeft.printBits(null, " ", "\n\t", "\n\t\t"));
+					System.out.println(
+						"Right (" + theRight.cardinality() + "):" + theRight + "\n\t" + theRight.printBits(null, " ", "\n\t", "\n\t\t"));
+				}
 				helper.placemark();
+
+				// Testing difference
 				int leftIndex = theLeft.nextSetBit(0);
 				int rightIndex = theRight.nextSetBit(0);
 				int nextDifference = theLeft.nextDifference(theRight, 0);
@@ -162,6 +197,35 @@ public class BetterBitSetTest {
 						if (nextDifference > 0)
 							Assert.assertEquals(lastDifference, theLeft.previousDifference(theRight, nextDifference - 1));
 					}
+				}
+
+				// Test grabbing a bunch of bits at once
+				int length = helper.getInt(0, Math.min(65, target.length()));
+				int index = helper.getInt(0, target.length());
+				long result = target.getBits(index, length, 0);
+				long mask = 1;
+				for (int j = 0; j < 64; j++) {
+					boolean expectedBit = j < length ? target.get(index + j) : false;
+					boolean resultBit = (result & mask) != 0;
+					Assert.assertEquals(expectedBit, resultBit);
+					mask <<= 1;
+				}
+
+				// Test navigation by modulus
+				int divisor = helper.getInt(2, 16);
+				int modulus = helper.getInt(0, divisor);
+				int prev = 0;
+				int next = target.nextSetBitMatching(0, divisor, modulus);
+				for (int j = target.nextSetBit(0); j >= 0; j = target.nextSetBit(j + 1)) {
+					if (j % divisor == modulus) {
+						if (j != next) {
+							target.nextSetBitMatching(prev + 1, divisor, modulus); // DEBUG
+							Assert.assertEquals(j, next);
+						}
+						prev = j;
+						next = target.nextSetBitMatching(j + 1, divisor, modulus);
+					} else
+						Assert.assertNotEquals(j, next);
 				}
 			}
 		}

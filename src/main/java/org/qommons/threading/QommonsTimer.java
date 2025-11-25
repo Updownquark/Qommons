@@ -376,6 +376,8 @@ public class QommonsTimer {
 				throw new IllegalArgumentException(threading + " is not allowed here");
 			if (threading == ThreadConstraint.ANY)
 				return onAnyThread();
+			else if (threading == ThreadConstraint.EDT)
+				return onEDT();
 			theThreading = (task, timer) -> {
 				threading.invoke(task);
 				return true;
@@ -678,17 +680,40 @@ public class QommonsTimer {
 	 * @return The task handle for the task
 	 */
 	public TaskHandle doAfterInactivity(Object taskKey, Runnable task, Duration inactiveTime) {
+		return doAfterInactivity(taskKey, task, inactiveTime, null);
+	}
+
+	/**
+	 * <p>
+	 * Performs a task after this method has not been called (with the same key) after a certain time period.
+	 * </p>
+	 * <p>
+	 * This method is good for performing cleanup tasks after a resources has not been used for a while. This eliminates the need to close
+	 * and re-create the resource each time it is needed, while ensuring that the resource is cleaned up eventually.
+	 * </p>
+	 * 
+	 * @param taskKey A unique (by {@link Object#equals(Object)}) key used to prolong the task's execution as long as this method keeps
+	 *        being called periodically (faster than <code>inactiveTime</code>).
+	 * @param task The task to execute
+	 * @param inactiveTime The inactive time after which to perform the task
+	 * @param init Optional initialization for the task handle--e.g. to set the {@link TaskHandle#withThreading(TaskThreading) threading}
+	 * @return The task handle for the task
+	 */
+	public TaskHandle doAfterInactivity(Object taskKey, Runnable task, Duration inactiveTime, Consumer<TaskHandle> init) {
 		return theInactivityTasks.compute(taskKey, (k, existing) -> {
 			if (existing == null) {
 				TaskHandle[] handle = new TaskHandle[1];
-				return handle[0] = build(() -> {
+				handle[0] = build(() -> {
 					try {
 						task.run();
 					} finally {
 						if (!handle[0].isActive())
 							theInactivityTasks.remove(taskKey);
 					}
-				}, Duration.ofSeconds(1_000_000_000), false).times(1).runNextIn(inactiveTime);
+				}, Duration.ofSeconds(1_000_000_000), false);
+				if (init != null)
+					init.accept(handle[0]);
+				return handle[0].times(1).runNextIn(inactiveTime);
 			} else {
 				existing.times(1).runNextIn(inactiveTime);
 				return existing;

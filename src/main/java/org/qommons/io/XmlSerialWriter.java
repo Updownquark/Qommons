@@ -217,6 +217,7 @@ public class XmlSerialWriter {
 		 */
 		public Document writeWhitespace(String whitespace) throws IOException {
 			assertWritable();
+			closeHeader();
 			for (int c = 0; c < whitespace.length(); c++)
 				if (!Character.isWhitespace(whitespace.charAt(c)))
 					throw new IllegalArgumentException("Character " + whitespace.charAt(c) + " (\\u" + //
@@ -267,6 +268,7 @@ public class XmlSerialWriter {
 		private boolean isHeaderClosed;
 		private boolean isClosing;
 		private boolean isClosed;
+		private boolean contentHasNewLines;
 
 		Element(Document doc, String elementName, int depth) throws IOException {
 			theDocument = doc;
@@ -298,6 +300,19 @@ public class XmlSerialWriter {
 				depth--;
 			for (int i = 0; i < depth; i++)
 				theDocument.getWriter().write(theDocument.getIndent());
+		}
+
+		/**
+		 * If this serial writer is configured to indent its document, this method writes enough white space to indent from a new line out
+		 * to the indent level of this element plus one.
+		 * 
+		 * @return This element
+		 * @throws IOException If the content could not be written
+		 */
+		public Element writeIndent() throws IOException {
+			for (int i = 0; i < theDepth; i++)
+				theDocument.getWriter().write(theDocument.getIndent());
+			return this;
 		}
 
 		@Override
@@ -362,6 +377,12 @@ public class XmlSerialWriter {
 			return addChild(childName, onChild);
 		}
 
+		/**
+		 * @param childName The name for the child element
+		 * @param onChild The code to configure the child element
+		 * @return This element
+		 * @throws IOException If an exception occurs writing the data
+		 */
 		@Override
 		public Element addChild(String childName, XmlChild onChild) throws IOException {
 			if (isClosed)
@@ -372,6 +393,18 @@ public class XmlSerialWriter {
 		}
 
 		/**
+		 * Writes an element with no attributes and the given content
+		 * 
+		 * @param childName The name for the child element
+		 * @param content The new child's content
+		 * @return This element
+		 * @throws IOException If an exception occurs writing the data
+		 */
+		public Element addChild(String childName, String content) throws IOException {
+			return addChild(childName, content == null ? null : child -> child.addContent(content));
+		}
+
+		/**
 		 * @param content Text content for this element
 		 * @return This element
 		 * @throws IOException If an exception occurs writing the data
@@ -379,9 +412,12 @@ public class XmlSerialWriter {
 		public Element addContent(String content) throws IOException {
 			if (isClosed)
 				throw new IllegalStateException("This element has already been closed");
-			isContentOnly = isEmpty;
+			if (isEmpty)
+				isContentOnly = true;
 			preContent(!isContentOnly);
 			writeXmlContent(theDocument.getWriter(), content, XmlContentType.CONTENT);
+			if (!contentHasNewLines && content.indexOf('\n') >= 0)
+				contentHasNewLines = true;
 			return this;
 		}
 
@@ -404,7 +440,7 @@ public class XmlSerialWriter {
 				theDocument.getWriter().write(" />");
 				isHeaderClosed = true;
 			} else {
-				preContent(!isContentOnly);
+				preContent(!isContentOnly || contentHasNewLines);
 				theDocument.getWriter().write("</");
 				writeXmlContent(theDocument.getWriter(), theElementName, XmlContentType.ELEMENT_NAME);
 				theDocument.getWriter().write(">");

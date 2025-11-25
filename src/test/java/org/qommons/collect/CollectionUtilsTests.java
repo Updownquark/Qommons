@@ -146,7 +146,11 @@ public class CollectionUtilsTests {
 			}
 
 			boolean useUniversal = helper.getBoolean(.75);
-			List<String> adjusting = new ArrayList<>(originalLength);
+			List<String> adjusting;
+			if (helper.getBoolean())
+				adjusting = new ArrayList<>(originalLength);
+			else
+				adjusting = BetterTreeList.create();
 			class TestSync extends CollectionUtils.SimpleCollectionSynchronizer<String, String, RuntimeException, TestSync> {
 				TestSync() {
 					// Using only the identity function here was causing some test cases related to universality to be overlooked

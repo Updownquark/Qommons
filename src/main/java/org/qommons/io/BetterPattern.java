@@ -705,13 +705,16 @@ public interface BetterPattern {
 		}
 	}
 
+	/** A pattern that matches exactly those sequences that a given pattern doesn't match */
 	public static class NotPattern implements BetterPattern {
 		private final BetterPattern theWrapped;
 
+		/** @param wrapped The pattern to be the converse of */
 		public NotPattern(BetterPattern wrapped) {
 			theWrapped = wrapped;
 		}
 
+		/** @return The pattern that this is the converse of */
 		public BetterPattern getWrapped() {
 			return theWrapped;
 		}
@@ -1251,14 +1254,21 @@ public interface BetterPattern {
 			}
 		}
 
+		/** A character class matching any character */
 		public static final CharClass ALL_CLASS = new DefaultCharClass(ch -> true, ".");
+		/** A character class matching any character except the new line */
 		public static final CharClass ALL_NO_NEWLINE_CLASS = new DefaultCharClass(ch -> ch != '\n', ".");
+		/** A character class matching digits 0-9 */
 		public static final CharClass DIGITS = new DefaultCharClass(ch -> ch >= '0' && ch <= '9', "\\d");
+		/** A character class matching white space */
 		public static final CharClass WHITE_SPACE = new DefaultCharClass(Character::isWhitespace, "\\s");
 
 		// public static final FlagPresentCondition DOT_MATCHES_ALL = new FlagPresentCondition(Pattern.DOTALL);
+		/** A pattern matching any single character */
 		public static final CharClassPattern ALL_SEARCH = new CharClassPattern(ALL_CLASS, 1, Integer.MAX_VALUE);
+		/** A pattern matching any single character except the new line */
 		public static final CharClassPattern ALL_NO_NEWLINE_SEARCH = new CharClassPattern(ALL_NO_NEWLINE_CLASS, 1, Integer.MAX_VALUE);
+		/** A pattern matching any single digit 0-9 */
 		public static final CharClassPattern ONE_DIGIT = new CharClassPattern(DIGITS, 1, 1);
 
 		private final CharClass theClass;
@@ -1283,10 +1293,12 @@ public interface BetterPattern {
 			return theClass;
 		}
 
+		/** @return The minimum number of characters in a sequence that may be matched with this pattern */
 		public int getMin() {
 			return theMin;
 		}
 
+		/** @return The maximum number of characters in sequences matched with this pattern */
 		public int getMax() {
 			return theMax;
 		}
@@ -2173,6 +2185,10 @@ public interface BetterPattern {
 			return new Default(Collections.unmodifiableList(betweenTexts), Collections.unmodifiableList(groupRefs));
 		}
 
+		/**
+		 * @param str The character sequence to escape
+		 * @return A character sequence with escape sequences such as "\\\\" or "\\n" replaced with the characters they represent
+		 */
 		static CharSequence escape(CharSequence str) {
 			StringBuilder builder = null;
 			boolean escaped = false;

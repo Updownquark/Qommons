@@ -1,12 +1,9 @@
 package org.qommons.collect;
 
-import java.util.function.BooleanSupplier;
-
 /** Provides feedback to an {@link org.qommons.Transactable.OptimisticIntOperation} about whether the operation is still valid */
-public interface OptimisticContext extends BooleanSupplier {
+public interface OptimisticContext {
 	/** @return Whether the current operation is still valid */
-	@Override
-	boolean getAsBoolean();
+	boolean isOperationValid();
 
 	/** A context that is always valid */
 	OptimisticContext TRUE = () -> true;
@@ -18,7 +15,7 @@ public interface OptimisticContext extends BooleanSupplier {
 	default OptimisticContext and(OptimisticContext other) {
 		if (other == null)
 			return this;
-		return () -> this.getAsBoolean() && other.getAsBoolean();
+		return () -> this.isOperationValid() && other.isOperationValid();
 	}
 
 	/**

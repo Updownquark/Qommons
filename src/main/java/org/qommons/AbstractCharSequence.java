@@ -58,6 +58,14 @@ public abstract class AbstractCharSequence implements CharSequence {
 	}
 
 	/**
+	 * @param sequences The sequences to concatenate
+	 * @return The concatenated sequence
+	 */
+	public static Concatenated concat(CharSequence... sequences) {
+		return new Concatenated(sequences);
+	}
+
+	/**
 	 * @param seq The sequence to lower-case
 	 * @return A character sequence that is the same as the given sequence, but with all lower-case characters. The new sequence tracks the
 	 *         source, changing as the source does
@@ -73,6 +81,48 @@ public abstract class AbstractCharSequence implements CharSequence {
 	 */
 	public static Reversed reverse(CharSequence seq) {
 		return new Reversed(seq);
+	}
+
+	/**
+	 * @param seq The sequence to multiply
+	 * @param times The number of times to reproduce the sequence
+	 * @return The multiplied sequence--e.g. multiply("Something", 2) would be "SomethingSomething"
+	 */
+	public static Multiplied multiply(CharSequence seq, int times) {
+		return new Multiplied(seq, times);
+	}
+
+	/** Implements {@link AbstractCharSequence#concat(CharSequence...)} */
+	public static class Concatenated extends AbstractCharSequence {
+		private final CharSequence[] theSequences;
+
+		/** @param sequences The sequences to concatenate */
+		public Concatenated(CharSequence[] sequences) {
+			theSequences = sequences;
+		}
+
+		@Override
+		public int length() {
+			int sum = 0;
+			for (int i = 0; i < theSequences.length; i++)
+				sum += theSequences[i].length();
+			return sum;
+		}
+
+		@Override
+		public char charAt(int index) {
+			if (index < 0)
+				throw new IndexOutOfBoundsException("" + index);
+			int remaining = index;
+			for (int i = 0; i < theSequences.length; i++) {
+				int length = theSequences[i].length();
+				if (remaining < length)
+					return theSequences[i].charAt(remaining);
+				else
+					remaining -= length;
+			}
+			throw new IndexOutOfBoundsException(index + " of " + (index - remaining));
+		}
 	}
 
 	/** A simple, immutable implementation of {@link AbstractCharSequence} */
@@ -138,6 +188,45 @@ public abstract class AbstractCharSequence implements CharSequence {
 			if (index < 0 || index >= length)
 				throw new IndexOutOfBoundsException(index + " of " + length);
 			return theWrapped.charAt(length - index - 1);
+		}
+	}
+
+	/** Implements {@link AbstractCharSequence#multiply(CharSequence, int)} */
+	public static class Multiplied extends AbstractCharSequence {
+		private final CharSequence theBase;
+		private final int theMultiplier;
+
+		/**
+		 * @param base The sequence to multiply
+		 * @param multiplier The number of times to reproduce the sequence
+		 */
+		public Multiplied(CharSequence base, int multiplier) {
+			theBase = base;
+			theMultiplier = multiplier;
+		}
+
+		/** @return The sequence being multiplied */
+		public CharSequence getBase() {
+			return theBase;
+		}
+
+		/** @return The number of times the {@link #getBase() base sequence} is reproduced */
+		public int getMultiplier() {
+			return theMultiplier;
+		}
+
+		@Override
+		public int length() {
+			return theBase.length() * theMultiplier;
+		}
+
+		@Override
+		public char charAt(int index) {
+			int length = length();
+			if (index < 0 || index >= length)
+				throw new IndexOutOfBoundsException(index + " of " + length);
+			int baseIdx = index % theMultiplier;
+			return theBase.charAt(baseIdx);
 		}
 	}
 }

@@ -73,7 +73,7 @@ public interface BinaryTreeNode<E> extends ListElement<E> {
 		int passed = 0;
 		int compare = search.compareTo(node);
 		while (node != null && compare != 0//
-			&& (ctx == null || ctx.getAsBoolean())) {
+			&& (ctx == null || ctx.isOperationValid())) {
 			if (compare > 0) {
 				passed += sizeOf(node.getLeft()) + 1;
 				node = node.getRight();
@@ -103,7 +103,7 @@ public interface BinaryTreeNode<E> extends ListElement<E> {
 		BinaryTreeNode<E> node = this;
 		BinaryTreeNode<E> found = null;
 		boolean foundMatches = false;
-		while (ctx == null || ctx.getAsBoolean()) {
+		while (ctx == null || ctx.isOperationValid()) {
 			int compare = finder.compareTo(node);
 			if (compare == 0)
 				return node;

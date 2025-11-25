@@ -3,7 +3,6 @@ package org.qommons;
 import java.util.*;
 
 import org.qommons.Lockable.CoreId;
-import org.qommons.ProgramTracker.TrackNode;
 import org.qommons.collect.SimpleDeque;
 
 /** A lock that keeps track of the causes by which it is write-locked for eventing */
@@ -30,41 +29,29 @@ public class DefaultCausalLock implements CausalLock {
 	@Override
 	public Transaction lock(boolean write, Object cause) {
 		ProgramTracker tracker = ProgramTracker.getThreadTracker();
-		try (TrackNode root = tracker.start("lock")) {
-			TrackNode node = tracker.start("coreLock");
-			Transaction t = theLock.lock(write, cause);
-			node.close();
-			return addCause(t, write, cause, tracker);
-		}
+		Transaction t = theLock.lock(write, cause);
+		return addCause(t, write, cause, tracker);
 	}
 
 	private Transaction addCause(Transaction valueLock, boolean write, Object cause, ProgramTracker tracker) {
-		TrackNode root = tracker.start("addCause");
 		CauseSupplier tCause;
 		Transaction causeFinish;
 		if (cause == null && (!write || hasCause(tracker))) {
 			causeFinish = null;
 			tCause = null;
 		} else if (cause instanceof Cause) {
-			TrackNode node = tracker.start("CC");
 			tCause = new ConstantCause((Cause) cause);
-			node.close();
 			causeFinish = null;
 		} else if (write) {
-			TrackNode node = tracker.start("LC");
 			tCause = new LazyCause(cause);
-			node.close();
 			causeFinish = ((LazyCause) tCause)::close;
 		} else {
 			tCause = null;
 			causeFinish = null;
 		}
 		if (write && tCause != null) {
-			TrackNode node = tracker.start("tcAdd");
 			theTransactionCauses.add(tCause);
-			node.close();
 		}
-		root.close();
 		return new Transaction() {
 			private boolean isClosed;
 
@@ -90,16 +77,11 @@ public class DefaultCausalLock implements CausalLock {
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
 		ProgramTracker tracker = ProgramTracker.getThreadTracker();
-		try (TrackNode root = tracker.start("lock")) {
-			TrackNode node = tracker.start("coreLock");
-			Transaction t = theLock.tryLock(write, cause);
-			node.close();
-			return t == null ? null : addCause(t, write, cause, tracker);
-		}
+		Transaction t = theLock.tryLock(write, cause);
+		return t == null ? null : addCause(t, write, cause, tracker);
 	}
 
 	private boolean hasCause(ProgramTracker tracker) {
-		TrackNode node = tracker.start("hasCause");
 		boolean exception = false;
 		do {
 			try {
@@ -115,7 +97,6 @@ public class DefaultCausalLock implements CausalLock {
 				exception = true;
 			}
 		} while (exception);
-		node.close();
 		return false;
 	}
 

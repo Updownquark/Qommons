@@ -2,10 +2,11 @@ package org.qommons.tree;
 
 import java.lang.reflect.Field;
 import java.util.*;
-import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 import org.qommons.QommonsUtils;
+import org.qommons.collect.ElementId;
+import org.qommons.collect.OptimisticContext;
 
 /**
  * A node in a red/black binary tree structure.
@@ -15,7 +16,7 @@ import org.qommons.QommonsUtils;
  * 
  * This class assumes nothing about how it is built. In particular it does not require or care that the values of the nodes be ordered in
  * any particular way. It does not have methods to add values to the structure, but the
- * {@link #findClosest(Comparable, boolean, boolean, BooleanSupplier) findClosest} method allows log(n) searching among nodes and the
+ * {@link #findClosest(Comparable, boolean, boolean, OptimisticContext) findClosest} method allows log(n) searching among nodes and the
  * {@link #add(RedBlackNode, boolean) add} method allows adding a node to the structure. The node is not checked to see if it belongs in the
  * structure at that location. Only rebalancing is handled.
  * 
@@ -23,7 +24,7 @@ import org.qommons.QommonsUtils;
  * 
  * @param <E> The type of value that the node holds
  */
-public final class RedBlackNode<E> {
+public final class RedBlackNode<E> implements BinaryTreeNode<E> {
 	private static class CachedIndex {
 		final int index;
 		final long stamp;
@@ -55,7 +56,7 @@ public final class RedBlackNode<E> {
 	private int theSizeAdjustment;
 
 	private E theValue;
-	Object wrapper;
+	private ElementId theElementId;
 	private int hashCode;
 
 	/**
@@ -66,6 +67,7 @@ public final class RedBlackNode<E> {
 		theTree = tree;
 		isRed = true;
 		theSize = 1;
+		hashCode = -1;
 
 		theValue = value;
 	}
@@ -75,8 +77,15 @@ public final class RedBlackNode<E> {
 		return theTree;
 	}
 
-	/** @return This node's value */
-	public E getValue() {
+	@Override
+	public ElementId getElementId() {
+		if (theElementId == null)
+			theElementId = theTree.getId(this);
+		return theElementId;
+	}
+
+	@Override
+	public E get() {
 		return theValue;
 	}
 
@@ -90,12 +99,12 @@ public final class RedBlackNode<E> {
 		return isRed;
 	}
 
-	/** @return The parent of this node in the tree structure. Will be null if and only if this node is the root (or an orphan). */
+	@Override
 	public RedBlackNode<E> getParent() {
 		return theParent;
 	}
 
-	/** @return The root of the tree structure holding this node */
+	@Override
 	public RedBlackNode<E> getRoot() {
 		RedBlackNode<E> root = this;
 		while (root.theParent != null)
@@ -187,25 +196,22 @@ public final class RedBlackNode<E> {
 		return theParent.getRootNoCycles(visited);
 	}
 
-	/** @return The child node that is on the left of this node */
+	@Override
 	public RedBlackNode<E> getLeft() {
 		return theLeft;
 	}
 
-	/** @return The child node that is on the right of this node */
+	@Override
 	public RedBlackNode<E> getRight() {
 		return theRight;
 	}
 
-	/**
-	 * @param left Whether to get the left or right child
-	 * @return The left or right child of this node
-	 */
+	@Override
 	public RedBlackNode<E> getChild(boolean left) {
 		return left ? theLeft : theRight;
 	}
 
-	/** @return Whether this node is on the right (false) or the left (true) of its parent. False for the root. */
+	@Override
 	public boolean getSide() {
 		if (getParent() == null)
 			return false;
@@ -214,7 +220,7 @@ public final class RedBlackNode<E> {
 		return false;
 	}
 
-	/** @return The other child of this node's parent. Null if the parent is null. */
+	@Override
 	public RedBlackNode<E> getSibling() {
 		if(theParent == null)
 			return null;
@@ -224,14 +230,27 @@ public final class RedBlackNode<E> {
 			return theParent.getLeft();
 	}
 
-	/** @return The number of nodes in this structure (this node plus all its descendants) */
+	@Override
 	public int size() {
 		return theSize;
 	}
 
 	@Override
+	public RedBlackNode<E> getAdjacent(boolean next) {
+		if (!isPresent()) {
+			if (theTree.getRoot() == null)
+				return null;
+			CachedIndex ci = theCachedIndex;
+			// This method can be called immediately after the node has been removed, but not if the tree has since been changed
+			QommonsUtils.assertThat(theTree.theStructureStamp == ci.stamp, false, //
+				"Elements cannot be used if the collection has been changed since the element was removed");
+		}
+		return next ? theNext : thePrevious;
+	}
+
+	@Override
 	public int hashCode() {
-		if (hashCode == 0)
+		if (hashCode == -1)
 			hashCode = super.hashCode();
 		return hashCode;
 	}
@@ -254,13 +273,14 @@ public final class RedBlackNode<E> {
 	 * @param cont A continue boolean to check. This method will return null immediately if this boolean returns false.
 	 * @return The node at the given index in this sub-tree
 	 */
-	public RedBlackNode<E> get(int index, BooleanSupplier cont) {
+	@Override
+	public RedBlackNode<E> get(int index, OptimisticContext cont) {
 		QommonsUtils.assertThat(index >= 0, IndexOutOfBoundsException::new, index);
 		RedBlackNode<E> node = this;
 		int passed = 0;
 		int nodeIndex = sizeOf(theLeft);
 		boolean checkedCont = true;
-		while (node != null && index != nodeIndex && (checkedCont = cont.getAsBoolean())) {
+		while (node != null && index != nodeIndex && (checkedCont = cont.isOperationValid())) {
 			boolean left = index < nodeIndex;
 			if (!left)
 				passed = nodeIndex + 1;
@@ -279,11 +299,11 @@ public final class RedBlackNode<E> {
 	 * @param cont A continue boolean to check. This method will return null immediately if this boolean returns false.
 	 * @return The first or last node in this sub-tree
 	 */
-	public RedBlackNode<E> getTerminal(boolean left, BooleanSupplier cont) {
+	public RedBlackNode<E> getTerminal(boolean left, OptimisticContext cont) {
 		RedBlackNode<E> parent = this;
 		RedBlackNode<E> child = parent.getChild(left);
 		boolean checkedCont = true;
-		while (child != null && (checkedCont = cont.getAsBoolean())) {
+		while (child != null && (checkedCont = cont.isOperationValid())) {
 			parent = child;
 			child = parent.getChild(left);
 		}
@@ -292,11 +312,8 @@ public final class RedBlackNode<E> {
 		return parent;
 	}
 
-	/**
-	 * @param cont A continue boolean to check. This method will return -1 immediately if this boolean returns false.
-	 * @return The number of nodes stored before this node in the tree
-	 */
-	public int getNodesBefore(BooleanSupplier cont) {
+	@Override
+	public int getElementsBefore() {
 		CachedIndex ci = theCachedIndex;
 		if (!isPresent()) {
 			// This method can be called immediately after the node has been removed, but not if the tree has since been changed
@@ -307,7 +324,25 @@ public final class RedBlackNode<E> {
 		long treeStamp = theTree.theStructureStamp;
 		if (ci != null && ci.stamp == treeStamp)
 			return ci.index;
-		else if (cont != null && !cont.getAsBoolean())
+		return theTree.doOptimistically(0, (__, ctx) -> getElementsBefore(ctx));
+	}
+
+	/**
+	 * @param cont A continue boolean to check. This method will return -1 immediately if this boolean returns false.
+	 * @return The number of nodes stored before this node in the tree
+	 */
+	public int getElementsBefore(OptimisticContext cont) {
+		CachedIndex ci = theCachedIndex;
+		if (!isPresent()) {
+			// This method can be called immediately after the node has been removed, but not if the tree has since been changed
+			QommonsUtils.assertThat(theTree.theStructureStamp == ci.stamp, false, //
+				"Elements cannot be used if the collection has been changed since the element was removed");
+			return ci.index;
+		}
+		long treeStamp = theTree.theStructureStamp;
+		if (ci != null && ci.stamp == treeStamp)
+			return ci.index;
+		else if (cont != null && !cont.isOperationValid())
 			return -1;
 		RedBlackNode<E> left = theLeft;
 		RedBlackNode<E> right = theRight;
@@ -316,25 +351,30 @@ public final class RedBlackNode<E> {
 		if (parent == null)
 			ret = sizeOf(left);
 		else if (parent.theRight == this) {
-			ret = parent.getNodesBefore(cont);
+			ret = parent.getElementsBefore(cont);
 			if (ret >= 0) // Will be -1 if cont returned false
 				ret += sizeOf(left) + 1;
 		} else {
-			ret = parent.getNodesBefore(cont);
+			ret = parent.getElementsBefore(cont);
 			if (ret >= 0) // Will be -1 if cont returned false
 				ret -= sizeOf(right) + 1;
 		}
-		if (ret >= 0 && (cont == null || cont.getAsBoolean()))
+		if (ret >= 0 && (cont == null || cont.isOperationValid()))
 			theCachedIndex = new CachedIndex(ret, treeStamp);
 		return ret;
+	}
+
+	@Override
+	public int getElementsAfter() {
+		return theTree.doOptimistically(0, (__, ctx) -> getElementsAfter(ctx));
 	}
 
 	/**
 	 * @param cont A continue boolean to check. This method will return -1 immediately if this boolean returns false.
 	 * @return The number of nodes stored after this node in the tree
 	 */
-	public int getNodesAfter(BooleanSupplier cont) {
-		int before = getNodesBefore(cont);
+	public int getElementsAfter(OptimisticContext cont) {
+		int before = getElementsBefore(cont);
 		if (before < 0)
 			return -1;
 		int after = theTree.size() - before;
@@ -358,7 +398,7 @@ public final class RedBlackNode<E> {
 	 *         </ul>
 	 * @throws IllegalArgumentException If the two nodes are not present in the same tree
 	 */
-	public static int compare(RedBlackNode<?> a, RedBlackNode<?> b, BooleanSupplier cont) {
+	public static int compare(RedBlackNode<?> a, RedBlackNode<?> b, OptimisticContext cont) {
 		QommonsUtils.assertThat(a != null && b != null, NullPointerException::new, //
 			(a == null && b == null) ? "Both null" : (a == null ? "a is null" : "b is null"));
 		if (a == null || b == null)
@@ -389,7 +429,7 @@ public final class RedBlackNode<E> {
 		 * When we find the common ancestor, we use the last ascended side variables to return the order.
 		 */
 		int aSide = 0, bSide = 0;
-		while (a != b && (cont == null || cont.getAsBoolean())) {
+		while (a != b && (cont == null || cont.isOperationValid())) {
 			boolean ascendA = a.theSize <= b.theSize;
 			boolean ascendB = b.theSize <= a.theSize;
 			if (ascendA) {
@@ -424,7 +464,7 @@ public final class RedBlackNode<E> {
 	 * @param cont The optimistic context (null will be returned if this ever returns false)
 	 * @return A node between the given nodes, or null if the nodes are the same or adjacent
 	 */
-	public static <E> RedBlackNode<E> splitBetween(RedBlackNode<E> a, RedBlackNode<E> b, BooleanSupplier cont) {
+	public static <E> RedBlackNode<E> splitBetween(RedBlackNode<E> a, RedBlackNode<E> b, OptimisticContext cont) {
 		QommonsUtils.assertThat(a != null && b != null, NullPointerException::new, //
 			(a == null && b == null) ? "Both null" : (a == null ? "a is null" : "b is null"));
 		if (a == null || b == null)
@@ -434,7 +474,7 @@ public final class RedBlackNode<E> {
 		RedBlackNode<E> origA = a, origB = b;
 		RedBlackNode<E> lastALeft = null, lastARight = null, lastBLeft = null, lastBRight = null;
 		int aSide = 0, bSide = 0;
-		while (a != b && (cont == null || cont.getAsBoolean())) {
+		while (a != b && (cont == null || cont.isOperationValid())) {
 			boolean ascendA = a.theSize <= b.theSize;
 			boolean ascendB = b.theSize <= a.theSize;
 			if (ascendA) {
@@ -547,22 +587,12 @@ public final class RedBlackNode<E> {
 		isRed = red;
 	}
 
-	/**
-	 * Finds the node in this tree that is closest to {@code finder.compareTo(node)==0)}, on either the left or right side.
-	 *
-	 * @param finder The compare operation to use to find the node. Must obey the ordering used to construct this structure.
-	 * @param lesser Whether to return the closest node lesser or greater than (to the left or right, respectively) the given search if an
-	 *        exact match ({@link Comparable#compareTo(Object) finder.compareTo(node)}==0) is not found
-	 * @param strictly If false, this method will return a node that does not obey the <code>lesser</code> parameter if there is no such
-	 *        node that obeys it. In other words, if <code>strictly</code> is false, this method will always return a node.
-	 * @param cont A continue boolean to check. This method will return null immediately if this boolean returns false.
-	 * @return The found node
-	 */
-	public RedBlackNode<E> findClosest(Comparable<RedBlackNode<E>> finder, boolean lesser, boolean strictly, BooleanSupplier cont) {
+	@Override
+	public RedBlackNode<E> findClosest(Comparable<BinaryTreeNode<E>> finder, boolean lesser, boolean strictly, OptimisticContext cont) {
 		RedBlackNode<E> node = this;
 		RedBlackNode<E> found = null;
 		boolean foundMatchesLesser = false;
-		while (cont.getAsBoolean()) {
+		while (cont == null || cont.isOperationValid()) {
 			int compare = finder.compareTo(node);
 			if (compare == 0)
 				return node;
@@ -734,7 +764,7 @@ public final class RedBlackNode<E> {
 	/** Removes this node (but not its children) from the tree, rebalancing if necessary */
 	public void delete() {
 		QommonsUtils.assertThat(isPresent(), false, "This node has already been removed");
-		int preDeleteIndex = getNodesBefore(() -> true);
+		int preDeleteIndex = getElementsBefore(() -> true);
 
 		// First let's link up the next and previous fields
 		if (theNext != null)
@@ -747,7 +777,7 @@ public final class RedBlackNode<E> {
 			theTree.theFirst = theNext;
 
 		if(theLeft != null && theRight != null) {
-			RedBlackNode<E> successor = getClosest(false);
+			RedBlackNode<E> successor = getAdjacent(true);
 			switchWith(successor);
 			// Now we've switched locations with successor, so we have either 0 or 1 children and can continue with delete
 		}
@@ -816,22 +846,6 @@ public final class RedBlackNode<E> {
 		int trans = theSizeAdjustment;
 		theSizeAdjustment = 0;
 		adjustSize(trans);
-	}
-
-	/**
-	 * @param left Whether to get the closest node on the left or right
-	 * @return The closest (in value) node to this node on one side or the other
-	 */
-	public RedBlackNode<E> getClosest(boolean left) {
-		if (!isPresent()) {
-			if (theTree.getRoot() == null)
-				return null;
-			CachedIndex ci = theCachedIndex;
-			// This method can be called immediately after the node has been removed, but not if the tree has since been changed
-			QommonsUtils.assertThat(theTree.theStructureStamp == ci.stamp, false, //
-				"Elements cannot be used if the collection has been changed since the element was removed");
-		}
-		return left ? thePrevious : theNext;
 	}
 
 	/**

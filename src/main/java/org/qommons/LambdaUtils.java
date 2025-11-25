@@ -173,9 +173,16 @@ public class LambdaUtils {
 	/** Static binary predicate for two objects being {@link Object#equals(Object) equal} */
 	public static final BiPredicate<Object, Object> EQUALS = printableBiPredicate(Objects::equals, () -> "equals", "equals");
 
-	/** Static binary predicate for two objects being {@link Object#equals(Object) equal} */
+	/** Static binary predicate for two objects being not {@link Object#equals(Object) equal} */
 	public static final BiPredicate<Object, Object> NOT_EQUALS = printableBiPredicate(
 		(v1, v2) -> v1 == null ? (v2 != null) : !v1.equals(v2), () -> "notEquals", "notEquals");
+
+	/** Static binary predicate for two objects being the same object */
+	public static final BiPredicate<Object, Object> IDENTICAL = printableBiPredicate((v1, v2) -> v1 == v2, () -> "identical", "identical");
+
+	/** Static binary predicate for two objects not being the same object */
+	public static final BiPredicate<Object, Object> NOT_IDENTICAL = printableBiPredicate((v1, v2) -> v1 != v2, () -> "notIdentical",
+		"notIdentical");
 
 	/** A trivial comparator that always returns zero for any two objects */
 	public static final Comparator<Object> ALWAYS_ZERO = new Comparator<Object>() {

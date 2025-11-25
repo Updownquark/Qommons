@@ -2084,6 +2084,17 @@ public final class ArrayUtils {
 	 * @param listener The listener to use for comparisons and to notify of swapping
 	 */
 	public static <T> void sort(T [] array, SortListener<T> listener) {
+		if (array == null || array.length == 0)
+			return;
+		// We can assume that sometimes this will be called on an already-sorted array. Speed up this case.
+		boolean allSorted = true;
+		T prev = array[0];
+		for (int i = 1; allSorted && i < array.length; i++) {
+			T next = array[i];
+			allSorted = listener.compare(prev, next) <= 0;
+		}
+		if (allSorted)
+			return;
 		for(int i = 0; i < array.length - 1; i++) {
 			int min = findMin(array, i, listener);
 			if(min != i) {

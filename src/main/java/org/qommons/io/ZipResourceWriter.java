@@ -112,11 +112,17 @@ public class ZipResourceWriter implements HierarchicalResourceWriter, AutoClosea
 		DefaultFileSource dfs = new DefaultFileSource(dir);
 		try {
 			FileUtils.extractZip(zipIn, (entry, zip) -> {
-				try (OutputStream writer = dfs.writeResource(entry.getName())) {
-					int read = zip.read(buffer);
-					while (read > 0) {
-						writer.write(buffer, 0, read);
-						read = zip.read(buffer);
+				if (entry.isDirectory()) {
+					File entryDir = new File(dir, entry.getName());
+					if (!entryDir.exists())
+						entryDir.mkdirs();
+				} else {
+					try (OutputStream writer = dfs.writeResource(entry.getName())) {
+						int read = zip.read(buffer);
+						while (read > 0) {
+							writer.write(buffer, 0, read);
+							read = zip.read(buffer);
+						}
 					}
 				}
 			}, null);

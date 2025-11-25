@@ -608,6 +608,8 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	 * @return An immutable sorted list with the given values
 	 */
 	public static <E> BetterSortedList<E> of(Comparator<? super E> compare, Collection<? extends E> values) {
+		if (values == null)
+			return empty(compare);
 		switch (values.size()) {
 		case 0:
 			return empty(compare);
@@ -625,7 +627,16 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	 * @return An immutable sorted list with the given values
 	 */
 	public static <E> BetterSortedList<E> of(Comparator<? super E> compare, E... values) {
-		return of(compare, Arrays.asList(values));
+		if (values.length == 0)
+			return empty(compare);
+		switch (values.length) {
+		case 0:
+			return empty(compare);
+		case 1:
+			return single(values[0], compare);
+		default:
+			return new ConstantSortedList<>(compare, values);
+		}
 	}
 	/**
 	 * Implements {@link BetterSortedList#empty(Comparator)}
@@ -773,13 +784,47 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			theSorting = sorting;
 		}
 
+		/**
+		 * @param sorting The sorting for the list
+		 * @param values The values for the list
+		 */
+		public ConstantSortedList(Comparator<? super E> sorting, E... values) {
+			this(sorting, false, values);
+		}
+
+		/**
+		 * @param sorting The sorting for the list
+		 * @param values The values for the list
+		 * @param distinct Whether to throw an exception if any values are given which sort identically
+		 */
+		protected ConstantSortedList(Comparator<? super E> sorting, boolean distinct, E[] values) {
+			super(sortValues(values, sorting, distinct));
+			theSorting = sorting;
+		}
+
 		private static <E> List<E> sortValues(Collection<? extends E> values, Comparator<? super E> sorting, boolean distinct) {
 			List<E> copy = new ArrayList<>(values.size());
 			copy.addAll(values);
 			Collections.sort(copy, sorting);
-			for (int i = 1; i < copy.size(); i++) {
-				if (sorting.compare(copy.get(i - 1), copy.get(i)) == 0)
-					throw new IllegalArgumentException("Values are not distinct: " + copy.get(i - 1) + " and " + copy.get(i));
+			if (distinct) {
+				for (int i = 1; i < copy.size(); i++) {
+					if (sorting.compare(copy.get(i - 1), copy.get(i)) == 0)
+						throw new IllegalArgumentException("Values are not distinct: " + copy.get(i - 1) + " and " + copy.get(i));
+				}
+			}
+			return copy;
+		}
+
+		private static <E> List<E> sortValues(E[] values, Comparator<? super E> sorting, boolean distinct) {
+			List<E> copy = new ArrayList<>(values.length);
+			for (int i = 0; i < values.length; i++)
+				copy.add(values[i]);
+			Collections.sort(copy, sorting);
+			if (distinct) {
+				for (int i = 1; i < copy.size(); i++) {
+					if (sorting.compare(copy.get(i - 1), copy.get(i)) == 0)
+						throw new IllegalArgumentException("Values are not distinct: " + copy.get(i - 1) + " and " + copy.get(i));
+				}
 			}
 			return copy;
 		}

@@ -33,7 +33,7 @@ public class Range<C> implements Comparable<C> {
 		 * @return Whether this bound is present. If not present, any value will {@link #contains(Object, Comparator) contain} this bound
 		 */
 		public boolean isPresent() {
-			return this != EMPTY_LOW && this != EMPTY_HIGH && this != EMPTY_EITHER;
+			return theValue != null || isClosed;
 		}
 
 		/** @return Whether this bound includes its {@link #getValue() value} */
@@ -59,8 +59,12 @@ public class Range<C> implements Comparable<C> {
 		 * @return Whether the value satisfies this bound for the range
 		 */
 		public boolean contains(C value, Comparator<? super C> compare) {
-			if (!isPresent())
-				return true;
+			if (theValue == null) {
+				if (isClosed) // Exclusive empty
+					return false;
+				else // Inclusive empty
+					return true;
+			}
 			int comp = compare.compare(value, theValue);
 			if (comp == 0)
 				return isClosed;
@@ -76,7 +80,7 @@ public class Range<C> implements Comparable<C> {
 		 * @return
 		 *         <ul>
 		 *         <li><b>-1</b> if the division of containment for this bound is less than that of the other</li>
-		 *         <li><b>0</b> if the dvision of containment for this bound is the same as that of the other</li>
+		 *         <li><b>0</b> if the division of containment for this bound is the same as that of the other</li>
 		 *         <li><b>-1</b> if the division of containment for this bound is greater than that of the other</li></li>
 		 * @throws IllegalArgumentException If the two bounds are not on the same end of their respective ranges
 		 * @see #isLowerBound()
@@ -108,7 +112,7 @@ public class Range<C> implements Comparable<C> {
 
 		@Override
 		public Bound<C> clone() {
-			if (!isPresent())
+			if (theValue == null)
 				return this;
 			try {
 				return (Bound<C>) super.clone();
@@ -145,14 +149,18 @@ public class Range<C> implements Comparable<C> {
 		StringBuilder append(StringBuilder str) {
 			if (isLowerBound == null)
 				str.append("??");
-			else if (isPresent()) {
+			else if (theValue == null) {
+				if (isClosed)
+					str.append(isLowerBound.booleanValue() ? "[\u2300" : "\u2300]");
+				else
+					str.append(isLowerBound.booleanValue() ? "(-\u221E" : "\u221E)");
+			} else {
 				if (isLowerBound.booleanValue()) {
 					str.append(isClosed ? '[' : '(').append(theValue);
 				} else {
 					str.append(theValue).append(isClosed ? ']' : ')');
 				}
-			} else
-				str.append(isLowerBound.booleanValue() ? "(-\u221E" : "\u221E)");
+			}
 			return str;
 		}
 	}
@@ -382,7 +390,10 @@ public class Range<C> implements Comparable<C> {
 	private static final Bound<?> EMPTY_LOW = new Bound<>(null, false).setLower(true);
 	private static final Bound<?> EMPTY_HIGH = new Bound<>(null, false).setLower(false);
 	private static final Bound<?> EMPTY_EITHER = new Bound<>(null, false);
+	private static final Bound<?> EXCLUSIVE_EMPTY_LOW = new Bound<>(null, true).setLower(true);
+	private static final Bound<?> EXCLUSIVE_EMPTY_HIGH = new Bound<>(null, true).setLower(false);
 	private static final Range<?> ALL = new Range<>(null, (Bound<Object>) EMPTY_LOW, (Bound<Object>) EMPTY_HIGH);
+	private static final Range<?> EMPTY = new Range<>(null, (Bound<Object>) EXCLUSIVE_EMPTY_LOW, (Bound<Object>) EXCLUSIVE_EMPTY_HIGH);
 
 	/**
 	 * @param <C> The type of the range set
@@ -426,6 +437,14 @@ public class Range<C> implements Comparable<C> {
 	 */
 	public static <C> Range<C> all() {
 		return (Range<C>) ALL;
+	}
+
+	/**
+	 * @param <C> The type of the range
+	 * @return A range that contains no values
+	 */
+	public static <C> Range<C> empty() {
+		return (Range<C>) EMPTY;
 	}
 
 	/**
@@ -569,6 +588,33 @@ public class Range<C> implements Comparable<C> {
 		return between(low, withLow, high, withHigh, LambdaUtils.COMPARABLE_COMPARE);
 	}
 
+	/**
+	 * @param <C> The type of the range set
+	 * @param withLow Whether the low value should be {@link #contains(Object) contained} in the range
+	 * @param withHigh Whether the high value should be {@link #contains(Object) contained} in the range
+	 * @param values The values for the range to contain
+	 * @return A range whose extent is determined by that of the given values
+	 */
+	public static <C extends Comparable<C>> Range<C> around(boolean withLow, boolean withHigh, C... values) {
+		if (values.length == 0)
+			return empty();
+		C min = values[0];
+		C max = values[0];
+		for (int i = 1; i < values.length; i++) {
+			int comp = values[i].compareTo(min);
+			if (comp == 0)
+				continue;
+			else if (comp < 0)
+				min = values[i];
+			else if (values[i].compareTo(max) > 0)
+				max = values[i];
+		}
+		if (min == max && !withLow || !withHigh)
+			return empty();
+		else
+			return between(min, withLow, max, withHigh);
+	}
+
 	private final Comparator<? super C> theCompare;
 	private final Bound<C> theLowerBound;
 	private final Bound<C> theUpperBound;
@@ -594,7 +640,7 @@ public class Range<C> implements Comparable<C> {
 			theUpperBound = upperBound;
 		}
 
-		if (theLowerBound.isPresent() && theUpperBound.isPresent()) {
+		if (theLowerBound.isPresent() && theUpperBound.isPresent() && EMPTY != null) {
 			int comp = compare.compare(theLowerBound.getValue(), theUpperBound.getValue());
 			if (comp > 0)
 				throw new IllegalArgumentException("Lower bound value (" + theLowerBound.getValue()
@@ -648,6 +694,223 @@ public class Range<C> implements Comparable<C> {
 	 */
 	public boolean contains(C value) {
 		return compareTo(value) == 0;
+	}
+
+	/**
+	 * @param other The range to test
+	 * @return Whether both bounds of the given range are contained in this range. If both ranges are {@link #empty() empty}, this returns
+	 *         false.
+	 */
+	public boolean contains(Range<C> other) {
+		if (this == EMPTY || other == EMPTY)
+			return false;
+
+		if (theLowerBound.isPresent()) {
+			if (other.theLowerBound.isPresent()) {
+				int comp = theCompare.compare(theLowerBound.getValue(), other.theLowerBound.getValue());
+				if (comp > 0)
+					return false;
+				else if (comp == 0) {
+					if (theLowerBound.isClosed() && !other.theLowerBound.isClosed())
+						return false;
+				}
+			} else
+				return false;
+		}
+
+		if (theUpperBound.isPresent()) {
+			if (other.theUpperBound.isPresent()) {
+				int comp = theCompare.compare(theUpperBound.getValue(), other.theUpperBound.getValue());
+				if (comp < 0)
+					return false;
+				else if (comp == 0) {
+					if (theUpperBound.isClosed() && !other.theUpperBound.isClosed())
+						return false;
+				}
+			} else
+				return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * @param other The other range to combine with
+	 * @return
+	 *         <ul>
+	 *         <li><code>this</code> If <code>this.{@link #contains(Range) contains}(other)</code></li>
+	 *         <li><code>other</code> If <code>other.{@link #contains(Range) contains}(this)</code></li>
+	 *         <li>A new Range that {@link #contains(Range) contains} both <code>this</code> and <code>other</code></li>
+	 *         </ul>
+	 *         This method always returns a non-null range
+	 */
+	public Range<C> union(Range<C> other) {
+		if (this == EMPTY)
+			return other;
+		else if (other == EMPTY)
+			return this;
+		Bound<C> low, high;
+
+		if (theLowerBound.isPresent()) {
+			if (other.theLowerBound.isPresent()) {
+				int comp = theCompare.compare(theLowerBound.getValue(), other.theLowerBound.getValue());
+				if (comp == 0) {
+					if (theLowerBound.isClosed()) {
+						if (other.theLowerBound.isClosed())
+							low = null; // Could be either
+						else
+							low = other.theLowerBound;
+					} else if (other.theLowerBound.isClosed())
+						low = theLowerBound;
+					else
+						low = null; // Could be either
+				} else if (comp < 0)
+					low = theLowerBound;
+				else
+					low = other.theLowerBound;
+			} else
+				low = other.theLowerBound;
+		} else if (other.theLowerBound.isPresent())
+			low = theLowerBound;
+		else
+			low = null; // Could be either
+
+		if (theUpperBound.isPresent()) {
+			if (other.theUpperBound.isPresent()) {
+				int comp = theCompare.compare(theUpperBound.getValue(), other.theUpperBound.getValue());
+				if (comp == 0) {
+					if (theUpperBound.isClosed()) {
+						if (other.theUpperBound.isClosed())
+							high = null; // Could be either
+						else
+							high = other.theUpperBound;
+					} else if (other.theUpperBound.isClosed())
+						high = theUpperBound;
+					else
+						high = null; // Could be either
+				} else if (comp > 0)
+					high = theUpperBound;
+				else
+					high = other.theUpperBound;
+			} else
+				high = other.theUpperBound;
+		} else if (other.theUpperBound.isPresent())
+			high = theUpperBound;
+		else
+			high = null; // Could be either
+
+		if (low == null || low == theLowerBound) {
+			if (high == null || high == theUpperBound)
+				return this;
+			else
+				return new Range<>(theCompare, theLowerBound, high);
+		} else { // low==other.theLowerBound
+			if (high == null || high == other.theUpperBound)
+				return other;
+			else
+				return new Range<>(theCompare, other.theLowerBound, high);
+		}
+	}
+
+	/**
+	 * @param other The other range to combine with
+	 * @return
+	 *         <ul>
+	 *         <li><code>this</code> if <code>other.{@link #contains(Range) contains}(this)</code></li>
+	 *         <li><code>other</code> if <code>this.{@link #contains(Range) contains}(other)</code></li>
+	 *         <li>{@link #empty() empty} If the two ranges are adjacent but have no values in common</li>
+	 *         <li><code>null</code> if the ranges are disjointed</li>
+	 *         <li>A new Range that is {@link #contains(Range) contained} by both <code>this</code> and <code>other</code></li>
+	 *         </ul>
+	 */
+	public Range<C> intersect(Range<C> other) {
+		if (this == EMPTY)
+			return this;
+		else if (other == EMPTY)
+			return other;
+
+		Bound<C> low, high;
+		if (theLowerBound.isPresent()) {
+			if (other.theLowerBound.isPresent()) {
+				int comp = theCompare.compare(theLowerBound.getValue(), other.theLowerBound.getValue());
+				if (comp == 0) {
+					if (theLowerBound.isClosed()) {
+						if (other.theUpperBound.isClosed())
+							low = null; // Could be either
+						else
+							low = theLowerBound;
+					} else if (other.theLowerBound.isClosed())
+						low = other.theLowerBound;
+					else
+						low = null; // Could be either
+				} else if (comp < 0)
+					low = other.theLowerBound;
+				else
+					low = theLowerBound;
+			} else
+				low = theLowerBound;
+		} else if (other.theLowerBound.isPresent())
+			low = other.theLowerBound;
+		else
+			low = null; // Could be either
+
+		if (theUpperBound.isPresent()) {
+			if (other.theUpperBound.isPresent()) {
+				int comp = theCompare.compare(theUpperBound.getValue(), other.theUpperBound.getValue());
+				if (comp == 0) {
+					if (theUpperBound.isClosed()) {
+						if (other.theUpperBound.isClosed())
+							high = null; // Could be either
+						else
+							high = theUpperBound;
+					} else if (other.theUpperBound.isClosed())
+						high = other.theUpperBound;
+					else
+						high = null; // Could be either
+				} else if (comp > 0)
+					high = other.theUpperBound;
+				else
+					high = theUpperBound;
+			} else
+				high = theUpperBound;
+		} else if (other.theUpperBound.isPresent())
+			high = other.theUpperBound;
+		else
+			high = null; // Could be either
+
+		if (low == null || low == theLowerBound) {
+			if (high == null || high == theUpperBound)
+				return this;
+			else if (!theLowerBound.isPresent() || !high.isPresent())
+				return new Range<>(theCompare, theLowerBound, high);
+			else {
+				int comp = theCompare.compare(theLowerBound.getValue(), high.getValue());
+				if (comp < 0)
+					return new Range<>(theCompare, theLowerBound, high);
+				else if (comp > 0)
+					return null;
+				else if (theLowerBound.isClosed() || theUpperBound.isClosed())
+					return empty();
+				else
+					return new Range<>(theCompare, theLowerBound, high);
+			}
+		} else { // low==other.theLowerBound
+			if (high == null || high == other.theUpperBound)
+				return other;
+			else if (!low.isPresent() || !high.isPresent())
+				return new Range<>(theCompare, low, high);
+			else {
+				int comp = theCompare.compare(low.getValue(), theUpperBound.getValue());
+				if (comp < 0)
+					return new Range<>(theCompare, low, high);
+				else if (comp > 0)
+					return null;
+				else if (low.isClosed() || high.isClosed())
+					return empty();
+				else
+					return new Range<>(theCompare, low, high);
+			}
+		}
 	}
 
 	/**
@@ -721,6 +984,8 @@ public class Range<C> implements Comparable<C> {
 
 	@Override
 	public String toString() {
+		if (this == EMPTY)
+			return "[\u2300]";
 		StringBuilder str = new StringBuilder();
 		theLowerBound.append(str);
 		str.append(',');

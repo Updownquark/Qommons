@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -963,6 +964,20 @@ public class QommonsUtils {
 	 */
 	public static <K, V> MapBuilder<K, V> buildMap(Map<K, V> map) {
 		return new MapBuilder<>(map);
+	}
+
+	/**
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 * @param map The map to populate (null to create a new one)
+	 * @param unmodifiable Whether the returned map should be unmodifiable
+	 * @param build A consumer to build out the map with a {@link MapBuilder}
+	 * @return A builder to populate the map
+	 */
+	public static <K, V> Map<K, V> buildMap(Map<K, V> map, boolean unmodifiable, Consumer<MapBuilder<K, V>> build) {
+		MapBuilder<K, V> builder=new MapBuilder<>(map);
+		build.accept(builder);
+		return unmodifiable ? builder.getUnmodifiable() : builder.get();
 	}
 
 	/**

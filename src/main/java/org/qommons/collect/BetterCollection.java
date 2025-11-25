@@ -31,6 +31,36 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	/** A message for an exception thrown when a view detects that it is invalid due to external modification of the underlying data */
 	public static final String BACKING_COLLECTION_CHANGED = "This collection view's backing collection has changed from underneath this view.\n"
 		+ "This view is now invalid";
+	@Override
+	default <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
+		if (isLockSupported()) {
+			StampedContext ctx = new StampedContext(this);
+			for (int i = 0; i < 3; i++) {
+				T result = operation.apply(init, ctx);
+				if (ctx.isValidOrReset())
+					return result;
+			}
+			// Failed to do it optimisitically. Force it.
+			try (Transaction t = lock(false, null)) {
+				return operation.apply(init, OptimisticContext.TRUE);
+			}
+		} else
+			return CausalLock.super.doOptimistically(init, operation);
+	}
+
+	@Override
+	default int doOptimistically(int init, OptimisticIntOperation operation) {
+		StampedContext ctx = new StampedContext(this);
+		for (int i = 0; i < 3; i++) {
+			int result = operation.apply(init, ctx);
+			if (ctx.isValidOrReset())
+				return result;
+		}
+		// Failed to do it optimisitically. Force it.
+		try (Transaction t = lock(false, null)) {
+			return operation.apply(init, OptimisticContext.TRUE);
+		}
+	}
 
 	/**
 	 * @param value The value to get the element for

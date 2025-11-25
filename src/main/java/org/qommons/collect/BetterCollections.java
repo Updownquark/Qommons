@@ -881,7 +881,14 @@ public class BetterCollections {
 		}
 	}
 
+	/**
+	 * Implements {@link OrderedMapEntry} for unmodifiable maps
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	public static class UnmodifiableOrderedEntry<K, V> extends UnmodifiableEntry<K, V> implements OrderedMapEntry<K, V> {
+		/** @param wrapped The map entry to wrap */
 		public UnmodifiableOrderedEntry(OrderedMapEntry<? extends K, ? extends V> wrapped) {
 			super(wrapped);
 		}
@@ -951,8 +958,15 @@ public class BetterCollections {
 		}
 	}
 
+	/**
+	 * Implements {@link MutableOrderedMapEntry} for unmodifiable maps
+	 * 
+	 * @param <K> The key type of the map
+	 * @param <V> The value type of the map
+	 */
 	public static class UnmodifiableMutableOrderedEntry<K, V> extends UnmodifiableMutableEntry<K, V>
 		implements MutableOrderedMapEntry<K, V> {
+		/** @param wrapped The map entry to wrap */
 		public UnmodifiableMutableOrderedEntry(OrderedMapEntry<? extends K, ? extends V> wrapped) {
 			super(wrapped);
 		}

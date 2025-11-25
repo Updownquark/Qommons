@@ -801,6 +801,14 @@ public class StringUtils {
 	}
 
 	/**
+	 * @param seq The sequence to reverse
+	 * @return The reversed sequence
+	 */
+	public static CharSequence reverse(CharSequence seq) {
+		return DefaultCharSubSequence.reverse(seq);
+	}
+
+	/**
 	 * @param seq1 The first sequence to test
 	 * @param off1 The start offset in the first sequence
 	 * @param seq2 The second sequence to test
@@ -1104,8 +1112,22 @@ public class StringUtils {
 	 * @return The string builder
 	 */
 	public static StringBuilder indent(StringBuilder str, int tabCount) {
-		for (int t = 0; t < tabCount; t++)
-			str.append('\t');
+		return indent(str, "\t", tabCount);
+	}
+
+	/**
+	 * Just appends the given indent to the sequence some number of times
+	 * 
+	 * @param str The string builder to append to
+	 * @param indent The indent sequence to append
+	 * @param indentCount The number of indent sequences to append
+	 * @return The string builder
+	 */
+	public static StringBuilder indent(StringBuilder str, CharSequence indent, int indentCount) {
+		if (indent == null || indent.length() == 0)
+			return str;
+		for (int t = 0; t < indentCount; t++)
+			str.append(indent);
 		return str;
 	}
 
