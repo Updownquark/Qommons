@@ -12,6 +12,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.qommons.ArgumentParsing.ArgumentParser;
 import org.qommons.ArgumentParsing.Arguments;
+import org.qommons.fn.FunctionUtils;
 
 /** Runs some tests on {@link ArgumentParsing} */
 public class ArgumentParsingTest {
@@ -36,7 +37,7 @@ public class ArgumentParsingTest {
 					.addInstantArgument("time-arg", a -> a.parseDefaultValue("12/25/2020 12:30am"))//
 					.addDurationArgument("duration-arg", a -> a.parseDefaultValue("1m"))//
 					.addStringArgument("string-arg",
-						a -> a.constrain(ab -> ab.check(LambdaUtils.printablePred(s -> s.length() <= 5, "length<5", null))))//
+						a -> a.constrain(ab -> ab.check(FunctionUtils.printablePred(s -> s.length() <= 5, "length<5", null))))//
 					.addPatternArgument("pattern-arg", "(\\d+)\\-(\\d+)", null)//
 					.addFileArgument("file-arg1",
 						a -> a//

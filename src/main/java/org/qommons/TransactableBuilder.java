@@ -3,6 +3,7 @@ package org.qommons;
 import java.util.function.Function;
 
 import org.qommons.collect.ThreadConstrainedLockingStrategy;
+import org.qommons.fn.FunctionUtils;
 
 /**
  * Builds some kind of object with identity and locking
@@ -15,7 +16,7 @@ public interface TransactableBuilder<B extends TransactableBuilder<? extends B>>
 	 * @return This builder
 	 */
 	default B withLocking(Transactable locker) {
-		return withLocking(LambdaUtils.constantFn(locker, locker::toString, locker));
+		return withLocking(FunctionUtils.constantFn(locker, locker::toString, locker));
 	}
 
 	/**
@@ -39,7 +40,7 @@ public interface TransactableBuilder<B extends TransactableBuilder<? extends B>>
 	 * @param <B> The sub-type of this builder
 	 */
 	public abstract class Default<B extends Default<? extends B>> implements TransactableBuilder<B> {
-		private static final Function<Object, Transactable> DEFAULT_LOCKER = LambdaUtils.constantFn(Transactable.NONE, "UNSAFE",
+		private static final Function<Object, Transactable> DEFAULT_LOCKER = FunctionUtils.constantFn(Transactable.NONE, "UNSAFE",
 			Transactable.NONE);
 
 		private Function<Object, Transactable> theLocker;
@@ -71,7 +72,7 @@ public interface TransactableBuilder<B extends TransactableBuilder<? extends B>>
 				return (B) this; // No-op
 			if (theLocker != DEFAULT_LOCKER)
 				System.err.println("WARNING: Using withThreadConstraint() after modifying the locking--locking policy will be reset");
-			theLocker = LambdaUtils.constantFn(ThreadConstrainedLockingStrategy.get(threadConstraint), threadConstraint::toString, null);
+			theLocker = FunctionUtils.constantFn(ThreadConstrainedLockingStrategy.get(threadConstraint), threadConstraint::toString, null);
 			return (B) this;
 		}
 

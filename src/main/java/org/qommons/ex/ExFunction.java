@@ -3,7 +3,8 @@ package org.qommons.ex;
 import java.util.Objects;
 import java.util.function.Function;
 
-import org.qommons.LambdaUtils;
+import org.qommons.fn.BetterFunction;
+import org.qommons.fn.FunctionUtils;
 
 /**
  * A {@link Function} look-alike that can throw a checked exception
@@ -25,7 +26,7 @@ public interface ExFunction<T, R, X extends Throwable> {
 	R apply(T value) throws X;
 
 	/** @return A {@link Function} that calls this function, wrapping any thrown checked exception with a {@link CheckedExceptionWrapper} */
-	default Function<T, R> unsafe() {
+	default BetterFunction<T, R> unsafe() {
 		return new Unsafe<>(this);
 	}
 
@@ -43,7 +44,7 @@ public interface ExFunction<T, R, X extends Throwable> {
 	 * @return This function as a supplier with the given constant argument
 	 */
 	default ExSupplier<R, X> curry(T arg) {
-		return curry(LambdaUtils.constantExSupplier(arg));
+		return curry(FunctionUtils.constantExSupplier(arg));
 	}
 
 	/**
@@ -80,7 +81,7 @@ public interface ExFunction<T, R, X extends Throwable> {
 	static <F, T, E extends Throwable> ExFunction<F, T, E> of(Function<F, T> f) {
 		if (f == null)
 			return null;
-		return LambdaUtils.printableExFn(f::apply, f::toString, f);
+		return FunctionUtils.printableExFn(f::apply, f::toString, f);
 	}
 
 	/**
@@ -98,7 +99,7 @@ public interface ExFunction<T, R, X extends Throwable> {
 	 * @param <R> The return type
 	 * @param <X> The throwable type
 	 */
-	class Unsafe<T, R, X extends Throwable> implements Function<T, R> {
+	class Unsafe<T, R, X extends Throwable> implements BetterFunction<T, R> {
 		private ExFunction<T, R, X> theFunction;
 
 		public Unsafe(ExFunction<T, R, X> function) {
@@ -281,7 +282,7 @@ public interface ExFunction<T, R, X extends Throwable> {
 			if (consumer != null)
 				theConsumer = consumer;
 			else
-				theConsumer = LambdaUtils.exConsumeDoNothing();
+				theConsumer = FunctionUtils.exConsumeDoNothing();
 		}
 
 		@Override

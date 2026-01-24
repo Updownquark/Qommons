@@ -5,6 +5,8 @@ import java.util.function.IntSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import org.qommons.fn.FunctionUtils;
+
 /**
  * <p>
  * An object provides visibility into its identity. Objects with the same identity are guaranteed to provide the same value(s) from its
@@ -320,7 +322,7 @@ public interface Identifiable {
 		 * @return This builder
 		 */
 		public CustomIdentityBuilder id(Object id) {
-			theIdentityComponents.add(LambdaUtils.constantSupplier(id));
+			theIdentityComponents.add(FunctionUtils.constantSupplier(id));
 			return this;
 		}
 
@@ -346,7 +348,7 @@ public interface Identifiable {
 		 * @return This builder
 		 */
 		public CustomIdentityBuilder append(Object toString) {
-			theToStringComponents.add(LambdaUtils.constantSupplier(toString));
+			theToStringComponents.add(FunctionUtils.constantSupplier(toString));
 			return this;
 		}
 
@@ -373,7 +375,7 @@ public interface Identifiable {
 		 * @return This builder
 		 */
 		public CustomIdentityBuilder withPrintedId(Object id) {
-			return withPrintedIdS(LambdaUtils.constantSupplier(id));
+			return withPrintedIdS(FunctionUtils.constantSupplier(id));
 		}
 
 		/** @return The built identity object */

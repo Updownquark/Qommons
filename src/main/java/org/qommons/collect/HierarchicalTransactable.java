@@ -1,10 +1,17 @@
 package org.qommons.collect;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.function.Function;
 
-import org.qommons.*;
+import org.qommons.Causable;
+import org.qommons.CausalLock;
 import org.qommons.Lockable.CoreId;
+import org.qommons.ThreadConstraint;
+import org.qommons.Transactable;
+import org.qommons.Transaction;
 
 /**
  * <p>
@@ -27,8 +34,8 @@ import org.qommons.Lockable.CoreId;
  * </p>
  * 
  * <p>
- * Thus, modifications can be made to an object protected by this class only while nothing is happening either to its ancestors or its
- * children, but siblings and other more distantly-related nodes in the hierarchy can be modified freely.
+ * Thus, modifications can be made to an object protected by this lock or its children while nothing is happening to its ancestors, but
+ * siblings and other more distantly-related nodes in the hierarchy can be modified freely.
  * </p>
  */
 public class HierarchicalTransactable implements CausalLock {
@@ -46,10 +53,56 @@ public class HierarchicalTransactable implements CausalLock {
 	/** @return The currently active causes of write locks. This value may not be unmodifiable for performance purposes. */
 	@Override
 	public Collection<Cause> getCurrentCauses() {
-		if(theParent!=null)
-			return IterableUtils.concat(theParent.getCurrentCauses(), myLock.getCurrentCauses());
-		else
+		if (theParent != null) {
+			Set<Cause> causes = addCurrentCauses(null);
+			if (causes == null)
+				causes = Collections.emptySet();
+			return causes;
+		} else
 			return myLock.getCurrentCauses();
+	}
+
+	private Set<Cause> addCurrentCauses(Set<Cause> causes) {
+		if (theParent != null)
+			causes = theParent.addCurrentCauses(causes);
+		Collection<Cause> myCauses = myLock.getCurrentCauses();
+		if (!myCauses.isEmpty()) {
+			if (causes == null)
+				causes = new LinkedHashSet<>();
+			causes.addAll(myCauses);
+		}
+		return causes;
+	}
+
+	@Override
+	public Collection<Cause> getUnfinishedCauses() {
+		if (theParent != null) {
+			Set<Cause> causes = addUnfinishedCauses(null);
+			if (causes == null)
+				causes = Collections.emptySet();
+			return causes;
+		} else
+			return myLock.getUnfinishedCauses();
+	}
+
+	private Set<Cause> addUnfinishedCauses(Set<Cause> causes) {
+		if (theParent != null)
+			causes = theParent.addUnfinishedCauses(causes);
+		for (Cause cause : myLock.getCurrentCauses()) {
+			if (cause instanceof Causable && !((Causable) cause).isFinished()) {
+				if (causes == null)
+					causes = new LinkedHashSet<>();
+				causes.add(cause);
+			}
+		}
+		return causes;
+	}
+
+	@Override
+	public boolean hasFinishingCauses() {
+		if (theParent != null && theParent.hasFinishingCauses())
+			return true;
+		return myLock.hasFinishingCauses();
 	}
 
 	@Override
@@ -112,36 +165,88 @@ public class HierarchicalTransactable implements CausalLock {
 			return theParent.getCoreId().and(myLock.getCoreId());
 	}
 
+	private static class LockWithCause {
+		final Transaction lock;
+		final Causable cause;
+
+		LockWithCause(Transaction lock, Causable cause) {
+			this.lock = lock;
+			this.cause = cause;
+		}
+	}
+
+	/* The only difference between the following two methods is that the first doesn't require a call to myLock.getRootCausable().
+	 * This class may be called so often that this is worth having 2 methods */
+
 	private Transaction lock(boolean justTry, boolean write, Object cause) {
-		boolean success = false;
-		// First, obtain a read lock on the parent if applicable
-		Transaction parentT;
 		if (theParent == null)
-			parentT = Transaction.NONE;
-		else {
-			parentT = theParent.lock(justTry, false, cause);
-			if (parentT == null)
-				return null;
-			Causable parentCause = theParent.getRootCausable();
-			if (parentCause != null)
-				cause = parentCause;
+			return lockSelf(justTry, write, cause);
+
+		// First, obtain a read lock on the parent
+		LockWithCause parentLock = theParent.lockWithCause(justTry, false, cause);
+		if (parentLock == null)
+			return null;
+		if (parentLock.cause != null)
+			cause = parentLock.cause;
+		// Now, try to obtain the local lock
+		return wrapWithLocalLock(parentLock.lock, justTry, write, cause);
+	}
+
+	private LockWithCause lockWithCause(boolean justTry, boolean write, Object cause) {
+		if (theParent == null) {
+			Transaction myT = lockSelf(justTry, write, cause);
+			return myT == null ? null : new LockWithCause(myT, myLock.getRootCausable());
 		}
 
-		// Now, try to obtain our own lock
-		Transaction myT;
-		try {
+		// First, obtain a read lock on the parent
+		LockWithCause parentLock = theParent.lockWithCause(justTry, false, cause);
+		if (parentLock == null)
+			return null;
+		if (parentLock.cause != null)
+			cause = parentLock.cause;
+		// Now, try to obtain the local lock
+		Transaction lock = wrapWithLocalLock(parentLock.lock, justTry, write, cause);
+		return lock == null ? null : new LockWithCause(lock, myLock.getRootCausable());
+	}
+
+	private Transaction lockSelf(boolean justTry, boolean write, Object cause) {
+		Transaction lock;
+		if (justTry) {
+			lock = myLock.tryLock(write, cause);
+		} else {
 			do {
-				myT = myLock.tryLock(write, cause);
-			} while (!justTry && myT == null);
-			success = myT != null;
+				lock = myLock.tryLock(write, cause);
+			} while (lock == null);
+		}
+		return lock;
+	}
+
+	private Transaction wrapWithLocalLock(Transaction parentLock, boolean justTry, boolean write, Object cause) {
+		boolean success = false;
+		try {
+			Transaction myT = lockSelf(justTry, write, cause);
+			if (myT != null) {
+				success = true;
+				return new HierarchicalLockTransaction(parentLock, myT);
+			}
 		} finally {
 			if (!success) {
-				parentT.close();
-				return null;
+				parentLock.close();
 			}
 		}
+		return null;
+	}
 
-		return new HierarchicalLockTransaction(parentT, myT);
+	@Override
+	public String toString() {
+		int depth = 0;
+		HierarchicalTransactable root = this;
+		while (root.theParent != null) {
+			depth++;
+			root = root.theParent;
+		}
+		return getClass().getSimpleName() + ":" + Integer.toHexString(root.hashCode()) + "@(" + depth + ")"
+			+ Integer.toHexString(root.hashCode());
 	}
 
 	static class HierarchicalLockTransaction implements Transaction {

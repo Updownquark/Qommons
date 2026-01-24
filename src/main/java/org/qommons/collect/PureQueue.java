@@ -6,7 +6,8 @@ import java.util.Queue;
 
 /**
  * A queue that does not allow any visibility into any of its elements except the head. For this reason, this interface differs from
- * {@link Queue} in that it does not extend {@link Collection}.
+ * {@link Queue} in that it does not extend {@link Collection} because it does not support iteration. In order to inspect elements in the
+ * queue other than the head via this API, the head would need to be removed to expose them.
  * 
  * @param <E> The type of values in the queue
  */
@@ -15,10 +16,10 @@ public interface PureQueue<E> {
 	boolean isEmpty();
 
 	/**
-	 * Returns the number of elements in this queue. If this collection contains more than <tt>Integer.MAX_VALUE</tt> elements, returns
+	 * Returns the number of elements in this queue. If this queue contains more than <tt>Integer.MAX_VALUE</tt> elements, returns
 	 * <tt>Integer.MAX_VALUE</tt>.
 	 *
-	 * @return the number of elements in this queue
+	 * @return The number of elements in this queue
 	 */
 	int size();
 
@@ -26,7 +27,7 @@ public interface PureQueue<E> {
 	 * Inserts the specified element into this queue if it is possible to do so immediately without violating capacity restrictions,
 	 * returning {@code true} upon success and throwing an {@code IllegalStateException} if no space is currently available.
 	 *
-	 * @param e the element to add
+	 * @param e The element to add
 	 * @return {@code true} (as specified by {@link Collection#add})
 	 * @throws IllegalStateException if the element cannot be added at this time due to capacity restrictions
 	 * @throws ClassCastException if the class of the specified element prevents it from being added to this queue
@@ -40,7 +41,7 @@ public interface PureQueue<E> {
 	 * using a capacity-restricted queue, this method is generally preferable to {@link #add}, which can fail to insert an element only by
 	 * throwing an exception.
 	 *
-	 * @param e the element to add
+	 * @param e The element to add
 	 * @return {@code true} if the element was added to this queue, else {@code false}
 	 * @throws ClassCastException if the class of the specified element prevents it from being added to this queue
 	 * @throws NullPointerException if the specified element is null and this queue does not permit null elements
@@ -52,7 +53,7 @@ public interface PureQueue<E> {
 	 * Retrieves and removes the head of this queue. This method differs from {@link #poll poll} only in that it throws an exception if this
 	 * queue is empty.
 	 *
-	 * @return the head of this queue
+	 * @return The head of this queue
 	 * @throws NoSuchElementException if this queue is empty
 	 */
 	E remove();
@@ -60,7 +61,7 @@ public interface PureQueue<E> {
 	/**
 	 * Retrieves and removes the head of this queue, or returns {@code null} if this queue is empty.
 	 *
-	 * @return the head of this queue, or {@code null} if this queue is empty
+	 * @return The head of this queue, or {@code null} if this queue is empty
 	 */
 	E poll();
 
@@ -68,7 +69,7 @@ public interface PureQueue<E> {
 	 * Retrieves, but does not remove, the head of this queue. This method differs from {@link #peek peek} only in that it throws an
 	 * exception if this queue is empty.
 	 *
-	 * @return the head of this queue
+	 * @return The head of this queue
 	 * @throws NoSuchElementException if this queue is empty
 	 */
 	E element();
@@ -76,7 +77,10 @@ public interface PureQueue<E> {
 	/**
 	 * Retrieves, but does not remove, the head of this queue, or returns {@code null} if this queue is empty.
 	 *
-	 * @return the head of this queue, or {@code null} if this queue is empty
+	 * @return The head of this queue, or {@code null} if this queue is empty
 	 */
 	E peek();
+
+	/** Removes all elements from this queue */
+	void clear();
 }

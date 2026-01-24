@@ -145,6 +145,10 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 	private BetterHashMap(BetterHashSet.HashSetBuilder<?> entryBuilder, Map<? extends K, ? extends V> values) {
 		theEntries = entryBuilder.build(values == null ? null : values.entrySet().stream()//
 			.<Entry> map(entry -> newEntry(entry.getKey(), entry.getValue())).collect(Collectors.toSet()));
+		if (values != null) {
+			for (CollectionElement<Entry> entry : theEntries.elements())
+				entry.get().setElement(entry);
+		}
 		theKeySet = new KeySet();
 	}
 

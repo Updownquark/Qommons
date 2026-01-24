@@ -2,10 +2,10 @@ package org.qommons.collect;
 
 import java.util.function.Function;
 
-import org.qommons.LambdaUtils;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.TransactableBuilder;
+import org.qommons.fn.FunctionUtils;
 
 /**
  * A sub-type of {@link TransactableBuilder} that specifically builds collections (or other multi-element data structures)
@@ -15,7 +15,7 @@ import org.qommons.TransactableBuilder;
 public interface CollectionBuilder<B extends CollectionBuilder<? extends B>> extends TransactableBuilder<B> {
 	@Override
 	default B withLocking(Function<Object, Transactable> locker) {
-		return withCollectionLocking(LambdaUtils.printableFn(obj -> {
+		return withCollectionLocking(FunctionUtils.printableFn(obj -> {
 			Transactable lock = locker.apply(obj);
 			if (lock instanceof CollectionLockingStrategy)
 				return (CollectionLockingStrategy) lock;
@@ -29,7 +29,7 @@ public interface CollectionBuilder<B extends CollectionBuilder<? extends B>> ext
 	 * @return This builder
 	 */
 	default B withLocking(CollectionLockingStrategy locker) {
-		return withCollectionLocking(LambdaUtils.constantFn(locker, locker::toString, locker));
+		return withCollectionLocking(FunctionUtils.constantFn(locker, locker::toString, locker));
 	}
 
 	/**
@@ -44,7 +44,7 @@ public interface CollectionBuilder<B extends CollectionBuilder<? extends B>> ext
 	 * @param <B> The sub-type of this builder
 	 */
 	public abstract class Default<B extends Default<? extends B>> implements CollectionBuilder<B> {
-		private static final Function<Object, CollectionLockingStrategy> DEFAULT_LOCKER = LambdaUtils
+		private static final Function<Object, CollectionLockingStrategy> DEFAULT_LOCKER = FunctionUtils
 			.printableFn(__ -> new FastFailLockingStrategy(), "fast-fail", "fast-fail-collection-locker");
 
 		private Function<Object, CollectionLockingStrategy> theLocker;
@@ -70,9 +70,9 @@ public interface CollectionBuilder<B extends CollectionBuilder<? extends B>> ext
 			if (theLocker != DEFAULT_LOCKER)
 				System.err.println("WARNING: Using withThreadConstraint() after modifying the locking--locking policy will be reset");
 			if (threadConstraint == ThreadConstraint.ANY) {
-				theLocker = LambdaUtils.constantFn(new FastFailLockingStrategy(), "fast-fail on " + threadConstraint, null);
+				theLocker = FunctionUtils.constantFn(new FastFailLockingStrategy(), "fast-fail on " + threadConstraint, null);
 			} else {
-				theLocker = LambdaUtils.constantFn(ThreadConstrainedLockingStrategy.get(threadConstraint),
+				theLocker = FunctionUtils.constantFn(ThreadConstrainedLockingStrategy.get(threadConstraint),
 					"thread-constrained on " + threadConstraint, null);
 			}
 			return (B) this;

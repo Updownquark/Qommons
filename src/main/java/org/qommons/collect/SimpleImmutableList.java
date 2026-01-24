@@ -73,7 +73,7 @@ public class SimpleImmutableList<E> extends AbstractList<E> implements DequeList
 	}
 
 	@Override
-	public boolean offerLast(E e) {
+	public boolean offer(E e) {
 		return false;
 	}
 
@@ -171,7 +171,7 @@ public class SimpleImmutableList<E> extends AbstractList<E> implements DequeList
 		}
 
 		@Override
-		public boolean offerLast(E e) {
+		public boolean offer(E e) {
 			return false;
 		}
 

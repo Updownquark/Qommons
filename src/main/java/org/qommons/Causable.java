@@ -234,21 +234,26 @@ public interface Causable extends CausalLock.Cause {
 				theCauses = BetterList.EMPTY;
 			} else {
 				int size = causes.length;
-				Causable root = null;
+				boolean replaceRoot = true;
+				Causable root = this;
 				for (Object cause : causes) {
 					if (cause == null)
 						size--;
-					else if (root == null && cause instanceof Causable && !(cause instanceof ChainBreak)) {
-						if (((Causable) cause).isTerminated())
+					else if (replaceRoot && cause instanceof Causable && !(cause instanceof ChainBreak)) {
+						Causable causable = (Causable) cause;
+						if (causable.isTerminated())
 							throw new IllegalStateException("Cannot use a terminated Causable as a cause");
-						root = ((Causable) cause).getRootCausable();
-						if (root.isTerminated())
+						root = causable.getRootCausable();
+						replaceRoot = false;
+						if (root != causable && root.isTerminated())
 							throw new IllegalStateException("Cannot use a terminated Causable as a cause");
 					}
 				}
-				theRootCausable = root != null ? root : this;
+				theRootCausable = root;
 				if (size == causes.length)
 					theCauses = BetterList.of(causes);
+				else if (size == 0)
+					theCauses = BetterList.EMPTY;
 				else {
 					Object[] notNullCauses = new Object[size];
 					int i = 0;

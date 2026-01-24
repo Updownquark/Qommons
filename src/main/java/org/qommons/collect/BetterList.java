@@ -568,6 +568,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	public static <E> BetterList<E> of(Collection<? extends E> values) {
 		if (values == null || values.isEmpty())
 			return empty();
+		else if (values instanceof BetterList && ((BetterList<?>) values).getThreadConstraint() == ThreadConstraint.NONE)
+			return (BetterList<E>) values;
 		else if (values.size() == 1) {
 			if (values instanceof Sequenced) {
 				Sequence<E> sequence = ((Sequenced<E>) values).sequence();
@@ -690,6 +692,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
+		public ListElement<E> addElement(E value, boolean first) throws UnsupportedOperationException, IllegalArgumentException {
+			return ListElement.reverse(getWrapped().addElement(value, !first));
+		}
+
+		@Override
 		public ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
 			return (ListElement<E>) super.addElement(value, after, before, first);
@@ -715,6 +722,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		@Override
 		public MutableListElement<E> mutableElement(ElementId id) {
 			return (MutableListElement<E>) super.mutableElement(id);
+		}
+
+		@Override
+		public ListElement<E> find(Predicate<? super E> search, boolean first) {
+			return ListElement.reverse(getWrapped().find(search, !first));
 		}
 
 		@Override
@@ -795,7 +807,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 * @param <E> The type of the list
 	 */
 	class SingletonList<E> extends SingletonCollection<E> implements BetterList<E> {
-		SingletonList(E value) {
+		public SingletonList(E value) {
 			super(value);
 		}
 
@@ -1894,6 +1906,10 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		public BetterList<CollectionElement<E>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
+			else if (sourceCollection instanceof AbstractConstantList
+				&& getIdentity().equals(((AbstractConstantList<?>) sourceCollection).getIdentity())) {
+				return BetterList.of(getElement(((AbstractConstantList<?>) sourceCollection).getElement(sourceEl).getElementsBefore()));
+			}
 			return BetterList.empty();
 		}
 
@@ -1903,14 +1919,25 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				if (!(localElement instanceof AbstractConstantList<?>.IndexElementId) || ((IndexElementId) localElement).getList() != this)
 					throw new IllegalArgumentException(localElement + " is not an element of this list");
 				return BetterList.of(localElement);
+			} else if (sourceCollection instanceof AbstractConstantList
+				&& getIdentity().equals(((AbstractConstantList<?>) sourceCollection).getIdentity())) {
+				if (!(localElement instanceof AbstractConstantList<?>.IndexElementId) || ((IndexElementId) localElement).getList() != this)
+					throw new IllegalArgumentException(localElement + " is not an element of this list");
+				return BetterList
+					.of(((AbstractConstantList<?>) sourceCollection).new IndexElementId(((IndexElementId) localElement).index));
 			}
 			return BetterList.empty();
 		}
 
 		@Override
 		public ElementId getEquivalentElement(ElementId equivalentEl) {
-			if (equivalentEl instanceof AbstractConstantList.IndexElementId && ((IndexElementId) equivalentEl).getList() == this)
-				return equivalentEl;
+			if (equivalentEl instanceof AbstractConstantList.IndexElementId) {
+				IndexElementId other = (IndexElementId) equivalentEl;
+				if (other.getList() == this)
+					return equivalentEl;
+				else
+					return new IndexElementId(other.index);
+			}
 			return null;
 		}
 
@@ -2010,6 +2037,10 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 				return AbstractConstantList.this;
 			}
 
+			boolean isInList(AbstractConstantList<?> other) {
+				return getList() == other.getLast() || getList().getIdentity().equals(other.getIdentity());
+			}
+
 			@Override
 			public int compareTo(ElementId o) {
 				return index - ((IndexElementId) o).index;
@@ -2028,12 +2059,61 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 			@Override
 			public boolean equals(Object obj) {
 				return obj instanceof AbstractConstantList<?>.IndexElementId && index == ((IndexElementId) obj).index//
-					&& getList().getIdentity().equals(((IndexElementId) obj).getList().getIdentity());
+					&& isInList(((IndexElementId) obj).getList());
 			}
 
 			@Override
 			public String toString() {
 				return new StringBuilder("[").append(index).append("]=").append(get(index)).toString();
+			}
+		}
+
+		public static class ConstantListEquivalence {
+			private final List<?> theValues;
+			private long hashCode;
+
+			public ConstantListEquivalence(List<?> values) {
+				theValues = values;
+				hashCode = -1L;
+			}
+
+			private long getHash() {
+				if (hashCode == -1) {
+					long hash = 0;
+					for (Object value : theValues) {
+						hash *= 31;
+						if (value == null) {// No adjustment
+						} else if (value instanceof Identifiable)
+							hash += ((Identifiable) value).getIdentity().hashCode();
+						else
+							hash += value.hashCode();
+					}
+					hashCode = hash;
+				}
+				return hashCode;
+			}
+
+			@Override
+			public int hashCode() {
+				return Long.hashCode(getHash());
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				if (this == obj)
+					return true;
+				else if (!(obj instanceof ConstantListEquivalence))
+					return false;
+				ConstantListEquivalence other = (ConstantListEquivalence) obj;
+				if (theValues == other.theValues)
+					return true;
+				else // This is a little problematic, but the flattened collection calls this so much I desperately needed to optimize
+					return theValues.size() == other.theValues.size() && getHash() == other.getHash();
+			}
+
+			@Override
+			public String toString() {
+				return theValues.toString();
 			}
 		}
 	}
@@ -2043,7 +2123,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 * 
 	 * @param <E> The type of values in the list
 	 */
-	class BetterArrayList<E> extends AbstractConstantList<E> {
+	class BetterArrayList<E> extends AbstractConstantList<E> implements RandomAccess {
 		private final Object[] theValues;
 
 		public BetterArrayList(Object[] values) {
@@ -2052,13 +2132,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		protected Object createIdentity() {
-			List<Object> identities = QommonsUtils.map(Arrays.asList(theValues), v -> {
-				if (v instanceof Identifiable)
-					return ((Identifiable) v).getIdentity();
-				else
-					return v;
-			}, true);
-			return Identifiable.idFor(identities, identities::toString, identities::hashCode, identities::equals);
+			return new ConstantListEquivalence(Arrays.asList(theValues));
 		}
 
 		@Override
@@ -2082,7 +2156,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 * 
 	 * @param <E> The type of values in the list
 	 */
-	class ConstantList<E> extends AbstractConstantList<E> implements BetterList<E> {
+	class ConstantList<E> extends AbstractConstantList<E> {
 		private final List<? extends E> theValues;
 
 		/** @param values The values for this list. The backing list should never be modified. */
@@ -2094,13 +2168,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		protected Object createIdentity() {
-			List<Object> identities = QommonsUtils.map(theValues, v -> {
-				if (v instanceof Identifiable)
-					return ((Identifiable) v).getIdentity();
-				else
-					return v;
-			}, true);
-			return Identifiable.idFor(identities, identities::toString, identities::hashCode, identities::equals);
+			return new ConstantListEquivalence(theValues);
 		}
 
 		@Override

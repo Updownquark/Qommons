@@ -124,7 +124,7 @@ public class ElasticExecutor<T> implements Named {
 		theUnusedWorkerLifetime = 100;
 
 		theTaskQueue = new ConcurrentLinkedQueue<>();
-		theRunner = new DefaultRunner();
+		theRunner = new DefaultRunner(new ThreadGroup(name));
 		theUnfinishedTaskCount = new AtomicInteger();
 
 		theActiveWorkers = new BetterBitSet();
@@ -680,9 +680,15 @@ public class ElasticExecutor<T> implements Named {
 	}
 
 	private static class DefaultRunner implements Runner {
+		private final ThreadGroup theThreadGroup;
+
+		public DefaultRunner(ThreadGroup threadGroup) {
+			theThreadGroup = threadGroup;
+		}
+
 		@Override
 		public void execute(Runnable task, String name) {
-			Thread thread = new Thread(task, name);
+			Thread thread = new Thread(theThreadGroup, task, name);
 			thread.setDaemon(true);
 			thread.start();
 		}

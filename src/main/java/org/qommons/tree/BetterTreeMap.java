@@ -137,7 +137,7 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 
 	@Override
 	public BinaryTreeEntry<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
-		return wrap(theEntries.addElement(newEntry(key, value), after, before, first));
+		return wrap(theEntries.getOrAdd(newEntry(key, value), after, before, first, null, null));
 	}
 
 	/**
@@ -151,8 +151,25 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 
 	@Override
 	public BinaryTreeEntry<K, V> getEntry(K key) {
-		return wrap(theEntries.search(//
-			e -> theCompare.compare(key, e.getKey()), BetterSortedList.SortedSearchFilter.OnlyMatch));
+		try {
+			return wrap(theEntries.search(//
+				e -> theCompare.compare(key, e.getKey()), BetterSortedList.SortedSearchFilter.OnlyMatch));
+		} catch (NullPointerException e) {
+			/* A very common use case is to make a sorted map with a lambda comparator (e.g. Comparable::compareTo).
+			 * In such cases, any query with a null key will result in a NullPointerException.
+			 * Ideally, either every comparator would be able to handle null (which I think it is unreasonable to expect of a developer),
+			 * or we would be able to detect whether the comparator handles null and deal with it,
+			 * but the Comparator API does not allow this.
+			 * 
+			 * In many cases (as here), the intended result of query with a null key into a map that does not handle null keys is clear.
+			 * So we can either propagate (or not handle) the exception when the comparator throws it, or we can handle it as it should
+			 * be handled with a slight performance hit for allowing the NPE to be thrown.
+			 */
+			if (key == null) // The comparator must not handle nulls
+				return null;
+			// else That can't be the problem and the dev needs to know there's some other issue
+			throw e;
+		}
 	}
 
 	@Override

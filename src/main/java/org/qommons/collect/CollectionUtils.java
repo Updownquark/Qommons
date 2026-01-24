@@ -870,9 +870,15 @@ public class CollectionUtils {
 				if (startLeft == leftToRight.length)
 					break;
 				int leftIndex = startLeft;
-				leftIndex = finder.findElement(left, r, leftIndex, filter);
-				while (leftIndex >= 0 && leftToRight[leftIndex] >= 0)
+				int newLeft = finder.findElement(left, r, leftIndex, filter);
+				while (newLeft >= leftIndex && leftToRight[leftIndex] >= 0) {
+					leftIndex = newLeft;
 					leftIndex = finder.findElement(left, r, leftIndex + 1, filter);
+				}
+				if (newLeft < leftIndex)
+					leftIndex = -1;
+				else
+					leftIndex = newLeft;
 
 				if (leftIndex >= 0) {
 					add--;

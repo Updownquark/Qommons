@@ -24,7 +24,7 @@ import org.qommons.TimeUtils;
 import org.qommons.TimeUtils.RelativeInstantEvaluation;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.ListenerList;
-import org.qommons.collect.ListenerList.Element;
+import org.qommons.collect.ListenerQueue;
 import org.qommons.debug.Debug;
 import org.qommons.io.CsvParser;
 import org.qommons.io.Format;
@@ -1422,8 +1422,9 @@ public class TestHelper extends TestUtil {
 					theMessages.add(new MessageLine(theTestCase, "Tester error: " + request, true), false);
 			}
 
+			@SuppressWarnings("resource")
 			void printOutput(AccumulatedMessage accumulated) {
-				Element<MessageLine> message = theMessages.poll(0);
+				ListenerQueue.Element<MessageLine> message = theMessages.poll(0);
 				while (message != null) {
 					accumulated.append(message.get());
 

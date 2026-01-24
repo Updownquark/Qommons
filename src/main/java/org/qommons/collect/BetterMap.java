@@ -9,6 +9,7 @@ import org.qommons.*;
 import org.qommons.Lockable.CoreId;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
+import org.qommons.fn.FunctionUtils;
 
 /**
  * A {@link Map} that provides access to its entries by ID.
@@ -91,7 +92,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 	 */
 	default MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
 		boolean[] added = new boolean[1];
-		MapEntryHandle<K, V> entry = getOrPutEntry(key, LambdaUtils.constantFn(value, () -> String.valueOf(value), value), after, before,
+		MapEntryHandle<K, V> entry = getOrPutEntry(key, FunctionUtils.constantFn(value, () -> String.valueOf(value), value), after, before,
 			first, null, () -> added[0] = true);
 		if (entry == null)
 			return null;

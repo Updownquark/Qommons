@@ -6,18 +6,17 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-import org.qommons.Stamped;
-
 /**
  * A double-ended queue that implements {@link Sequenced}
  * 
  * @param <E> The type of values in the queue
  */
-public interface SequencedDeque<E> extends Deque<E>, Sequenced<E>, PureQueue<E>, Stamped {
+public interface SequencedDeque<E> extends SequencedQueue<E>, Deque<E> {
 	/**
 	 * @param c The collection
 	 * @return Whether this collection contains any elements of the given collection
 	 */
+	@Override
 	boolean containsAny(Collection<?> c);
 
 	@Override
@@ -27,22 +26,8 @@ public interface SequencedDeque<E> extends Deque<E>, Sequenced<E>, PureQueue<E>,
 	}
 
 	@Override
-	default void addLast(E e) {
-		if (!offerLast(e))
-			throw new IllegalStateException("List is full");
-	}
-
-	@Override
-	default boolean add(E e) {
-		return offerLast(e);
-	}
-
-	@Override
 	default E removeFirst() {
-		if (isEmpty())
-			throw new NoSuchElementException("List is empty");
-		E v = pollFirst();
-		return v;
+		return SequencedQueue.super.removeFirst();
 	}
 
 	@Override
@@ -54,14 +39,13 @@ public interface SequencedDeque<E> extends Deque<E>, Sequenced<E>, PureQueue<E>,
 	}
 
 	@Override
+	default boolean removeFirstOccurrence(Object o) {
+		return SequencedQueue.super.removeFirstOccurrence(o);
+	}
+
+	@Override
 	default E getFirst() {
-		long stamp = getStamp();
-		if (isEmpty())
-			throw new NoSuchElementException("List is empty");
-		E v = peekFirst();
-		if (stamp != getStamp())
-			throw new ConcurrentModificationException("List was modified externally");
-		return v;
+		return SequencedQueue.super.getFirst();
 	}
 
 	@Override
@@ -76,13 +60,8 @@ public interface SequencedDeque<E> extends Deque<E>, Sequenced<E>, PureQueue<E>,
 	}
 
 	@Override
-	default boolean removeFirstOccurrence(Object o) {
-		return remove(o);
-	}
-
-	@Override
-	default boolean offer(E e) {
-		return offerLast(e);
+	default boolean offerLast(E e) {
+		return offer(e);
 	}
 
 	@Override

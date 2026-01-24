@@ -2,7 +2,7 @@ package org.qommons.ex;
 
 import java.util.function.BiConsumer;
 
-import org.qommons.TriConsumer;
+import org.qommons.fn.TriConsumer;
 
 /**
  * A {@link BiConsumer} look-alike that is capable of throwing a checked exception

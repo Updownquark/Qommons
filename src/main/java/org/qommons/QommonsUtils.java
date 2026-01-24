@@ -1629,7 +1629,7 @@ public class QommonsUtils {
 	 *         rest
 	 */
 	public static <T extends Comparable<? super T>> T max(T... values) {
-		return max(Arrays.asList(values), Comparable::compareTo);
+		return max(Comparable::compareTo, values);
 	}
 
 	/**
@@ -1650,7 +1650,12 @@ public class QommonsUtils {
 	 *         the rest
 	 */
 	public static <T> T max(Comparator<? super T> compare, T... values) {
-		return max(Arrays.asList(values), compare);
+		T max = null;
+		for (T value : values) {
+			if (value != null && (max == null || compare.compare(value, max) > 0))
+				max = value;
+		}
+		return max;
 	}
 
 	/**
@@ -1675,7 +1680,7 @@ public class QommonsUtils {
 	 * @return The first non-null value in the array which {@link Comparable#compareTo(Object) compares} less than or equal to all the rest
 	 */
 	public static <T extends Comparable<? super T>> T min(T... values) {
-		return min(Arrays.asList(values), Comparable::compareTo);
+		return min(Comparable::compareTo, values);
 	}
 
 	/**

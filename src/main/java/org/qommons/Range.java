@@ -3,6 +3,8 @@ package org.qommons;
 import java.util.Comparator;
 import java.util.Objects;
 
+import org.qommons.fn.FunctionUtils;
+
 /**
  * An interval in a continuous ordered set of values
  * 
@@ -465,7 +467,7 @@ public class Range<C> implements Comparable<C> {
 	 * @return The new range
 	 */
 	public static <C extends Comparable<C>> Range<C> of(Bound<C> lowerBound, Bound<C> upperBound) {
-		return of(lowerBound, upperBound, LambdaUtils.COMPARABLE_COMPARE);
+		return of(lowerBound, upperBound, FunctionUtils.COMPARABLE_COMPARE);
 	}
 
 	/**
@@ -537,7 +539,7 @@ public class Range<C> implements Comparable<C> {
 	 * @return A range that contains all values equal to or greater than the given value
 	 */
 	public static <C extends Comparable<C>> Range<C> atLeast(C value) {
-		return atLeast(value, LambdaUtils.COMPARABLE_COMPARE);
+		return atLeast(value, FunctionUtils.COMPARABLE_COMPARE);
 	}
 
 	/**
@@ -546,7 +548,7 @@ public class Range<C> implements Comparable<C> {
 	 * @return A range that contains all values less than or equal to the given value
 	 */
 	public static <C extends Comparable<C>> Range<C> atMost(C value) {
-		return atMost(value, LambdaUtils.COMPARABLE_COMPARE);
+		return atMost(value, FunctionUtils.COMPARABLE_COMPARE);
 	}
 
 	/**
@@ -555,7 +557,7 @@ public class Range<C> implements Comparable<C> {
 	 * @return A range that contains all values greater than the given value
 	 */
 	public static <C extends Comparable<C>> Range<C> greaterThan(C value) {
-		return greaterThan(value, LambdaUtils.COMPARABLE_COMPARE);
+		return greaterThan(value, FunctionUtils.COMPARABLE_COMPARE);
 	}
 
 	/**
@@ -564,7 +566,7 @@ public class Range<C> implements Comparable<C> {
 	 * @return A range that contains all values less than the given value
 	 */
 	public static <C extends Comparable<C>> Range<C> lessThan(C value) {
-		return lessThan(value, LambdaUtils.COMPARABLE_COMPARE);
+		return lessThan(value, FunctionUtils.COMPARABLE_COMPARE);
 	}
 
 	/**
@@ -573,7 +575,7 @@ public class Range<C> implements Comparable<C> {
 	 * @return A range that contains only the given value
 	 */
 	public static <C extends Comparable<C>> Range<C> exactly(C value) {
-		return exactly(value, LambdaUtils.COMPARABLE_COMPARE);
+		return exactly(value, FunctionUtils.COMPARABLE_COMPARE);
 	}
 
 	/**
@@ -585,7 +587,7 @@ public class Range<C> implements Comparable<C> {
 	 * @return A range that contains all values between the given values
 	 */
 	public static <C extends Comparable<C>> Range<C> between(C low, boolean withLow, C high, boolean withHigh) {
-		return between(low, withLow, high, withHigh, LambdaUtils.COMPARABLE_COMPARE);
+		return between(low, withLow, high, withHigh, FunctionUtils.COMPARABLE_COMPARE);
 	}
 
 	/**

@@ -27,6 +27,16 @@ public class MappedList<S, T> extends AbstractList<T> {
 		theMap = map;
 	}
 
+	/** @return The source list */
+	protected List<S> getSource() {
+		return theWrapped;
+	}
+
+	/** @return The mapping function */
+	protected Function<? super S, T> getMap() {
+		return theMap;
+	}
+
 	@Override
 	public void clear() {
 		theWrapped.clear();

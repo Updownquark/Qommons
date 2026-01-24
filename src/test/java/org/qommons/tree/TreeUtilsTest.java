@@ -8,12 +8,12 @@ import java.util.*;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.qommons.LambdaUtils;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
 import org.qommons.collect.ListElement;
 import org.qommons.collect.OptimisticContext;
 import org.qommons.collect.ValueStoredCollection;
+import org.qommons.fn.FunctionUtils;
 import org.qommons.testing.QommonsTestUtils;
 import org.qommons.testing.TestHelper;
 
@@ -278,12 +278,12 @@ public class TreeUtilsTest {
 
 	static class TreeRepairTester implements TestHelper.Testable {
 		private static Comparator<? super IntHolder>[] SORT_STRATEGIES = new Comparator[] {
-			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> Integer.compare(h1.value, h2.value), () -> "asc"), //
-			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> -Integer.compare(h1.value, h2.value), () -> "desc"), //
-			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> compareIntAbs(h1.value, h2.value), () -> "abs asc"), //
-			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> -compareIntAbs(h1.value, h2.value), () -> "abs desc"), //
-			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> compareIntStr(h1.value, h2.value), () -> "str"), //
-			LambdaUtils.<IntHolder> printableComparator((h1, h2) -> -compareIntStr(h1.value, h2.value), () -> "str desc")//
+			FunctionUtils.<IntHolder> printableComparator((h1, h2) -> Integer.compare(h1.value, h2.value), () -> "asc"), //
+			FunctionUtils.<IntHolder> printableComparator((h1, h2) -> -Integer.compare(h1.value, h2.value), () -> "desc"), //
+			FunctionUtils.<IntHolder> printableComparator((h1, h2) -> compareIntAbs(h1.value, h2.value), () -> "abs asc"), //
+			FunctionUtils.<IntHolder> printableComparator((h1, h2) -> -compareIntAbs(h1.value, h2.value), () -> "abs desc"), //
+			FunctionUtils.<IntHolder> printableComparator((h1, h2) -> compareIntStr(h1.value, h2.value), () -> "str"), //
+			FunctionUtils.<IntHolder> printableComparator((h1, h2) -> -compareIntStr(h1.value, h2.value), () -> "str desc")//
 		};
 
 		// This differs from just comparing the absolute values in that if the absolute values are equal but the values themselves aren't,
@@ -309,7 +309,7 @@ public class TreeUtilsTest {
 		public void accept(TestHelper t) {
 			int[] sortType = new int[] { t.getInt(0, SORT_STRATEGIES.length) };
 			// Build a random tree set
-			BetterTreeSet<IntHolder> set = BetterTreeSet.<IntHolder> buildTreeSet(LambdaUtils.<IntHolder> printableComparator(//
+			BetterTreeSet<IntHolder> set = BetterTreeSet.<IntHolder> buildTreeSet(FunctionUtils.<IntHolder> printableComparator(//
 				(h1, h2) -> SORT_STRATEGIES[sortType[0]].compare(h1, h2), () -> SORT_STRATEGIES[sortType[0]].toString()))
 				.build();
 			int length = t.getInt(2, 10);

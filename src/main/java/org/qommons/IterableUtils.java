@@ -135,13 +135,12 @@ public class IterableUtils {
 
 	/**
 	 * @param <T> The type of the values to iterate over
-	 * @param compound The iterables to compound
-	 * @return An Iterable that iterates through all elements in the given iterables
-	 * @deprecated Use {@link #concat(Iterable...)}
+	 * @param array The array to iterate over
+	 * @return An iterator to iterate over each element in the array
 	 */
 	@Deprecated
-	public static <T> Betterable<T> iterable(final Iterable<? extends T>... compound) {
-		return concat(compound);
+	public static <T> Betterable<T> iterable(final T[] array) {
+		return iterable(array, true);
 	}
 
 	/**
@@ -190,15 +189,12 @@ public class IterableUtils {
 			private Iterator<? extends T> theCurrentIter;
 
 			private boolean calledHasNext;
-			private boolean currentIterHasValue;
 
 			@Override
 			public boolean hasNext() {
 				calledHasNext = true;
-				if (currentIterHasValue)
-					theLastValueIter = theCurrentIter;
 
-				currentIterHasValue = theCurrentIter != null && theCurrentIter.hasNext();
+				boolean currentIterHasValue = theCurrentIter != null && theCurrentIter.hasNext();
 				while (!currentIterHasValue && theCompoundIter.hasNext()) {
 					theCurrentIter = theCompoundIter.next().iterator();
 					currentIterHasValue = theCurrentIter != null && theCurrentIter.hasNext();
@@ -213,15 +209,15 @@ public class IterableUtils {
 				if (theCurrentIter == null)
 					throw new NoSuchElementException();
 				calledHasNext = false;
-				return theCurrentIter.next();
+				T next = theCurrentIter.next();
+				theLastValueIter = theCurrentIter;
+				return next;
 			}
 
 			@Override
 			public void remove() {
-				if (!currentIterHasValue && theLastValueIter == null)
+				if (theLastValueIter == null)
 					throw new IllegalStateException("remove() must be called after next()");
-				if (currentIterHasValue)
-					theCurrentIter.remove();
 				else
 					theLastValueIter.remove();
 			}

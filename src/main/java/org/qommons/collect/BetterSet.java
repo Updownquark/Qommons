@@ -3,11 +3,13 @@ package org.qommons.collect;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
 
 import org.qommons.Lockable;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
+import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
  * A {@link Set} that is also a {@link BetterCollection}.
@@ -269,6 +271,15 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 	class SingletonSet<E> extends BetterCollection.SingletonCollection<E> implements BetterSet<E> {
 		public SingletonSet(E value) {
 			super(value);
+		}
+
+		@Override
+		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			if (Objects.equals(value, getFirst()))
+				return null;
+			else
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 
 		@Override

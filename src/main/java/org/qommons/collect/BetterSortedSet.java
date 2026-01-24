@@ -318,7 +318,10 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		case 1:
 			return single(values.iterator().next(), compare);
 		default:
-			return new ConstantSortedSet<>(compare, values);
+			// if (values.size() <= HighPerformanceArraySet.MAX_SIZE)
+			// return HighPerformanceArraySet.create(compare, values);
+			// else
+				return new ConstantSortedSet<>(compare, values);
 		}
 	}
 
@@ -337,7 +340,10 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		case 1:
 			return single(values[0], compare);
 		default:
-			return new ConstantSortedSet<>(compare, values);
+			// if (values.length <= HighPerformanceArraySet.MAX_SIZE)
+			// return HighPerformanceArraySet.create(compare, values);
+			// else
+				return new ConstantSortedSet<>(compare, values);
 		}
 	}
 

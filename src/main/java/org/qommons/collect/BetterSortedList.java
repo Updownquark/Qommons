@@ -710,6 +710,15 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
+		public ListElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
+			if (theSorting.compare(value, getFirst()) == 0)
+				return null;
+			else
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+
+		@Override
 		public <X> boolean repair(ElementId element, org.qommons.collect.ValueStoredCollection.RepairListener<E, X> listener) {
 			return false;
 		}
@@ -733,11 +742,11 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 					return null;
 				break;
 			case Less:
-				if (comp > 0)
+				if (comp < 0)
 					return null;
 				break;
 			case Greater:
-				if (comp < 0)
+				if (comp > 0)
 					return null;
 				break;
 			default:
@@ -751,7 +760,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			int comp = search.compareTo(getFirst());
 			if (comp == 0)
 				return 0;
-			else if (comp < 0)
+			else if (comp > 0)
 				return -1;
 			else
 				return 1;
@@ -763,7 +772,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	 * 
 	 * @param <E> The type of the list
 	 */
-	class ConstantSortedList<E> extends BetterList.ConstantList<E> implements BetterSortedList<E> {
+	class ConstantSortedList<E> extends BetterList.BetterArrayList<E> implements BetterSortedList<E> {
 		private final Comparator<? super E> theSorting;
 
 		/**
@@ -780,7 +789,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		 * @param distinct Whether to throw an exception if any values are given which sort identically
 		 */
 		protected ConstantSortedList(Comparator<? super E> sorting, Collection<? extends E> values, boolean distinct) {
-			super(sortValues(values, sorting, distinct));
+			super(sortValues(values.toArray(), sorting, distinct));
 			theSorting = sorting;
 		}
 
@@ -802,28 +811,14 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			theSorting = sorting;
 		}
 
-		private static <E> List<E> sortValues(Collection<? extends E> values, Comparator<? super E> sorting, boolean distinct) {
-			List<E> copy = new ArrayList<>(values.size());
-			copy.addAll(values);
-			Collections.sort(copy, sorting);
+		private static <E> Object[] sortValues(Object[] values, Comparator<? super E> sorting, boolean distinct) {
+			Object[] copy = new Object[values.length];
+			System.arraycopy(values, 0, copy, 0, values.length);
+			Arrays.sort(copy, (Comparator<Object>) sorting);
 			if (distinct) {
-				for (int i = 1; i < copy.size(); i++) {
-					if (sorting.compare(copy.get(i - 1), copy.get(i)) == 0)
-						throw new IllegalArgumentException("Values are not distinct: " + copy.get(i - 1) + " and " + copy.get(i));
-				}
-			}
-			return copy;
-		}
-
-		private static <E> List<E> sortValues(E[] values, Comparator<? super E> sorting, boolean distinct) {
-			List<E> copy = new ArrayList<>(values.length);
-			for (int i = 0; i < values.length; i++)
-				copy.add(values[i]);
-			Collections.sort(copy, sorting);
-			if (distinct) {
-				for (int i = 1; i < copy.size(); i++) {
-					if (sorting.compare(copy.get(i - 1), copy.get(i)) == 0)
-						throw new IllegalArgumentException("Values are not distinct: " + copy.get(i - 1) + " and " + copy.get(i));
+				for (int i = 1; i < copy.length; i++) {
+					if (sorting.compare((E) copy[i - 1], (E) copy[i]) == 0)
+						throw new IllegalArgumentException("Values are not distinct: " + copy[i - 1] + " and " + copy[i]);
 				}
 			}
 			return copy;

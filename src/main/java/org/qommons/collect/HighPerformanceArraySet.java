@@ -32,7 +32,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 	 *         </ul>
 	 */
 	static <E> HighPerformanceArraySet<E> create(Comparator<? super E> sorting, E... values) throws IllegalArgumentException {
-		return create(sorting, Arrays.asList(values));
+		return Impl.create(sorting, values);
 	}
 
 	/**
@@ -214,10 +214,32 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 		 */
 		V get(int index);
 
+		/**
+		 * @param index The index of the value to set
+		 * @param newValue The new value to replace at the given index
+		 * @return The previous value at the index
+		 */
+		V set(int index, V newValue);
+
+		@Override
+		default HPAMap<K, V> with(K key, V value) {
+			BetterSortedMap.super.with(key, value);
+			return this;
+		}
+
+		@Override
+		default HPAMap<K, V> withAll(Map<? extends K, ? extends V> values) {
+			BetterSortedMap.super.withAll(values);
+			return this;
+		}
+
 		@Override
 		default BetterSortedSet<Entry<K, V>> entrySet() {
 			return new EntrySet<>(this);
 		}
+
+		/** @return A copy of this map with the same key set and an independent copy of this map's values */
+		HPAMap<K, V> copy();
 
 		/** @return A map backed by this map but which is unmodifiable */
 		HPAMap<K, V> unmodifiable();
@@ -293,17 +315,18 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 
 	/** Implementations for this class */
 	class Impl {
-		private static final Object[] EMPTY_VALUES = new Object[0];
+		static final Object[] EMPTY_VALUES = new Object[0];
 		static final IndexedElementId[] IDS = new IndexedElementId[] { //
 			new IndexedElementId(0), new IndexedElementId(1), new IndexedElementId(2), new IndexedElementId(3), new IndexedElementId(4),
 			new IndexedElementId(5), new IndexedElementId(6) };
 
 		static <E> HighPerformanceArraySet<E> create(Comparator<? super E> sorting, Collection<? extends E> values) {
-			Object[] valuesA;
+			if (values instanceof HighPerformanceArraySet)
+				return (HighPerformanceArraySet<E>) values;
+			else if (values.isEmpty())
+				return new Empty<>(sorting);
 			if (values.size() > MAX_SIZE)
 				throw new IllegalArgumentException("Max size of a " + HighPerformanceArraySet.class.getSimpleName() + " is " + MAX_SIZE);
-			if (values.isEmpty())
-				return new Empty<>(sorting);
 			else if (values.size() == 1) {
 				E value = values.iterator().next();
 				if (value == null)
@@ -312,29 +335,52 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 				return new Singleton<>(sorting, value);
 			}
 
-			valuesA = values.toArray();
-			Arrays.sort(valuesA, (Comparator<Object>) sorting);
-			for (int i = 1; i < valuesA.length; i++) {
-				if (valuesA[i] == null)
+			return create0(sorting, values.toArray());
+		}
+
+		static <E> HighPerformanceArraySet<E> create(Comparator<? super E> sorting, E[] values) {
+			if (values.length == 0)
+				return new Empty<>(sorting);
+			else if (values.length > MAX_SIZE)
+				throw new IllegalArgumentException("Max size of a " + HighPerformanceArraySet.class.getSimpleName() + " is " + MAX_SIZE);
+			else if (values.length == 1) {
+				E value = values[0];
+				if (value == null)
 					throw new IllegalArgumentException(
 						"Null values are not allowed in " + HighPerformanceArraySet.class.getSimpleName() + "s");
-				else if (sorting.compare((E) valuesA[i - 1], (E) valuesA[i]) == 0)
-					throw new IllegalArgumentException("Values for a " + HighPerformanceArraySet.class.getSimpleName()
-						+ " must all be distinct: " + valuesA[i - 1] + " and " + valuesA[i]);
+				return new Singleton<>(sorting, value);
 			}
-			switch (valuesA.length) {
+			Object[] valuesA = new Object[values.length];
+			System.arraycopy(values, 0, valuesA, 0, values.length);
+
+			return create0(sorting, valuesA);
+		}
+
+		static <E> HighPerformanceArraySet<E> create0(Comparator<? super E> sorting, Object[] values) {
+			Arrays.sort(values, (Comparator<Object>) sorting);
+			if (values[0] == null)
+				throw new IllegalArgumentException("Null values are not allowed in " + HighPerformanceArraySet.class.getSimpleName() + "s");
+			for (int i = 1; i < values.length; i++) {
+				if (values[i] == null)
+					throw new IllegalArgumentException(
+						"Null values are not allowed in " + HighPerformanceArraySet.class.getSimpleName() + "s");
+				else if (sorting.compare((E) values[i - 1], (E) values[i]) == 0)
+					throw new IllegalArgumentException("Values for a " + HighPerformanceArraySet.class.getSimpleName()
+						+ " must all be distinct: " + values[i - 1] + " and " + values[i]);
+			}
+			switch (values.length) {
 			case 2:
-				return new Double<>(sorting, (E) valuesA[0], (E) valuesA[1]);
+				return new Double<>(sorting, (E) values[0], (E) values[1]);
 			case 3:
-				return new Triple<>(sorting, valuesA);
+				return new Triple<>(sorting, values);
 			case 4:
-				return new Quadruple<>(sorting, valuesA);
+				return new Quadruple<>(sorting, values);
 			case 5:
-				return new Quintuple<>(sorting, valuesA);
+				return new Quintuple<>(sorting, values);
 			case 6:
-				return new Hextuple<>(sorting, valuesA);
+				return new Hextuple<>(sorting, values);
 			default:
-				return new Heptuple<>(sorting, valuesA);
+				return new Heptuple<>(sorting, values);
 			}
 		}
 
@@ -365,7 +411,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 
 			@Override
 			public <V> HPAMap<E, V> createMap() {
-				return new HighPerformanceArrayMap<>(this);
+				return new EmptyMap<>(this);
 			}
 		}
 
@@ -1279,9 +1325,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 					comp = theSorting.compare((E) value, (E) theValues[1]);
 					if (comp == 0)
 						return 1;
-					else if (comp > 0)
-						return -1;
-					else if (theValues[0].equals(value))
+					else if (comp < 0 && theValues[0].equals(value))
 						return 0;
 					else
 						return -1;
@@ -1289,9 +1333,7 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 					comp = theSorting.compare((E) value, (E) theValues[3]);
 					if (comp == 0)
 						return 3;
-					else if (comp < 0)
-						return -1;
-					else if (theValues[4].equals(value))
+					else if (comp > 0 && theValues[4].equals(value))
 						return 4;
 					else
 						return -1;
@@ -1398,6 +1440,99 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 		}
 
+		static class EmptyMap<K, V> extends AbstractIdentifiable implements HPAMap<K, V> {
+			private final Empty<K> theKeySet;
+
+			EmptyMap(Empty<K> keySet) {
+				theKeySet = keySet;
+			}
+
+			@Override
+			protected Object createIdentity() {
+				return Identifiable.wrap(theKeySet.getIdentity(), "map", this);
+			}
+
+			@Override
+			public int size() {
+				return 0;
+			}
+
+			@Override
+			public boolean isEmpty() {
+				return true;
+			}
+
+			@Override
+			public String canPut(K key, V value) {
+				return StdMsg.UNSUPPORTED_OPERATION;
+			}
+
+			@Override
+			public OrderedMapEntry<K, V> getEntry(K key) {
+				return null;
+			}
+
+			@Override
+			public OrderedMapEntry<K, V> getEntryById(ElementId entryId) {
+				throw new NoSuchElementException();
+			}
+
+			@Override
+			public MutableOrderedMapEntry<K, V> mutableEntry(ElementId entryId) {
+				throw new NoSuchElementException();
+			}
+
+			@Override
+			public OrderedMapEntry<K, V> searchEntries(Comparable<? super java.util.Map.Entry<K, V>> search, SortedSearchFilter filter) {
+				return null;
+			}
+
+			@Override
+			public HighPerformanceArraySet<K> keySet() {
+				return theKeySet;
+			}
+
+			@Override
+			public Map.Entry<K, V> getEntry(int index) {
+				throw new IndexOutOfBoundsException(index + " of 0");
+			}
+
+			@Override
+			public V get(int index) {
+				throw new IndexOutOfBoundsException(index + " of 0");
+			}
+
+			@Override
+			public V set(int index, V newValue) {
+				throw new IndexOutOfBoundsException(index + " of 0");
+			}
+
+			@Override
+			public HPAMap<K, V> copy() {
+				return this; // No point making a copy
+			}
+
+			@Override
+			public HPAMap<K, V> unmodifiable() {
+				return this; // We're already immutable
+			}
+
+			@Override
+			public int hashCode() {
+				return 0;
+			}
+
+			@Override
+			public boolean equals(Object obj) {
+				return obj instanceof Map && ((Map<?, ?>) obj).isEmpty();
+			}
+
+			@Override
+			public String toString() {
+				return "{}";
+			}
+		}
+
 		static class HighPerformanceArrayMap<K, V> extends AbstractIdentifiable implements HPAMap<K, V> {
 			private final HighPerformanceArraySet<K> theKeySet;
 			private final Object[] theValues;
@@ -1405,7 +1540,13 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 
 			HighPerformanceArrayMap(HighPerformanceArraySet<K> keySet) {
 				theKeySet = keySet;
-				theValues = keySet.isEmpty() ? EMPTY_VALUES : new Object[keySet.size()];
+				theValues = new Object[keySet.size()];
+				theEntries = new HighPerformanceArrayMap.Entry[theValues.length];
+			}
+
+			HighPerformanceArrayMap(HighPerformanceArrayMap<K, V> toCopy) {
+				theKeySet = toCopy.theKeySet;
+				theValues = toCopy.theValues.clone();
 				theEntries = new HighPerformanceArrayMap.Entry[theValues.length];
 			}
 
@@ -1420,6 +1561,11 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
+			public boolean isEmpty() {
+				return false;
+			}
+
+			@Override
 			public int size() {
 				return theValues.length;
 			}
@@ -1427,6 +1573,13 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			@Override
 			public V get(int index) {
 				return (V) theValues[index];
+			}
+
+			@Override
+			public V set(int index, V newValue) {
+				V oldValue = (V) theValues[index];
+				theValues[index] = newValue;
+				return oldValue;
 			}
 
 			@Override
@@ -1514,6 +1667,11 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			@Override
 			public HPAMap<K, V> unmodifiable() {
 				return new UnmodifiableHPAMap<>(this);
+			}
+
+			@Override
+			public HPAMap<K, V> copy() {
+				return new HighPerformanceArrayMap<>(this);
 			}
 
 			@Override
@@ -1708,23 +1866,33 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 			}
 
 			@Override
+			public V set(int index, V newValue) {
+				throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+			}
+
+			@Override
 			public HPAMap<K, V> unmodifiable() {
 				return this;
 			}
 
 			@Override
+			public HPAMap<K, V> copy() {
+				return theWrapped.copy();
+			}
+
+			@Override
 			public int hashCode() {
-				return BetterMap.hashCode(this);
+				return BetterMap.hashCode(theWrapped);
 			}
 
 			@Override
 			public boolean equals(Object obj) {
-				return BetterMap.equals(this, obj);
+				return BetterMap.equals(theWrapped, obj);
 			}
 
 			@Override
 			public String toString() {
-				return entrySet().toString();
+				return theWrapped.entrySet().toString();
 			}
 
 			class UnmodifiableMutableElement implements MutableOrderedMapEntry<K, V> {

@@ -547,7 +547,10 @@ public class CircularArrayList<E> implements DequeList<E> {
 			int newSize = theSize + 1;
 			ensureCapacity(newSize);
 			theSize = newSize;
-			theArray[translateToInternalIndex(oldSize)] = e;
+			int offset = theOffset + oldSize;
+			if (offset >= theArray.length)
+				offset -= theArray.length;
+			theArray[offset] = e;
 		}
 		theStamp++;
 		return true;
@@ -636,7 +639,86 @@ public class CircularArrayList<E> implements DequeList<E> {
 	 * @return This list
 	 */
 	public CircularArrayList<E> with(E... values) {
-		addAll(Arrays.asList(values));
+		return addAll(values, 0, values.length);
+	}
+
+	/**
+	 * Adds values from an array into this list
+	 * 
+	 * @param values The array containing the values to add
+	 * @param start The start index in the array
+	 * @param end The end index in the array
+	 * @return This list
+	 */
+	public CircularArrayList<E> addAll(E[] values, int start, int end) {
+		if (start < 0 || start > end || end > values.length)
+			throw new IndexOutOfBoundsException(start + " to " + end + " of " + values.length);
+		int count = end - start;
+		if (count == 0)
+			return this;
+		else if (count >= theMaxCapacity) { // All existing content (if any) will be discarded, as well as possibly some of the added
+											// content
+			count = theMaxCapacity;
+			start = end - count;
+			ensureCapacity(count);
+			System.arraycopy(values, start, theArray, 0, count);
+			theOffset = 0;
+			theSize = count;
+			theAdvanced = count;
+		} else if (theSize == 0) {
+			if (count > theArray.length)
+				theArray = new Object[growCapacity(theArray.length, count, theGrowthFactor)];
+			System.arraycopy(values, start, theArray, 0, count);
+			theOffset = 0;
+			theSize = count;
+			theAdvanced = count;
+		} else if (count + theSize - theMaxCapacity < 0) { // Some existing content will be discarded
+			Object[] newArray;
+			if (theArray.length < theMaxCapacity)
+				newArray = new Object[theMaxCapacity];
+			else
+				newArray = theArray;
+			int remaining = theMaxCapacity - count;
+			int relocateEnd = theOffset + remaining;
+			if (relocateEnd < theArray.length)
+				System.arraycopy(theArray, theOffset, newArray, 0, remaining);
+			else {
+				int firstCopy = theArray.length - theOffset;
+				System.arraycopy(theArray, theOffset, newArray, 0, firstCopy);
+				System.arraycopy(theArray, 0, newArray, firstCopy, remaining - firstCopy);
+			}
+			System.arraycopy(values, start, newArray, remaining, count);
+			theArray = newArray;
+			theOffset = 0;
+			theSize = theMaxCapacity;
+			theAdvanced = theMaxCapacity;
+		} else if (theSize + count - theArray.length < 0) {// Need a new array
+			Object[] newArray = new Object[growCapacity(theArray.length, count, theGrowthFactor)];
+			int myEnd = theOffset + theSize;
+			if (myEnd < theArray.length)
+				System.arraycopy(theArray, theOffset, newArray, 0, theSize);
+			else {
+				int firstCopy = theArray.length - theOffset;
+				System.arraycopy(theArray, theOffset, newArray, 0, firstCopy);
+				System.arraycopy(theArray, 0, newArray, firstCopy, theSize - firstCopy);
+			}
+			System.arraycopy(values, start, newArray, theSize, count);
+			theArray = newArray;
+			theOffset = 0;
+			theSize += count;
+			theAdvanced = theSize;
+		} else if (theOffset + theSize + count - theArray.length < 0) {// The values will be split across the end of the array
+			int firstCopy = theArray.length - theOffset;
+			System.arraycopy(values, start, theArray, theOffset, firstCopy);
+			theAdvanced = count - firstCopy;
+			System.arraycopy(values, start + firstCopy, theArray, 0, theAdvanced);
+			theSize += count;
+		} else { // Just a single copy operation
+			System.arraycopy(values, start, theArray, theOffset, count);
+			theSize += count;
+			theAdvanced += count;
+		}
+		theStamp++;
 		return this;
 	}
 
@@ -658,7 +740,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 	}
 
 	@Override
-	public boolean offerLast(E e) {
+	public boolean offer(E e) {
 		if (theSize == theMaxCapacity)
 			return false;
 		return add(e);
@@ -765,14 +847,32 @@ public class CircularArrayList<E> implements DequeList<E> {
 	public E pollFirst() {
 		if (theSize == 0)
 			return null;
-		return internalRemove(0, translateToInternalIndex(0));
+		int offset = theOffset;
+		E value = (E) theArray[offset];
+		theArray[offset] = null;
+		offset++;
+		if (offset == theArray.length)
+			offset = 0;
+		theOffset = offset;
+		theSize--;
+		trimIfNeeded();
+		theStamp++;
+		return value;
 	}
 
 	@Override
 	public E pollLast() {
 		if (theSize == 0)
 			return null;
-		return internalRemove(theSize - 1, translateToInternalIndex(theSize - 1));
+		int offset = theOffset + theSize - 1;
+		if (offset >= theArray.length)
+			offset -= theArray.length;
+		E value = (E) theArray[offset];
+		theArray[offset] = null;
+		theSize--;
+		trimIfNeeded();
+		theStamp++;
+		return value;
 	}
 
 	@Override
@@ -862,12 +962,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 			int oldCapacity = theArray.length;
 			if (capacity - MAX_ARRAY_SIZE > 0)
 				throw new OutOfMemoryError("Cannot allocate an array of size " + capacity);
-			int growCapacity = oldCapacity == 0 ? 10 : oldCapacity + (int) Math.round(theGrowthFactor * oldCapacity);
-			if (growCapacity - MAX_ARRAY_SIZE > 0)
-				growCapacity = MAX_ARRAY_SIZE;
-			int newCapacity = growCapacity;
-			if (newCapacity - capacity < 0)
-				newCapacity = capacity;
+			int newCapacity = growCapacity(oldCapacity, capacity, theGrowthFactor);
 			Object[] newArray = new Object[newCapacity];
 			if (theSize > 0)
 				internalArrayCopy(newArray);
@@ -876,6 +971,16 @@ public class CircularArrayList<E> implements DequeList<E> {
 			return true;
 		} else
 			return false;
+	}
+
+	private static int growCapacity(int oldCapacity, int minCapacity, double growthFactor) {
+		int growCapacity = oldCapacity == 0 ? 10 : oldCapacity + (int) Math.round(growthFactor * oldCapacity);
+		if (growCapacity - MAX_ARRAY_SIZE > 0)
+			growCapacity = MAX_ARRAY_SIZE;
+		int newCapacity = growCapacity;
+		if (newCapacity - minCapacity < 0)
+			newCapacity = minCapacity;
+		return newCapacity;
 	}
 
 	/**
@@ -1093,7 +1198,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 		}
 
 		@Override
-		public boolean offerLast(E e) {
+		public boolean offer(E e) {
 			if (theSize == theMaxCapacity)
 				return false;
 			add(size(), e);

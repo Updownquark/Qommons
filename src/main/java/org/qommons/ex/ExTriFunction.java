@@ -2,8 +2,8 @@ package org.qommons.ex;
 
 import java.util.Objects;
 
-import org.qommons.LambdaUtils;
-import org.qommons.TriFunction;
+import org.qommons.fn.FunctionUtils;
+import org.qommons.fn.TriFunction;
 
 /**
  * A {@link TriFunction} look-alike that is capable of throwing a checked exception
@@ -38,7 +38,7 @@ public interface ExTriFunction<T, U, V, R, X extends Throwable> {
 	 * @return The curried unary function
 	 */
 	default ExBiFunction<U, V, R, X> curry1(T arg1) {
-		return curry1(LambdaUtils.constantExSupplier(arg1));
+		return curry1(FunctionUtils.constantExSupplier(arg1));
 	}
 
 	/**
@@ -54,7 +54,7 @@ public interface ExTriFunction<T, U, V, R, X extends Throwable> {
 	 * @return The curried unary function
 	 */
 	default ExBiFunction<T, V, R, X> curry2(U arg2) {
-		return curry2(LambdaUtils.constantExSupplier(arg2));
+		return curry2(FunctionUtils.constantExSupplier(arg2));
 	}
 
 	/**
@@ -70,7 +70,7 @@ public interface ExTriFunction<T, U, V, R, X extends Throwable> {
 	 * @return The curried unary function
 	 */
 	default ExBiFunction<T, U, R, X> curry3(V arg2) {
-		return curry3(LambdaUtils.constantExSupplier(arg2));
+		return curry3(FunctionUtils.constantExSupplier(arg2));
 	}
 
 	/**
@@ -109,7 +109,7 @@ public interface ExTriFunction<T, U, V, R, X extends Throwable> {
 	static <T, U, V, R, X extends Throwable> ExTriFunction<T, U, V, R, X> of(TriFunction<T, U, V, R> f) {
 		if (f == null)
 			return null;
-		return LambdaUtils.printableExTriFn(f::apply, f::toString, f);
+		return FunctionUtils.printableExTriFn(f::apply, f::toString, f);
 	}
 
 	/**
@@ -356,7 +356,7 @@ public interface ExTriFunction<T, U, V, R, X extends Throwable> {
 			if (consumer != null)
 				theConsumer = consumer;
 			else
-				theConsumer = LambdaUtils.exConsumeDoNothing();
+				theConsumer = FunctionUtils.exConsumeDoNothing();
 		}
 
 		@Override

@@ -7,6 +7,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import org.qommons.fn.FunctionUtils;
+
 /**
  * <p>
  * A concurrent interface that can be locked.
@@ -305,7 +307,7 @@ public interface Lockable extends ThreadConstrained {
 	 */
 	static Transaction lockAll(Lockable outer, Collection<? extends Lockable> lockables) {
 		return lockAll(outer, //
-			() -> lockables, LambdaUtils.identity());
+			() -> lockables, FunctionUtils.identity());
 	}
 
 	/**
@@ -397,7 +399,7 @@ public interface Lockable extends ThreadConstrained {
 	 * @return A transaction to close to release the locks, or null if the lock could not be obtained.
 	 */
 	static Transaction tryLockAll(Lockable outer, Collection<? extends Lockable> lockables) {
-		return tryLockAll(outer, LambdaUtils.constantSupplier(lockables));
+		return tryLockAll(outer, FunctionUtils.constantSupplier(lockables));
 	}
 
 	/**
@@ -408,7 +410,7 @@ public interface Lockable extends ThreadConstrained {
 	 * @return A transaction to close to release the locks, or null if the lock could not be obtained.
 	 */
 	static Transaction tryLockAll(Lockable outer, Supplier<? extends Collection<? extends Lockable>> lockables) {
-		return tryLockAll(outer, lockables, LambdaUtils.identity());
+		return tryLockAll(outer, lockables, FunctionUtils.identity());
 	}
 
 	/**
@@ -758,7 +760,7 @@ public interface Lockable extends ThreadConstrained {
 		public ThreadConstraint getThreadConstraint() {
 			if (!isConstant)
 				return ThreadConstraint.ANY; // Can't know
-			return ThreadConstrained.getThreadConstraint(theFirst, theLocks.get(), LambdaUtils.identity());
+			return ThreadConstrained.getThreadConstraint(theFirst, theLocks.get(), FunctionUtils.identity());
 		}
 
 		@Override

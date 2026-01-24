@@ -10,6 +10,8 @@ import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.qommons.fn.FunctionUtils;
+
 /** Common utilities for dealing with Strings */
 public class StringUtils {
 	private StringUtils() {
@@ -36,7 +38,7 @@ public class StringUtils {
 					str.append('S'); // S for strict
 			} else if (onlyZeroIfEqual)
 				str.append('S');
-			compare = LambdaUtils.printableComparator(//
+			compare = FunctionUtils.printableComparator(//
 				(s1, s2) -> compareNumberTolerant(s1, s2, true, true), //
 				() -> str.toString(), null);
 			CI_COMPARATORS[index] = compare;
@@ -54,7 +56,7 @@ public class StringUtils {
 	 * An object comparator that returns the result of {@link #compareNumberTolerant(CharSequence, CharSequence, boolean, boolean)
 	 * compareNumberTolerant}<code>(object1.toString(), object2.toString(), true, true)</code>
 	 */
-	public static final Comparator<Object> TO_STRING_NUMBER_TOLERANT = LambdaUtils.printableComparator(//
+	public static final Comparator<Object> TO_STRING_NUMBER_TOLERANT = FunctionUtils.printableComparator(//
 		(obj1, obj2) -> compareNumberTolerant(obj1 == null ? null : obj1.toString(), obj2 == null ? null : obj2.toString(), true, true),
 		() -> "toStringNumberTolerant", null);
 
@@ -62,7 +64,7 @@ public class StringUtils {
 	 * An enum comparator that returns the result of {@link #compareNumberTolerant(CharSequence, CharSequence, boolean, boolean)
 	 * compareNumberTolerant}<code>(enum1.name(), enum2.name(), true, true)</code>
 	 */
-	public static final Comparator<Enum<?>> ENUM_NAME_NUMBER_TOLERANT = LambdaUtils.printableComparator(//
+	public static final Comparator<Enum<?>> ENUM_NAME_NUMBER_TOLERANT = FunctionUtils.printableComparator(//
 		(obj1, obj2) -> compareNumberTolerant(obj1 == null ? null : obj1.name(), obj2 == null ? null : obj2.name(), true, true),
 		() -> "toStringNumberTolerant", null);
 

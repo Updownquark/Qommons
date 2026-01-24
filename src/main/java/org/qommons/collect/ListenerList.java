@@ -6,10 +6,10 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import org.qommons.LambdaUtils;
 import org.qommons.LongList;
 import org.qommons.Stamped;
 import org.qommons.Transaction;
+import org.qommons.fn.FunctionUtils;
 
 /**
  * <p>
@@ -59,7 +59,7 @@ import org.qommons.Transaction;
  * 
  * @param <E> The type of value that this list can store
  */
-public class ListenerList<E> implements PureQueue<E>, Stamped {
+public class ListenerList<E> implements ListenerQueue<E> {
 	private static boolean SWALLOW_EXCEPTIONS = true;
 
 	/**
@@ -78,35 +78,6 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 		SWALLOW_EXCEPTIONS = swallowExceptions;
 	}
 
-	/**
-	 * An element containing a value in a {@link ListenerList}
-	 * 
-	 * @param <E> The type of the value that this node holds
-	 */
-	public interface Element<E> extends Runnable {
-		/** @return Whether this element is still present in the list */
-		boolean isPresent();
-
-		/**
-		 * Removes this element from the list
-		 * 
-		 * @return True if the element was removed as a result of this call, false if it had been removed already
-		 */
-		boolean remove();
-
-		/** @return The value that this element contains in the list */
-		E get();
-
-		/** @param newValue The new value for this element */
-		void set(E newValue);
-
-		/** Calls {@link #remove()} */
-		@Override
-		default void run() {
-			remove();
-		}
-	}
-
 	/** A listener to be invoked when a value is added to an empty list or a solitary value is removed from a {@link ListenerList} */
 	public interface InUseListener {
 		/** @param inUse Whether list just went in to (true) or out of (false) use */
@@ -121,10 +92,11 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 		private boolean fastSize;
 		private boolean isSynchronized;
 		private Consumer<Throwable> theErrorLogger;
+		private boolean isSkipAddingByDefault;
 
 		Builder() {
 			// Initialize with defaults, which mostly lean toward safety and functionality, away from performance
-			theReentrancyError = LambdaUtils.constantSupplier("Reentrancy not allowed", "Reentrancy not allowed", null);
+			theReentrancyError = FunctionUtils.constantSupplier("Reentrancy not allowed", "Reentrancy not allowed", null);
 			isForEachSafe = true;
 			fastSize = true;
 			isSynchronized = true;
@@ -148,7 +120,7 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 		 * @see #allowReentrant()
 		 */
 		public Builder reentrancyError(String error) {
-			theReentrancyError = error == null ? null : LambdaUtils.constantSupplier(error, error, null);
+			theReentrancyError = error == null ? null : FunctionUtils.constantSupplier(error, error, null);
 			return this;
 		}
 
@@ -214,8 +186,9 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 		 * the list, errors may occur, such as:
 		 * <ul>
 		 * <li>True parameters passed to {@link ListenerList#add(Object, boolean)} may not always be respected</li>
-		 * <li>{@link ListenerList#add(Object, boolean) Additions} and {@link Element#remove() removals} on the list may not be effective,
-		 * or may cause other elements to be removed from the list (but {@link Element#isPresent()} may not report this).</li>
+		 * <li>{@link ListenerList#add(Object, boolean) Additions} and {@link ListenerQueue.Element#remove() removals} on the list may not
+		 * be effective, or may cause other elements to be removed from the list (but {@link ListenerQueue.Element#isPresent()} may not
+		 * report this).</li>
 		 * </ul>
 		 * <p>
 		 * Other, unanticipated errors, may occur as well.
@@ -240,11 +213,23 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 		}
 
 		/**
+		 * @param skipAdd Whether the {@link ListenerList#add(Object) add(Object)} method should use the skipCurrent feature of the
+		 *        {@link ListenerList#add(Object, boolean)} method.
+		 * 
+		 * @return This builder
+		 */
+		public Builder skipAddByDefault(boolean skipAdd) {
+			isSkipAddingByDefault = skipAdd;
+			return this;
+		}
+
+		/**
 		 * @param <E> The type of the list to build
 		 * @return The new list
 		 */
 		public <E> ListenerList<E> build() {
-			return new ListenerList<>(theReentrancyError, isForEachSafe, theInUseListener, fastSize, isSynchronized, theErrorLogger);
+			return new ListenerList<>(theReentrancyError, isForEachSafe, theInUseListener, fastSize, isSynchronized, theErrorLogger,
+				isSkipAddingByDefault);
 		}
 	}
 
@@ -428,11 +413,12 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 	private final InUseListener theInUseListener;
 	private final boolean isSynchronized;
 	private final Consumer<Throwable> theErrorLogger;
+	private final boolean isSkipAddingByDefault;
 
 	private final AtomicInteger theSize;
 
 	ListenerList(Supplier<String> reentrancyError, boolean safeForEach, InUseListener inUseListener, boolean fastSize,
-		boolean sync, Consumer<Throwable> errorLogger) {
+		boolean sync, Consumer<Throwable> errorLogger, boolean skipAddByDefault) {
 		// The code is much simpler and safer if all the real elements can know that there's a non-null node before and after them.
 		// The first node's previous pointer and the last node's next pointer would always be null,
 		// so there's no need to have different nodes for first and last.
@@ -446,6 +432,7 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 		theSize = fastSize ? new AtomicInteger() : null;
 		isSynchronized = sync;
 		theErrorLogger = errorLogger;
+		isSkipAddingByDefault = skipAddByDefault;
 	}
 
 	@Override
@@ -455,8 +442,13 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 
 	@Override
 	public boolean add(E e) {
-		add(e, false);
+		add(e, isSkipAddingByDefault);
 		return true;
+	}
+
+	@Override
+	public Element<E> addNew(E value) {
+		return add(value, isSkipAddingByDefault);
 	}
 
 	/**
@@ -597,6 +589,7 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 		long start = timeChecking ? System.currentTimeMillis() : 0;
 		int waited = 0;
 		RunLastNode runLast = null;
+		@SuppressWarnings("resource")
 		Node remove = first ? theTerminal.next : theTerminal.previous;
 		do {
 			if (remove == theTerminal) {//
@@ -704,11 +697,7 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 		return el == null ? null : el.get();
 	}
 
-	/**
-	 * Applies a specified action to each value in this list
-	 * 
-	 * @param action The action to perform on each value in this list
-	 */
+	@Override
 	public void forEach(Consumer<? super E> action) {
 		Node node = theTerminal.next;
 		if (node == theTerminal) {
@@ -822,6 +811,7 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 	}
 
 	/** Removes all values from this list */
+	@Override
 	public void clear() {
 		synchronized (theTerminal) {
 			Node node = theTerminal;
@@ -865,6 +855,7 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 	 *         iteration}, this will only return true in the case that iteration is happening on the current thread. Otherwise, it will
 	 *         return true during iteration on any thread.
 	 */
+	@Override
 	public boolean isFiring() {
 		return theFiringSafety.isFiring();
 	}
@@ -874,9 +865,14 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 		return theFiringSafety.getStamp();
 	}
 
-	/** Increment's this list's {@link #getStamp() stamp} without firing any listeners */
-	public void incrementStamp() {
-		theFiringSafety.incrementIterId();
+	/**
+	 * Increment's this list's {@link #getStamp() stamp} without firing any listeners
+	 * 
+	 * @return The new stamp
+	 */
+	@Override
+	public long incrementStamp() {
+		return theFiringSafety.incrementIterId();
 	}
 
 	/**
@@ -915,12 +911,7 @@ public class ListenerList<E> implements PureQueue<E>, Stamped {
 		return collection;
 	}
 
-	/**
-	 * Clears this list, providing each value to a consumer before it is removed
-	 * 
-	 * @param consumer The consumer to accept each value in this list
-	 * @return The number of items that were found in the list
-	 */
+	@Override
 	public int dumpAndClear(Consumer<E> consumer) {
 		Node node = theTerminal.next;
 		List<E> lastNodes = null;

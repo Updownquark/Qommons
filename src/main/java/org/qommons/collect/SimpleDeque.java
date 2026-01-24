@@ -5,24 +5,36 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * Simple double-linked list implementation of {@link SequencedDeque}. Very light-weight and basically bullet-proof when used concurrently,
  * as long as only one thread is modifying it at a time. It is not thread-safe when multiple threads are attempting to modify it. Obviously,
- * the data as viewed by read-only threads is somewhat undeterminable if viewes during a modification by another thread, but this class will
+ * the data as viewed by read-only threads is somewhat undeterminable if viewed during a modification by another thread, but this class will
  * not throw exceptions.
  * 
  * @param <E> The type of values in the queue
  */
-public class SimpleDeque<E> implements SequencedDeque<E> {
-	private Node<E> theFirst;
-	private Node<E> theLast;
+public class SimpleDeque<E> implements SequencedDeque<E>, ListenerQueue<E> {
+	private Node theFirst;
+	private Node theLast;
 	private int theSize;
 	private long theStamp;
+	private int isFiring;
+
+	@Override
+	public long getStamp() {
+		return theStamp;
+	}
+
+	@Override
+	public long incrementStamp() {
+		return ++theStamp;
+	}
 
 	@Override
 	public boolean offerFirst(E e) {
-		theFirst = new Node<>(null, theFirst, e);
+		theFirst = new Node(null, theFirst, e);
 		if (theLast == null)
 			theLast = theFirst;
 		theSize++;
@@ -31,8 +43,8 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 	}
 
 	@Override
-	public boolean offerLast(E e) {
-		theLast = new Node<>(theLast, null, e);
+	public boolean offer(E e) {
+		theLast = new Node(theLast, null, e);
 		if (theFirst == null)
 			theFirst = theLast;
 		theSize++;
@@ -41,33 +53,52 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 	}
 
 	@Override
+	public Element<E> addNew(E value) {
+		Node newNode = new Node(theLast, null, value);
+		theLast = newNode;
+		if (theFirst == null)
+			theFirst = newNode;
+		theSize++;
+		theStamp++;
+		return newNode;
+	}
+
+	@Override
 	public E pollFirst() {
-		return remove(theFirst);
+		Node node = theFirst;
+		if (node == null)
+			return null;
+		node.remove();
+		return node.value;
 	}
 
 	@Override
 	public E pollLast() {
-		return remove(theLast);
+		Node node = theLast;
+		if (node == null)
+			return null;
+		node.remove();
+		return node.value;
 	}
 
 	@Override
 	public E peekFirst() {
-		Node<E> first = theFirst;
+		Node first = theFirst;
 		return first == null ? null : first.value;
 	}
 
 	@Override
 	public E peekLast() {
-		Node<E> last = theLast;
+		Node last = theLast;
 		return last == null ? null : last.value;
 	}
 
 	@Override
 	public boolean removeLastOccurrence(Object o) {
-		Node<E> node = theLast;
+		Node node = theLast;
 		while (node != null) {
 			if (Objects.equals(node.value, o)) {
-				remove(node);
+				node.remove();
 				return true;
 			}
 			node = node.previous;
@@ -77,10 +108,10 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 
 	@Override
 	public boolean remove(Object o) {
-		Node<E> node = theFirst;
+		Node node = theFirst;
 		while (node != null) {
 			if (Objects.equals(node.value, o)) {
-				remove(node);
+				node.remove();
 				return true;
 			}
 			node = node.next;
@@ -93,12 +124,12 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 	 * @return The number of occurrences of the value that were found and removed from this deque
 	 */
 	public int removeAllOccurrences(Object o) {
-		Node<E> node = theFirst;
+		Node node = theFirst;
 		int found = 0;
 		while (node != null) {
 			if (Objects.equals(node.value, o)) {
 				found++;
-				remove(node);
+				node.remove();
 			}
 			node = node.next;
 		}
@@ -107,7 +138,7 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 
 	@Override
 	public boolean contains(Object o) {
-		for (Node<E> node = theFirst; node != null; node = node.next) {
+		for (Node node = theFirst; node != null; node = node.next) {
 			if (Objects.equals(node.value, o))
 				return true;
 		}
@@ -133,7 +164,7 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 	public Object[] toArray() {
 		Object[] array = new Object[theSize];
 		int index = 0;
-		for (Node<E> node = theFirst; node != null && index < array.length; node = node.next, index++)
+		for (Node node = theFirst; node != null && index < array.length; node = node.next, index++)
 			array[index] = node.value;
 		if (index < array.length)
 			array = Arrays.copyOf(array, index);
@@ -145,7 +176,7 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 		if (array.length < theSize)
 			array = Arrays.copyOf(array, theSize);
 		int index = 0;
-		for (Node<E> node = theFirst; node != null && index < array.length; node = node.next, index++)
+		for (Node node = theFirst; node != null && index < array.length; node = node.next, index++)
 			array[index] = (T) node.value;
 		if (index < array.length)
 			array = Arrays.copyOf(array, index);
@@ -159,6 +190,15 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 				return false;
 		}
 		return true;
+	}
+
+	@Override
+	public boolean containsAny(Collection<?> c) {
+		for (Object o : c) {
+			if (contains(o))
+				return true;
+		}
+		return false;
 	}
 
 	@Override
@@ -183,40 +223,93 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 	@Override
 	public boolean retainAll(Collection<?> c) {
 		boolean changed = false;
-		for (Object o : c) {
-			if (removeAllOccurrences(o) > 0)
+		for (Node node = theFirst; node != null; node = node.next) {
+			if (!c.contains(node.value)) {
+				node.remove();
 				changed = true;
+			}
 		}
 		return changed;
 	}
 
 	@Override
+	public void forEach(Consumer<? super E> action) {
+		isFiring++;
+		try {
+			Node node = theFirst;
+			while (node != null) {
+				try {
+					action.accept(node.value);
+				} catch (RuntimeException e) {
+					e.printStackTrace();
+				}
+				node = node.next;
+			}
+		} finally {
+			isFiring--;
+		}
+	}
+
+	@Override
+	public boolean isFiring() {
+		return isFiring != 0;
+	}
+
+	@Override
 	public void clear() {
-		if (theFirst == null)
+		Node node = theFirst;
+		if (node == null)
 			return;
 		theFirst = theLast = null;
 		theSize = 0;
 		theStamp++;
-	}
-
-	@Override
-	public long getStamp() {
-		return theStamp;
-	}
-
-	@Override
-	public boolean containsAny(Collection<?> c) {
-		for (Object o : c) {
-			if (contains(o))
-				return true;
+		// Need to tell all the elements that they're removed
+		while (node != null) {
+			node.previous = node; // isPresent() just checks whether previous.next==this
+			node = node.next;
 		}
-		return false;
+	}
+	
+	@Override
+	public int dumpAndClear(Consumer<E> consumer) {
+		Node node = theFirst;
+		int size = theSize;
+		clear();
+		while (node != null) {
+			consumer.accept(node.value);
+			node = node.next;
+		}
+		return size;
+	}
+
+	/** Inspects the internal structure of this deque and throws an {@link AssertionError} if it is internally inconsistent */
+	public void checkValid() {
+		int size=0;
+		if(theFirst==null){
+			if(theLast!=null)
+				throw new AssertionError("First is null, but last is not");
+		} else {
+			if(theLast==null)
+				throw new AssertionError("First is not null, but last is");
+			if(theFirst.previous!=null)
+				throw new AssertionError("First node thinks it has a previous node");
+			for (Node node = theFirst; node != null; node = node.next) {
+				size++;
+				if(node.next==null){
+					if(theLast!=node)
+						throw new AssertionError("Last node by iteration is not the deque's last");
+				} else if(node.next.previous!=node)
+					throw new AssertionError("Inconsistent node: "+node.value+".next.previous="+node.next.previous.value);
+			}
+		}
+		if(size!=theSize)
+			throw new AssertionError("Size is inconsistent: "+size+" vs "+theSize);
 	}
 
 	@Override
 	public int hashCode() {
 		int hash = 0;
-		for (Node<E> node = theFirst; node != null; node = node.next)
+		for (Node node = theFirst; node != null; node = node.next)
 			hash = 31 * hash + (node.value == null ? 0 : node.value.hashCode());
 		return hash;
 	}
@@ -231,7 +324,7 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 		if (theSize != other.size())
 			return false;
 		Iterator<?> otherIter = other.iterator();
-		for (Node<E> node = theFirst;; node = node.next) {
+		for (Node node = theFirst;; node = node.next) {
 			if (node == null)
 				return !otherIter.hasNext();
 			else if (!otherIter.hasNext())
@@ -245,7 +338,7 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 	public String toString() {
 		StringBuilder str = new StringBuilder().append('[');
 		boolean first = true;
-		for (Node<E> node = theFirst; node != null; node = node.next) {
+		for (Node node = theFirst; node != null; node = node.next) {
 			if (first)
 				first = false;
 			else
@@ -255,25 +348,8 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 		return str.append(']').toString();
 	}
 
-	E remove(Node<E> node) {
-		if (node == null || node.removed)
-			return null;
-		node.removed = true;
-		if (node.previous != null)
-			node.previous.next = node.next;
-		else
-			theFirst = node.next;
-		if (node.next != null)
-			node.next.previous = node.previous;
-		else
-			theLast = node.previous;
-		theSize--;
-		theStamp++;
-		return node.value;
-	}
-
-	void insert(E newValue, Node<E> atNode, boolean before) {
-		Node<E> newNode = new Node<>(before ? atNode.previous : atNode, before ? atNode : atNode.next, newValue);
+	void insert(E newValue, Node atNode, boolean before) {
+		Node newNode = new Node(before ? atNode.previous : atNode, before ? atNode : atNode.next, newValue);
 		if (newNode.previous == null)
 			theFirst = newNode;
 		if (newNode.next == null)
@@ -282,13 +358,12 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 		theStamp++;
 	}
 
-	static class Node<E> {
-		Node<E> previous;
-		Node<E> next;
+	class Node implements Element<E> {
+		Node previous;
+		Node next;
 		E value;
-		boolean removed;
 
-		Node(Node<E> previous, Node<E> next, E value) {
+		Node(Node previous, Node next, E value) {
 			this.previous = previous;
 			this.next = next;
 			this.value = value;
@@ -298,11 +373,68 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 				next.previous = this;
 		}
 
-		Node<E> getAdjacent(boolean forward) {
-			Node<E> adj = forward ? next : previous;
-			while (adj != null && adj.removed)
-				adj = forward ? adj.next : adj.previous;
-			return adj;
+		@Override
+		public E get() {
+			return value;
+		}
+
+		@Override
+		public void set(E value) {
+			this.value = value;
+		}
+
+		@Override
+		public boolean isPresent() {
+			if (previous == null)
+				return theFirst == this;
+			else
+				return previous.next == this;
+		}
+
+		@Override
+		public boolean remove() {
+			if (previous != null) {
+				if (previous.next != this)
+					return false; // Likely already removed, otherwise it's an internal error
+				previous.next = next;
+			} else {
+				if (theFirst != this)
+					return false; // Likely already removed, otherwise it's an internal error
+				theFirst = next;
+			}
+			// We've established that the node is in the sequence, so no need to check again for next
+			if (next != null)
+				next.previous = previous;
+			else
+				theLast = previous;
+			theSize--;
+			theStamp++;
+			return true;
+		}
+
+		@Override
+		public void unsubscribe() {
+			Node prev = previous, nxt = next;
+			if (prev != null) {
+				if (prev.next != this)
+					return; // Likely already removed, otherwise it's an internal error
+				previous.next = nxt;
+			} else {
+				if (theFirst != this)
+					return; // Likely already removed, otherwise it's an internal error
+				theFirst = nxt;
+			}
+			// We've established that the node is in the sequence, so no need to check again for next
+			if (nxt != null)
+				nxt.previous = prev;
+			else
+				theLast = previous;
+			theSize--;
+			theStamp++;
+		}
+
+		Node getAdjacent(boolean forward) {
+			return forward ? next : previous;
 		}
 
 		@Override
@@ -313,7 +445,7 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 
 	class SimpleDequeSequence implements Sequence<E> {
 		private final boolean isStartAtFirst;
-		private Node<E> theNode;
+		private Node theNode;
 
 		SimpleDequeSequence(boolean first) {
 			isStartAtFirst = first;
@@ -322,7 +454,7 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 		@Override
 		public boolean advance(boolean forward) {
 			if (theNode != null) {
-				Node<E> next = theNode.getAdjacent(forward);
+				Node next = theNode.getAdjacent(forward);
 				if (next == null)
 					return false;
 				theNode = next;
@@ -348,7 +480,7 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 
 		@Override
 		public E get() throws NoSuchElementException {
-			Node<E> node = theNode;
+			Node node = theNode;
 			if (node != null)
 				return node.value;
 			else
@@ -366,8 +498,8 @@ public class SimpleDeque<E> implements SequencedDeque<E> {
 		public void remove() throws IllegalStateException {
 			if (theNode == null)
 				throw new IllegalStateException(NO_ELEMENT_AT_POSTION);
-			SimpleDeque.this.remove(theNode);
-			Node<E> next = theNode.getAdjacent(true);
+			theNode.remove();
+			Node next = theNode.getAdjacent(true);
 			if (next == null)
 				next = theNode.getAdjacent(false);
 			theNode = next;

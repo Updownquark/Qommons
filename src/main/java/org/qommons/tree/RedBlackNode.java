@@ -764,7 +764,7 @@ public final class RedBlackNode<E> implements BinaryTreeNode<E> {
 	/** Removes this node (but not its children) from the tree, rebalancing if necessary */
 	public void delete() {
 		QommonsUtils.assertThat(isPresent(), false, "This node has already been removed");
-		int preDeleteIndex = getElementsBefore(() -> true);
+		int preDeleteIndex = getElementsBefore(OptimisticContext.TRUE);
 
 		// First let's link up the next and previous fields
 		if (theNext != null)

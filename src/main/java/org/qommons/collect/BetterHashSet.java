@@ -4,7 +4,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -138,8 +137,8 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 	private final CollectionLockingStrategy theLocker;
 	private final ToIntFunction<Object> theHasher;
 	private final BiPredicate<Object, Object> theEquals;
-	private final AtomicLong theFirstIdCreator;
-	private final AtomicLong theLastIdCreator;
+	private long theFirstIdCreator;
+	private long theLastIdCreator;
 
 	private final double theLoadFactor;
 
@@ -154,8 +153,8 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 		Iterable<? extends E> initialValues) {
 		theHasher = hasher;
 		theEquals = equals;
-		theFirstIdCreator = new AtomicLong(-1);
-		theLastIdCreator = new AtomicLong(0);
+		theFirstIdCreator = -1L;
+		theLastIdCreator = 0L;
 		initIdentity(identity);
 
 		if (loadFactor < MIN_LOAD_FACTOR || loadFactor > MAX_LOAD_FACTOR)
@@ -442,10 +441,10 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 					afterEntry.theOrder--;
 					afterEntry = afterEntry.previous;
 				}
-				if (theFirst.theOrder == theFirstIdCreator.get())
-					theFirstIdCreator.getAndDecrement();
+				if (theFirst.theOrder == theFirstIdCreator)
+					theFirstIdCreator--;
 			} else {
-				entry = new HashEntry(theFirstIdCreator.getAndDecrement(), value, hashCode);
+				entry = new HashEntry(theFirstIdCreator--, value, hashCode);
 				entry.next = theFirst;
 				if (theFirst != null)
 					theFirst.previous = entry;
@@ -469,10 +468,10 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 					beforeEntry.theOrder++;
 					beforeEntry = beforeEntry.next;
 				}
-				if (theLast.theOrder == theLastIdCreator.get())
-					theLastIdCreator.getAndIncrement();
+				if (theLast.theOrder == theLastIdCreator)
+					theLastIdCreator++;
 			} else {
-				entry = new HashEntry(theLastIdCreator.getAndIncrement(), value, hashCode);
+				entry = new HashEntry(theLastIdCreator++, value, hashCode);
 				if (theLast != null)
 					theLast.next = entry;
 				entry.previous = theLast;
@@ -859,11 +858,11 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 				theTreeNode.remove();
 				if (theFirst == this)
 					theFirst = next;
+				else
+					previous.next = next;
 				if (theLast == this)
 					theLast = previous;
-				if (previous != null)
-					previous.next = next;
-				if (next != null)
+				else
 					next.previous = previous;
 				// Don't remove the table entry.
 				// For one thing, this element may not be the only entry in the table.

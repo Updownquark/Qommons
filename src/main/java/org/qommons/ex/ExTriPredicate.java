@@ -2,8 +2,8 @@ package org.qommons.ex;
 
 import java.util.function.BiPredicate;
 
-import org.qommons.LambdaUtils;
-import org.qommons.TriPredicate;
+import org.qommons.fn.FunctionUtils;
+import org.qommons.fn.TriPredicate;
 
 /**
  * A {@link BiPredicate} look-alike that is capable of throwing a checked exception
@@ -51,6 +51,6 @@ public interface ExTriPredicate<T, U, V, X extends Throwable> {
 	static <T, U, V, X extends Throwable> ExTriPredicate<T, U, V, X> of(TriPredicate<T, U, V> f) {
 		if (f == null)
 			return null;
-		return LambdaUtils.printableExTriPred(f::test, f::toString, f);
+		return FunctionUtils.printableExTriPred(f::test, f::toString, f);
 	}
 }

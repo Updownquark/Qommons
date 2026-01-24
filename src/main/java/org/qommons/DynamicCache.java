@@ -129,6 +129,7 @@ public class DynamicCache<T, X extends Throwable> {
 	 * @param idledBefore The epoch time before which resources will be deleted
 	 * @return The number of idle resources purged from the cache by this call
 	 */
+	@SuppressWarnings("resource")
 	public int purgeResources(long idledBefore) {
 		ListenerList.Element<IdleResource<T>> resource = theIdleResourceCache.peekFirst();
 		int purged = 0;

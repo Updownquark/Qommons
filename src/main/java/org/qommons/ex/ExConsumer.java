@@ -3,7 +3,7 @@ package org.qommons.ex;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-import org.qommons.LambdaUtils;
+import org.qommons.fn.FunctionUtils;
 
 /**
  * A consumer that may throw an exception
@@ -44,7 +44,7 @@ public interface ExConsumer<T, X extends Throwable> {
 	 * @return A runnable that always supplies the given value for the argument to this consumer
 	 */
 	default ExRunnable<X> curry(T arg) {
-		return curry(LambdaUtils.constantExSupplier(arg));
+		return curry(FunctionUtils.constantExSupplier(arg));
 	}
 
 	/**
@@ -77,7 +77,7 @@ public interface ExConsumer<T, X extends Throwable> {
 	static <T, E extends Throwable> ExConsumer<T, E> wrap(Consumer<T> s) {
 		if (s == null)
 			return null;
-		return LambdaUtils.printableExConsumer(s::accept, s::toString, s);
+		return FunctionUtils.printableExConsumer(s::accept, s::toString, s);
 	}
 
 	/**

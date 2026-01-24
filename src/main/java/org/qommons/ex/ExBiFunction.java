@@ -3,7 +3,8 @@ package org.qommons.ex;
 import java.util.Objects;
 import java.util.function.BiFunction;
 
-import org.qommons.LambdaUtils;
+import org.qommons.fn.BetterBiFunction;
+import org.qommons.fn.FunctionUtils;
 
 /**
  * A {@link BiFunction} look-alike that is capable of throwing a checked exception
@@ -27,7 +28,7 @@ public interface ExBiFunction<T, U, R, X extends Throwable> {
 	 * @return A {@link BiFunction} that calls this bi function, wrapping any thrown checked exception with a
 	 *         {@link CheckedExceptionWrapper}
 	 */
-	default BiFunction<T, U, R> unsafe() {
+	default BetterBiFunction<T, U, R> unsafe() {
 		return new Unsafe<>(this);
 	}
 
@@ -36,7 +37,7 @@ public interface ExBiFunction<T, U, R, X extends Throwable> {
 	 * @return The curried unary function
 	 */
 	default ExFunction<U, R, X> curry1(T arg1) {
-		return curry1(LambdaUtils.constantExSupplier(arg1));
+		return curry1(FunctionUtils.constantExSupplier(arg1));
 	}
 
 	/**
@@ -52,7 +53,7 @@ public interface ExBiFunction<T, U, R, X extends Throwable> {
 	 * @return The curried unary function
 	 */
 	default ExFunction<T, R, X> curry2(U arg2) {
-		return curry2(LambdaUtils.constantExSupplier(arg2));
+		return curry2(FunctionUtils.constantExSupplier(arg2));
 	}
 
 	/**
@@ -127,7 +128,7 @@ public interface ExBiFunction<T, U, R, X extends Throwable> {
 	 * @param <R> The return type of the function
 	 * @param <X> The type of exception thrown by the exception-enabled function
 	 */
-	class Unsafe<T, U, R, X extends Throwable> implements BiFunction<T, U, R> {
+	class Unsafe<T, U, R, X extends Throwable> implements BetterBiFunction<T, U, R> {
 		private final ExBiFunction<T, U, R, X> theFunction;
 
 		public Unsafe(ExBiFunction<T, U, R, X> function) {
@@ -393,7 +394,7 @@ public interface ExBiFunction<T, U, R, X extends Throwable> {
 			if (consumer != null)
 				theConsumer = consumer;
 			else
-				theConsumer = LambdaUtils.exConsumeDoNothing();
+				theConsumer = FunctionUtils.exConsumeDoNothing();
 		}
 
 		@Override

@@ -2,7 +2,7 @@ package org.qommons.ex;
 
 import java.util.function.Supplier;
 
-import org.qommons.LambdaUtils;
+import org.qommons.fn.FunctionUtils;
 
 /**
  * A {@link Supplier} look-alike that can throw a checked exception
@@ -31,7 +31,7 @@ public interface ExSupplier<R, X extends Throwable> {
 	static <T, E extends Throwable> ExSupplier<T, E> of(Supplier<T> s) {
 		if (s == null)
 			return null;
-		return LambdaUtils.printableExSupplier(s::get, s::toString, s);
+		return FunctionUtils.printableExSupplier(s::get, s::toString, s);
 	}
 
 	/**

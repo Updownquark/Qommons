@@ -3,15 +3,11 @@ package org.qommons;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
-import org.qommons.collect.BetterBitSetTest;
-import org.qommons.collect.CircularListTest;
-import org.qommons.collect.CollectionUtilsTests;
-import org.qommons.collect.HashSetTest;
-import org.qommons.collect.ListenerListTest;
+import org.qommons.collect.*;
 import org.qommons.config.QommonsConfigTester;
+import org.qommons.io.MinMLTest;
 import org.qommons.io.QonsoleTest;
 import org.qommons.io.ReaderInputStreamTest;
-import org.qommons.io.MinMLTest;
 import org.qommons.threading.ElasticExecutorTest;
 import org.qommons.threading.QommonsTimerTest;
 import org.qommons.tree.TreeUtilsTest;
@@ -26,7 +22,8 @@ import org.qommons.tree.TreeUtilsTest;
 	QommonsUtilsTests.class, //
 	StringUtilsTest.class, //
 	ArgumentParsingTest.class, //
-	CircularListTest.class,
+	CircularListTest.class, //
+	SimpleDequeTest.class, //
 	CollectionUtilsTests.class, //
 	HashSetTest.class, //
 	ListenerListTest.class, //

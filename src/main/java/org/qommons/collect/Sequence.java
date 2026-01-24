@@ -143,6 +143,14 @@ public interface Sequence<E> extends Supplier<E> {
 	void add(E newValue, boolean before) throws UnsupportedOperationException, IllegalArgumentException;
 
 	/**
+	 * @return A sequence at the same position in the same content as this sequence, but which will travel the content in the opposite
+	 *         direction of this sequence
+	 */
+	default Sequence<E> reverse() {
+		return new ReversedSequence<>(this);
+	}
+
+	/**
 	 * @param <E> The type for the sequence
 	 * @return The empty sequence
 	 */
@@ -436,6 +444,93 @@ public interface Sequence<E> extends Supplier<E> {
 		@Override
 		public void add(E newValue, boolean before) throws UnsupportedOperationException, IllegalArgumentException, IllegalStateException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
+		}
+	}
+
+	/**
+	 * Default {@link Sequence#reverse()} implementation
+	 * 
+	 * @param <E> The type of values in the sequence
+	 */
+	class ReversedSequence<E> implements Sequence<E> {
+		private final Sequence<E> theWrapped;
+
+		public ReversedSequence(Sequence<E> wrap) {
+			theWrapped = wrap;
+		}
+
+		protected Sequence<E> getWrapped() {
+			return theWrapped;
+		}
+
+		@Override
+		public boolean advance(boolean forward) {
+			return theWrapped.advance(!forward);
+		}
+
+		@Override
+		public boolean has(boolean next) {
+			return theWrapped.has(!next);
+		}
+
+		@Override
+		public boolean exists() {
+			return theWrapped.exists();
+		}
+
+		@Override
+		public E get() throws NoSuchElementException {
+			return theWrapped.get();
+		}
+
+		@Override
+		public String canRemove() {
+			return theWrapped.canRemove();
+		}
+
+		@Override
+		public void remove() throws UnsupportedOperationException, IllegalStateException {
+			theWrapped.remove();
+		}
+
+		@Override
+		public String isSettable() {
+			return theWrapped.isSettable();
+		}
+
+		@Override
+		public String isAcceptable(E newValue) {
+			return theWrapped.isAcceptable(newValue);
+		}
+
+		@Override
+		public void set(E newValue) throws UnsupportedOperationException, IllegalArgumentException, IllegalStateException {
+			theWrapped.set(newValue);
+		}
+
+		@Override
+		public String canAdd(E value, boolean before) {
+			return theWrapped.canAdd(value, !before);
+		}
+
+		@Override
+		public void add(E newValue, boolean before) throws UnsupportedOperationException, IllegalArgumentException {
+			theWrapped.add(newValue, !before);
+		}
+
+		@Override
+		public Sequence<E> reverse() {
+			return theWrapped;
+		}
+
+		@Override
+		public int hashCode() {
+			return theWrapped.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof ReversedSequence && theWrapped.equals(((ReversedSequence<?>) obj).theWrapped);
 		}
 	}
 }

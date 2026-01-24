@@ -16,6 +16,7 @@ import org.qommons.ArgumentParsing.Impl.ArgumentTypeHolder;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.QuickSet.QuickMap;
 import org.qommons.ex.ExFunction;
+import org.qommons.fn.FunctionUtils;
 import org.qommons.io.BetterFile;
 import org.qommons.io.BetterFile.FileBacking;
 import org.qommons.io.BetterFile.FileDataSource;
@@ -1923,7 +1924,7 @@ public class ArgumentParsing {
 		 * @return This builder
 		 */
 		default B defaultValue(T value) {
-			return defaultValue(LambdaUtils.constantSupplier(value, value::toString, null));
+			return defaultValue(FunctionUtils.constantSupplier(value, value::toString, null));
 		}
 
 		/**
@@ -3267,7 +3268,8 @@ public class ArgumentParsing {
 
 				@Override
 				public Instant parse(String text, Arguments otherArgs) throws ParseException {
-					return TimeUtils.parseInstant(text, true, true, opts -> opts.withTimeZone(theTimeZone)).evaluate(theReference);
+					return TimeUtils.parseInstant(text.replace("_", " "), true, true, opts -> opts.withTimeZone(theTimeZone))
+						.evaluate(theReference);
 				}
 			}
 		}

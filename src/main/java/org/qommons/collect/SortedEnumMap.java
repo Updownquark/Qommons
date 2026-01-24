@@ -4,12 +4,12 @@ import java.util.*;
 
 import org.qommons.ArrayUtils;
 import org.qommons.Identifiable;
-import org.qommons.LambdaUtils;
 import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedList.SortedSearchFilter;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.fn.FunctionUtils;
 
 /**
  * It's infuriating to me that java's {@link EnumMap} is not a {@link NavigableMap} or even a {@link SortedMap}. So I had to write my own.
@@ -30,10 +30,10 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 	};
 
-	private static final Comparator<Enum<?>> COMPARE = LambdaUtils.<Enum<?>> printableComparator((e1, e2) -> {
+	private static final Comparator<Enum<?>> COMPARE = FunctionUtils.<Enum<?>> printableComparator((e1, e2) -> {
 		return Integer.compare(e1.ordinal(), e2.ordinal());
 	}, () -> "enumCompare", null);
-	private static final Comparator<Map.Entry<? extends Enum<?>, ?>> ENTRY_COMPARE = LambdaUtils.<Map.Entry<? extends Enum<?>, ?>> printableComparator(
+	private static final Comparator<Map.Entry<? extends Enum<?>, ?>> ENTRY_COMPARE = FunctionUtils.<Map.Entry<? extends Enum<?>, ?>> printableComparator(
 		(e1, e2) -> {
 			return Integer.compare(e1.getKey().ordinal(), e2.getKey().ordinal());
 		}, () -> "enumEntryCompare", null);

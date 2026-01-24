@@ -1,7 +1,6 @@
 package org.qommons.collect;
 
 import java.util.Collection;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.Supplier;
 
@@ -15,12 +14,12 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	final Object theOwner;
 	private final ThreadLocal<ThreadState> theStampCollection;
 	final StampedLock theUpdateLocker;
-	private final AtomicLong theModCount;
+	private volatile long theModCount;
 	private int optimisticTries;
 
 	/**
 	 * If true, locking strategies of this type will keep a record of the thread that currently holds a write lock on them in
-	 * {@link #updateWriteLocker}. This variable can be set by setting the system property "qommons.locking.debug" to "true".
+	 * {@link #updateWriteLocker}. This variable can be set by initializing the system property "qommons.locking.debug" to "true".
 	 */
 	public static boolean STORE_WRITERS = "true".equalsIgnoreCase(System.getProperty("qommons.locking.debug")); // A debug setting
 	volatile Thread updateWriteLocker;
@@ -56,7 +55,6 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		theCausalLock = new DefaultCausalLock(new TransactableCore());
 		theStampCollection = ThreadLocal.withInitial(ThreadState::new);
 		theUpdateLocker = new StampedLock();
-		theModCount = new AtomicLong(0);
 		this.optimisticTries = optimisticTries;
 	}
 
@@ -92,12 +90,12 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 
 	@Override
 	public long getStamp() {
-		return theModCount.get();
+		return theModCount;
 	}
 
 	@Override
 	public void modified() {
-		theModCount.getAndIncrement();
+		theModCount++;
 	}
 
 	@Override

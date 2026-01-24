@@ -1478,7 +1478,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 				return null;
 
 			// We'll have to remove the value from its source
-			msg = theMap.getEntryById(mvi.keyId).getValues().canRemove(mvi.valueId);
+			msg = theMap.getEntryById(mvi.keyId).getValues().mutableElement(mvi.valueId).canRemove();
 			if (msg != null)
 				return msg;
 			V value = theMap.getEntryById(mvi.keyId, mvi.valueId).get();

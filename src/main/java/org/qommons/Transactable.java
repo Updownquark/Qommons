@@ -10,6 +10,7 @@ import java.util.function.Supplier;
 
 import org.qommons.Lockable.CoreId;
 import org.qommons.collect.OptimisticContext;
+import org.qommons.fn.FunctionUtils;
 
 /**
  * Represents a mutable object whose modifications may possibly be batched for increased efficiency.
@@ -519,8 +520,8 @@ public interface Transactable extends ThreadConstrained {
 	 * @return The combined transactable
 	 */
 	static Transactable combine(Collection<? extends Transactable> transactables) {
-		return new CombinedTransactable<>(null, LambdaUtils.constantSupplier(transactables, transactables::toString, null),
-			LambdaUtils.identity(), true);
+		return new CombinedTransactable<>(null, FunctionUtils.constantSupplier(transactables, transactables::toString, null),
+			FunctionUtils.identity(), true);
 	}
 
 	/**
@@ -531,8 +532,8 @@ public interface Transactable extends ThreadConstrained {
 	 * @return The combined transactable
 	 */
 	static Transactable combine(Transactable first, Transactable... others) {
-		return new CombinedTransactable<>(first, LambdaUtils.constantSupplier(Arrays.asList(others), () -> Arrays.toString(others), null),
-			LambdaUtils.identity(), true);
+		return new CombinedTransactable<>(first, FunctionUtils.constantSupplier(Arrays.asList(others), () -> Arrays.toString(others), null),
+			FunctionUtils.identity(), true);
 	}
 
 	/**
@@ -543,7 +544,7 @@ public interface Transactable extends ThreadConstrained {
 	 * @return The combined transactable
 	 */
 	static Transactable combine(Transactable first, Collection<? extends Transactable> others) {
-		return new CombinedTransactable<>(first, LambdaUtils.constantSupplier(others, others::toString, others), LambdaUtils.identity(),
+		return new CombinedTransactable<>(first, FunctionUtils.constantSupplier(others, others::toString, others), FunctionUtils.identity(),
 			true);
 	}
 

@@ -16,11 +16,11 @@ import java.util.function.Supplier;
 import org.qommons.ArgumentParsing;
 import org.qommons.ArgumentParsing.Argument;
 import org.qommons.ArgumentParsing.MatchedArgument;
-import org.qommons.LambdaUtils;
 import org.qommons.QommonsUtils;
 import org.qommons.ThreadConstraint;
 import org.qommons.TimeUtils;
 import org.qommons.collect.ListenerList;
+import org.qommons.fn.FunctionUtils;
 
 /** A timer class that allows very flexible scheduling of tasks without needing to create a thread per task */
 public class QommonsTimer {
@@ -36,7 +36,7 @@ public class QommonsTimer {
 		WeakReference<ElasticExecutor<?>> executorRef = new WeakReference<>(executor);
 		QommonsTimer.TaskHandle[] handle = new QommonsTimer.TaskHandle[1];
 		// This operation is expensive, don't do it very often
-		handle[0] = COMMON_INSTANCE.execute(LambdaUtils.printableRunnable(() -> {
+		handle[0] = COMMON_INSTANCE.execute(FunctionUtils.printableRunnable(() -> {
 			ElasticExecutor<?> exec = executorRef.get();
 			if (exec == null) // The executor has been garbage-collected
 				handle[0].setActive(false);
@@ -95,7 +95,7 @@ public class QommonsTimer {
 			else if (sleepTime.getNano() >= 1_000_000)
 				Thread.sleep(sleepTime.getNano() / 1_000_000, sleepTime.getNano() % 1_000_000);
 			else
-				Thread.sleep(0, sleepTime.getNano() % 1_000_000);
+				Thread.sleep(0, sleepTime.getNano());
 		}
 	}
 

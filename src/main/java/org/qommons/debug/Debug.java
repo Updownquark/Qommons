@@ -1,6 +1,8 @@
 package org.qommons.debug;
 
+import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -11,6 +13,7 @@ import java.util.function.Supplier;
 import org.qommons.BreakpointHere;
 import org.qommons.Transaction;
 import org.qommons.collect.ListenerList;
+import org.qommons.threading.QommonsTimer;
 
 /**
  * <p>
@@ -55,6 +58,8 @@ public class Debug {
 		return new StackOverflowDebugging();
 	});
 
+	private static final ConcurrentHashMap<String, AtomicLong> CALL_COUNTS = new ConcurrentHashMap<>();
+
 	/**
 	 * This call is to assist in debugging stack overflow errors that may be intermittent. This call will trigger a {@link BreakpointHere}
 	 * breakpoint when the number of recursive hits to the given spot meets or exceeds the given limit. This call is thread-safe.
@@ -65,6 +70,15 @@ public class Debug {
 	 */
 	public static Transaction debugStackOverflow(String pointName, int limit) {
 		return STACK_OVERFLOW_DEBUGGER.get().debug(pointName, limit);
+	}
+
+	public static void debugCountInvocations(String name, Duration inactivity) {
+		AtomicLong count = CALL_COUNTS.computeIfAbsent(name, __ -> new AtomicLong());
+		count.getAndIncrement();
+		QommonsTimer.getCommonInstance().doAfterInactivity(name, () -> {
+			long total = count.getAndSet(0L);
+			System.out.println("Called " + name + " " + total + " time" + (total == 1 ? "" : "s"));
+		}, inactivity);
 	}
 
 	private static final char DIV = '.';

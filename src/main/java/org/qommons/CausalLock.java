@@ -1,6 +1,9 @@
 package org.qommons;
 
 import java.util.Collection;
+import java.util.Collections;
+
+import org.qommons.collect.SimpleDeque;
 
 /** A lock that keeps track of the causes by which it is write-locked for eventing */
 public interface CausalLock extends Transactable {
@@ -11,23 +14,37 @@ public interface CausalLock extends Transactable {
 	public interface Cause {
 	}
 
-	/** @return The currently active causes of write locks. This value is not unmodifiable for performance purposes. */
+	/** @return The currently active causes of write locks. This value may not be unmodifiable for performance purposes. */
 	Collection<Cause> getCurrentCauses();
 
 	/** @return The currently active causes of write locks which are not {@link Causable#isFinished() finished} being fired */
 	default Collection<Cause> getUnfinishedCauses() {
-		// Most of the time, there won't be any unfinished causes here, so the most performant way to do this is to check first
-		Collection<Cause> causes = getCurrentCauses();
-		boolean anyUnfinished = false;
-		for (Cause cause : causes) {
-			if (cause instanceof Causable && ((Causable) cause).isFinished()) {
-				anyUnfinished = true;
-				break;
+		/* Pretty often, there won't be any unfinished causes here.
+		 * Most of the rest of the time, there will just be a single one.
+		 * Most of the rest of the time after that, there will be a very few.
+		 */
+		Cause singleCause = null;
+		Collection<Cause> causes = null;
+		Collection<Cause> allCauses = getCurrentCauses();
+		for (Cause cause : allCauses) {
+			if (cause instanceof Causable && !((Causable) cause).isFinished()) {
+				if (singleCause == null)
+					singleCause = cause;
+				else {
+					if (causes == null) {
+						causes = new SimpleDeque<>();
+						causes.add(singleCause);
+					}
+					causes.add(cause);
+				}
 			}
 		}
-		if (!anyUnfinished)
+		if (causes != null)
 			return causes;
-		return QommonsUtils.filterMap(getCurrentCauses(), c -> !(c instanceof Causable) || !((Causable) c).isFinished(), null);
+		else if (singleCause != null)
+			return Collections.singleton(singleCause);
+		else
+			return Collections.emptySet();
 	}
 
 	/** @return The first Causable in this lock's {@link #getCurrentCauses() current causes} */

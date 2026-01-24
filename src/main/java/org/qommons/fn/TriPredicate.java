@@ -1,7 +1,8 @@
-package org.qommons;
+package org.qommons.fn;
 
 import java.util.Objects;
 import java.util.function.BiPredicate;
+import java.util.function.Supplier;
 
 /**
  * A predicate of 3 arguments
@@ -41,6 +42,34 @@ public interface TriPredicate<T, U, V> {
 	 */
 	default BiPredicate<T, U> curry3(V arg3) {
 		return new TriPredicateCurry3<>(this, arg3);
+	}
+
+	/**
+	 * @param <A1> The type of the first argument to the ternary predicate
+	 * @param <A2> The type of the second argument to the ternary predicate
+	 * @param <A3> The type of the third argument to the ternary predicate
+	 * @param function The implementation
+	 * @param print The string for the wrapped predicate's {@link #toString()}
+	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @return The wrapped, printable ternary predicate
+	 */
+	static <A1, A2, A3> TriPredicate<A1, A2, A3> printable(TriPredicate<? super A1, ? super A2, ? super A3> function, String print,
+		Object identity) {
+		return printable(function, () -> print, identity);
+	}
+
+	/**
+	 * @param <A1> The type of the first argument to the ternary predicate
+	 * @param <A2> The type of the second argument to the ternary predicate
+	 * @param <A3> The type of the third argument to the ternary predicate
+	 * @param function The implementation
+	 * @param print Supplies the string for the wrapped predicate's {@link #toString()}
+	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @return The wrapped, printable ternary predicate
+	 */
+	static <A1, A2, A3> TriPredicate<A1, A2, A3> printable(TriPredicate<? super A1, ? super A2, ? super A3> function,
+		Supplier<String> print, Object identity) {
+		return new PrintableTriPredicate<>(function, print, identity);
 	}
 
 	/**
@@ -190,6 +219,30 @@ public interface TriPredicate<T, U, V> {
 		@Override
 		public String toString() {
 			return theSource + ".curry3(" + theArg3 + ")";
+		}
+	}
+
+	/**
+	 * Implements {@link TriPredicate#printable(TriPredicate, String, Object)}
+	 * 
+	 * @param <A1> The first argument type
+	 * @param <A2> The second argument type
+	 * @param <A3> The third argument type
+	 */
+	class PrintableTriPredicate<A1, A2, A3> extends FunctionUtils.PrintableLambda<TriPredicate<? super A1, ? super A2, ? super A3>>
+		implements TriPredicate<A1, A2, A3> {
+		public PrintableTriPredicate(TriPredicate<? super A1, ? super A2, ? super A3> lambda, Supplier<String> print, Object identifier) {
+			super(lambda, print, identifier);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return false;
+		}
+
+		@Override
+		public boolean test(A1 arg1, A2 arg2, A3 arg3) {
+			return getLambda().test(arg1, arg2, arg3);
 		}
 	}
 }

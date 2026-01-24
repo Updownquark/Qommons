@@ -9,6 +9,7 @@ import java.util.function.UnaryOperator;
 import org.qommons.*;
 import org.qommons.Lockable.CoreId;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.fn.FunctionUtils;
 
 /**
  * BetterCollection is an ordered {@link Collection} (also a {@link Deque}) that provides a great deal of extra capability.
@@ -129,7 +130,9 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 *        element may be added at the beginning of the collection
 	 * @param before The element currently occupying the position before which (exclusive) the value's insertion is desirable, or null if
 	 *        the element may be added at the end of the collection
-	 * @return Null if given value could possibly be added to this collection within the given position range, or a message why it can't
+	 * @return Null if the given value could possibly be added to this collection within the given position range, or a message why it
+	 *         can't. In particular, this method should return {@link StdMsg#ELEMENT_EXISTS} if the element already exists in this
+	 *         collection and duplicates are not permitted.
 	 */
 	String canAdd(E value, ElementId after, ElementId before);
 
@@ -147,7 +150,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 *        <li>Ignored if the collection does not support position-indicated addition</li>
 	 *        <li>Used as a suggestion, where the insertion will be closer to the beginning (true) or end (false) of the collection as
 	 *        indicated by the parameter</li></li>
-	 * @return The element at which the value was added, or null if the value was not added due to a non-erroring condition
+	 * @return The element at which the value was added, or null if the value was not added because it already exists in the collection and
+	 *         this collection does not permit duplicates
 	 * @throws UnsupportedOperationException If such an operation is not supported by this collection in general
 	 * @throws IllegalArgumentException If something about the value prevents this operation, or if either <code>after</code> or
 	 *         <code>before</code> is not null and not an element in this collection
@@ -186,7 +190,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * Tests the compatibility of an object with this collection.
 	 *
 	 * @param value The value to test compatibility for
-	 * @return Null if given value could possibly be added to this collection, or a message why it can't
+	 * @return Null if given value could possibly be added to this collection, or a message why it can't. In particular, this method should
+	 *         return {@link StdMsg#ELEMENT_EXISTS} if the element already exists in this collection and duplicates are not permitted.
 	 */
 	default String canAdd(E value) {
 		return canAdd(value, null, null);
@@ -199,11 +204,14 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * @param value The value to add
 	 * @param first Whether to prefer a lower position over a higher one. This parameter may be:
 	 *        <ul>
-	 *        <li>Strictly obeyed, in which the value will be added at the beginning (true) or end (false) of the collection</li>
+	 *        <li>Strictly obeyed, in which the value will be added at the beginning (true) or end (false) of the collection. This is much
+	 *        preferred if the nature of the collection supports it.</li>
 	 *        <li>Ignored if the collection does not support position-indicated addition</li>
 	 *        <li>Used as a suggestion, where the insertion will be closer to the beginning (true) or end (false) of the collection as
-	 *        indicated by the parameter</li></li>
-	 * @return The element at which the value was added, or null if the value was not added due to a non-erroring condition
+	 *        indicated by the parameter</li>
+	 *        </ul>
+	 * @return The element at which the value was added, or null if the value was not added because it already exists in the collection and
+	 *         this collection does not permit duplicates
 	 * @throws UnsupportedOperationException If such an operation is not supported by this collection in general
 	 * @throws IllegalArgumentException If something about the value prevents this operation
 	 */
@@ -216,6 +224,12 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		return addElement(value, null, null, false) != null;
 	}
 
+	/**
+	 * Adds all values from the given collection which {@link #canAdd(Object) can be added} into this collection
+	 * 
+	 * @param c The collection containing the values to add
+	 * @return Whether any values were added to this collection
+	 */
 	@Override
 	default boolean addAll(Collection<? extends E> c) {
 		if (c.isEmpty())
@@ -231,6 +245,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	}
 
 	/**
+	 * Adds all values from the given array which {@link #canAdd(Object) can be added} into this collection
+	 * 
 	 * @param values The values to add to the collection
 	 * @return This collection
 	 */
@@ -245,6 +261,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	}
 
 	/**
+	 * Adds all values from the given collection which {@link #canAdd(Object) can be added} into this collection
+	 * 
 	 * @param values The values to add to the collection
 	 * @return This collection
 	 */
@@ -259,22 +277,6 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	}
 
 	/**
-	 * Tests the removability of an element from this collection. This method exposes a "best guess" on whether an element in the collection
-	 * could be removed, but does not provide any guarantee. This method should return null for any object for which {@link #remove(Object)}
-	 * is successful, but the fact that an object passes this test does not guarantee that it would be removed successfully. E.g. the
-	 * position of the element in the collection may be a factor, but may not be tested for here.
-	 *
-	 * @param value The value to test removability for
-	 * @return Null if given value could possibly be removed from this collection, or a message why it can't
-	 */
-	default String canRemove(Object value) {
-		try (Transaction t = lock(false, null)) {
-			CollectionElement<E> found = getElement((E) value, true);
-			return mutableElement(found.getElementId()).canRemove();
-		}
-	}
-
-	/**
 	 * @param value The value to find in this collection
 	 * @param first Whether to search for the first or last element in this collection whose value is equivalent to the given one
 	 * @return The value of the found element, or null if the value was not found in this collection
@@ -284,17 +286,24 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	}
 
 	/**
+	 * <p>
 	 * Finds the first (or last) element in this collection whose value is equivalent to the given one, and sets it to its own value (which
 	 * may not be identical to the given value) if possible.
+	 * </p>
+	 * <p>
+	 * This method differs from {@link #replace(Object, boolean)} in that the operation is an update, in which
+	 * {@link MutableCollectionElement#set(Object) set} is called with the instance in this collection, not the argument if they are not the
+	 * same instance.
+	 * </p>
 	 * 
 	 * @param value The value to find and update
 	 * @param first Whether to find and update the first or last element in this collection whose value is equivalent to the given one
 	 * @return
-	 *         <ol>
+	 *         <ul>
 	 *         <li>{@link StdMsg#NOT_FOUND} if no such element exists in this collection,</li>
 	 *         <li><code>null</code> if the element was updated, or</li>
 	 *         <li>The reason why the element could not be updated.</li>
-	 *         </ol>
+	 *         </ul>
 	 */
 	default String update(Object value, boolean first) {
 		try (Transaction t = lock(true, null)) {
@@ -311,17 +320,24 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	}
 
 	/**
+	 * <p>
 	 * Finds the first (or last) element in this collection whose value is equivalent to the given one, and sets it to the given value
 	 * (which may not be identical to the given value) if possible.
+	 * </p>
+	 * <p>
+	 * This method differs from {@link #update(Object, boolean)} in that the operation is a replacement, in which
+	 * {@link MutableCollectionElement#set(Object) set} is called with the given argument, not instance in this collection if they are not
+	 * the same instance.
+	 * </p>
 	 * 
 	 * @param value The value to find and replace
 	 * @param first Whether to find and replace the first or last element in this collection whose value is equivalent to the given one
 	 * @return
-	 *         <ol>
+	 *         <ul>
 	 *         <li>{@link StdMsg#NOT_FOUND} if no such element exists in this collection,</li>
 	 *         <li><code>null</code> if the element was replaced, or</li>
-	 *         <li>The reason why the element could not be replaced.</li>
-	 *         </ol>
+	 *         <li>The reason why the element could not be replaced with the given value.</li>
+	 *         </ul>
 	 */
 	default String replace(Object value, boolean first) {
 		try (Transaction t = lock(true, null)) {
@@ -339,8 +355,28 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 
 	@Override
 	default boolean contains(Object o) {
-		CollectionElement<E> el = getElement((E) o, true);
-		return el != null;
+		try {
+			CollectionElement<E> el = getElement((E) o, true);
+			return el != null;
+		} catch (NullPointerException | ClassCastException e) {
+			/* It might seem like I should just leave this method abstract and require implementations to implement it
+			 * to avoid having to catch exceptions,
+			 * but it turns out that in almost all cases where an exception would be thrown,
+			 * it's not possible to prevent it even in the implementation.
+			 * 
+			 * E.g. in a sorted set where values must be passed to a comparator which assumes the type of all values passed to it,
+			 * the sorted set has no knowledge at run time of the type required by the comparator.
+			 * Java's own utility collections will throw class cast exceptions in such a situation because it's basically unavoidable.
+			 * Java's sorted collections do check for a null argument and return false, but I want this class to be usable for collections
+			 * and even sorted collections which support null values.
+			 * 
+			 * I think it's prudent, however, to print the stack trace, because relying on this mechanism will produce poor performance
+			 * and the dev should know about it.
+			 */
+			System.err.println("Exception in containment test:");
+			e.printStackTrace();
+			return false;
+		}
 	}
 
 	/**
@@ -466,7 +502,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		if (c.isEmpty())
 			return false;
 		return removeIf(//
-			LambdaUtils.printablePred(c::contains, () -> "in" + c, null));
+			FunctionUtils.printablePred(c::contains, () -> "in" + c, null));
 	}
 
 	/**
@@ -494,7 +530,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			}
 		}
 		return removeIf(//
-			LambdaUtils.printablePred(o -> !c.contains(o), () -> "notIn" + c, null));
+			FunctionUtils.printablePred(o -> !c.contains(o), () -> "notIn" + c, null));
 	}
 
 	@Override
@@ -551,7 +587,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * @param op The operation to apply to each value in this collection
 	 */
 	default void replaceAll(UnaryOperator<E> op) {
-		replaceAll(LambdaUtils.printableFn(v -> op.apply(v), op::toString), false);
+		replaceAll(FunctionUtils.printableFn(v -> op.apply(v), op::toString), false);
 	}
 
 	/**
@@ -1284,9 +1320,91 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			getWrapped().clear();
 		}
 
+		// Overriding for performance
+
 		@Override
 		public int hashCode() {
 			return BetterCollection.hashCode(this);
+		}
+
+		@Override
+		public CollectionElement<E> addElement(E value, boolean first) throws UnsupportedOperationException, IllegalArgumentException {
+			return CollectionElement.reverse(getWrapped().addElement(value, !first));
+		}
+
+		@Override
+		public E getEquivalentValue(Object value, boolean first) {
+			return getWrapped().getEquivalentValue(value, !first);
+		}
+
+		@Override
+		public CollectionElement<E> find(Predicate<? super E> search, boolean first) {
+			return CollectionElement.reverse(getWrapped().find(search, !first));
+		}
+
+		@Override
+		public void addFirst(E e) {
+			getWrapped().addLast(e);
+		}
+
+		@Override
+		public void addLast(E e) {
+			getWrapped().addFirst(e);
+		}
+
+		@Override
+		public boolean offerFirst(E e) {
+			return getWrapped().offerLast(e);
+		}
+
+		@Override
+		public boolean offerLast(E e) {
+			return getWrapped().offerFirst(e);
+		}
+
+		@Override
+		public E removeFirst() {
+			return getWrapped().removeLast();
+		}
+
+		@Override
+		public E removeLast() {
+			return getWrapped().removeFirst();
+		}
+
+		@Override
+		public E pollFirst() {
+			return getWrapped().pollLast();
+		}
+
+		@Override
+		public E pollLast() {
+			return getWrapped().pollFirst();
+		}
+
+		@Override
+		public E getFirst() {
+			return getWrapped().getLast();
+		}
+
+		@Override
+		public E getLast() {
+			return getWrapped().getFirst();
+		}
+
+		@Override
+		public E peekFirst() {
+			return getWrapped().peekLast();
+		}
+
+		@Override
+		public E peekLast() {
+			return getWrapped().peekFirst();
+		}
+
+		@Override
+		public Iterator<E> descendingIterator() {
+			return getWrapped().iterator();
 		}
 
 		@Override
@@ -1441,6 +1559,53 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			return null;
 		}
 
+		// Overriding for performance
+
+		@Override
+		public boolean contains(Object o) {
+			return false;
+		}
+
+		@Override
+		public boolean containsAny(Collection<?> c) {
+			return false;
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			return c.isEmpty();
+		}
+
+		@Override
+		public E pollFirst() {
+			return null;
+		}
+
+		@Override
+		public E pollLast() {
+			return null;
+		}
+
+		@Override
+		public E getFirst() {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public E getLast() {
+			throw new NoSuchElementException();
+		}
+
+		@Override
+		public E peekFirst() {
+			return null;
+		}
+
+		@Override
+		public E peekLast() {
+			return null;
+		}
+
 		@Override
 		public int hashCode() {
 			return 0;
@@ -1586,7 +1751,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		@Override
 		public CollectionElement<E> addElement(E value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			return null;
+			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 
 		@Override
@@ -1619,6 +1784,50 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 				a = Arrays.copyOf(a, 1);
 			a[0] = (T) theElement.get();
 			return a;
+		}
+
+		// Overriding for performance
+
+		@Override
+		public boolean contains(Object o) {
+			return Objects.equals(theElement.get(), o);
+		}
+
+		@Override
+		public boolean containsAny(Collection<?> c) {
+			return c.contains(theElement.get());
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			Object v = theElement.get();
+			if (v == null)
+				return c.stream().allMatch(Objects::isNull);
+			for (Object o : c) {
+				if (!v.equals(o))
+					return false;
+			}
+			return true;
+		}
+
+		@Override
+		public E getFirst() {
+			return theElement.get();
+		}
+
+		@Override
+		public E getLast() {
+			return theElement.get();
+		}
+
+		@Override
+		public E peekFirst() {
+			return theElement.get();
+		}
+
+		@Override
+		public E peekLast() {
+			return theElement.get();
 		}
 
 		@Override
@@ -1805,8 +2014,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public BetterList<CollectionElement<CE>> getElementsBySource(ElementId sourceEl,
-			BetterCollection<?> sourceCollection) {
+		public BetterList<CollectionElement<CE>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
 			return QommonsUtils.map2(theCollection.getElementsBySource(sourceEl, sourceCollection), this::wrap);
@@ -1828,8 +2036,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public CollectionElement<CE> addElement(CE value, ElementId after, ElementId before,
-			boolean first) throws UnsupportedOperationException, IllegalArgumentException {
+		public CollectionElement<CE> addElement(CE value, ElementId after, ElementId before, boolean first)
+			throws UnsupportedOperationException, IllegalArgumentException {
 			throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 		}
 
@@ -1839,8 +2047,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public CollectionElement<CE> move(ElementId valueEl, ElementId after, ElementId before, boolean first,
-			Runnable afterRemove) {
+		public CollectionElement<CE> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove) {
 			return wrap(theCollection.move(valueEl, after, before, first, afterRemove));
 		}
 

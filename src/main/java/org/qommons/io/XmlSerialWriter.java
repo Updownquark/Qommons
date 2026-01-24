@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.Arrays;
 
+import org.qommons.DefaultCharSubSequence;
+import org.qommons.ex.ExConsumer;
+
 /** A simple utility for writing XML to a {@link Writer} serially */
 public class XmlSerialWriter {
 	/** The default version (1.0) that will be written for the document if not explicitly specified */
@@ -43,11 +46,14 @@ public class XmlSerialWriter {
 		/** @return -1 for a document, 0 for the root element, etc. */
 		public abstract int getDepth();
 
+		/** @return The current position in the file that will be written next */
+		public abstract FilePosition getCurrentPosition();
+
 		void preContent(boolean indent) throws IOException {
 			assertWritable();
 			closeHeader();
 			if (indent && getDocument().isContentOnSeparateLines() && !isNewLine)
-				getDocument().getWriter().write('\n');
+				getDocument().write("\n");
 			isNewLine = false;
 			if (indent)
 				indent();
@@ -66,9 +72,9 @@ public class XmlSerialWriter {
 		 */
 		public XmlComponent writeComment(String comment) throws IOException {
 			preContent(true);
-			getDocument().getWriter().append("<!--");
-			writeXmlContent(getDocument().getWriter(), comment, XmlContentType.COMMENT);
-			getDocument().getWriter().append("-->");
+			getDocument().write("<!--");
+			writeXmlContent(comment, XmlContentType.COMMENT, getDocument()::write);
+			getDocument().write("-->");
 			return this;
 		}
 
@@ -82,7 +88,7 @@ public class XmlSerialWriter {
 			}
 			element.close();
 			if (getDocument().isContentOnSeparateLines()) {
-				getDocument().getWriter().write('\n');
+				getDocument().write("\n");
 				isNewLine = true;
 			}
 			return this;
@@ -100,11 +106,17 @@ public class XmlSerialWriter {
 		private String theIndent;
 		private boolean isContentOnSeparateLines;
 
+		private int theTabLength;
+		private int thePosition;
+		private int theLineNumber;
+		private int theCharNumber;
+
 		Document(Writer writer) throws IOException {
 			theWriter = writer;
 			theStage = Stage.HEADER;
 			theIndent = "\t";
 			isContentOnSeparateLines = true;
+			theTabLength = 4;
 
 			init();
 		}
@@ -137,8 +149,14 @@ public class XmlSerialWriter {
 			return this;
 		}
 
-		Writer getWriter() {
-			return theWriter;
+		/**
+		 * @param tabLength The size of tabs. Affects only the {@link FilePosition#getCharNumber() character number} in the
+		 *        {@link #getCurrentPosition() current position}
+		 * @return This document
+		 */
+		public Document setTabLength(int tabLength) {
+			theTabLength = tabLength;
+			return this;
 		}
 
 		@Override
@@ -155,8 +173,36 @@ public class XmlSerialWriter {
 		}
 
 		@Override
+		public FilePosition getCurrentPosition() {
+			return new FilePosition(thePosition, theLineNumber, theCharNumber);
+		}
+
+		/**
+		 * @param text The character sequence to write to the file
+		 * @throws IOException If the data write fails
+		 */
+		protected void write(CharSequence text) throws IOException {
+			theWriter.append(text);
+			thePosition += text.length();
+			for (int i = 0; i < text.length(); i++) {
+				if (text.charAt(i) < ' ') {
+					switch (text.charAt(i)) {
+					case '\n':
+						theLineNumber++;
+						theCharNumber = 0;
+						break;
+					case '\t':
+						theCharNumber += theTabLength;
+						break;
+					}
+				} else
+					theCharNumber++;
+			}
+		}
+
+		@Override
 		void init() throws IOException {
-			theWriter.append("<?xml");
+			write("<?xml");
 		}
 
 		/**
@@ -171,9 +217,9 @@ public class XmlSerialWriter {
 				throw new IllegalStateException("Version has already been written");
 			hasWrittenVersion = true;
 			if (version != null) {
-				theWriter.write(" version=\"");
-				theWriter.write(version);
-				theWriter.write('\"');
+				write(" version=\"");
+				write(version);
+				write("\"");
 			}
 			return this;
 		}
@@ -190,9 +236,9 @@ public class XmlSerialWriter {
 				throw new IllegalStateException("Encoding has already been written");
 			hasWrittenEncoding = true;
 			if (encoding != null) {
-				theWriter.write(" encoding=\"");
-				theWriter.write(encoding);
-				theWriter.write('\"');
+				write(" encoding=\"");
+				write(encoding);
+				write("\"");
 			}
 			return this;
 		}
@@ -206,7 +252,7 @@ public class XmlSerialWriter {
 			if (!hasWrittenEncoding)
 				setEncoding(DEFAULT_ENCODING);
 
-			theWriter.append(" ?>");
+			write(" ?>");
 			theStage = Stage.POST_HEADER;
 		}
 
@@ -224,7 +270,7 @@ public class XmlSerialWriter {
 						Integer.toHexString(whitespace.codePointAt(c)) + ")");
 			if (whitespace.length() > 0 && whitespace.charAt(whitespace.length() - 1) == '\n')
 				isNewLine = true;
-			writeXmlContent(theWriter, whitespace, XmlContentType.CONTENT);
+			writeXmlContent(whitespace, XmlContentType.CONTENT, this::write);
 			return this;
 		}
 
@@ -288,7 +334,7 @@ public class XmlSerialWriter {
 		void closeHeader() throws IOException {
 			if (isHeaderClosed)
 				return;
-			theDocument.getWriter().write('>');
+			theDocument.write(">");
 			isHeaderClosed = true;
 			isEmpty = false;
 		}
@@ -299,7 +345,7 @@ public class XmlSerialWriter {
 			if (isClosing)
 				depth--;
 			for (int i = 0; i < depth; i++)
-				theDocument.getWriter().write(theDocument.getIndent());
+				theDocument.write(theDocument.getIndent());
 		}
 
 		/**
@@ -311,7 +357,7 @@ public class XmlSerialWriter {
 		 */
 		public Element writeIndent() throws IOException {
 			for (int i = 0; i < theDepth; i++)
-				theDocument.getWriter().write(theDocument.getIndent());
+				theDocument.write(theDocument.getIndent());
 			return this;
 		}
 
@@ -321,9 +367,14 @@ public class XmlSerialWriter {
 		}
 
 		@Override
+		public FilePosition getCurrentPosition() {
+			return theDocument.getCurrentPosition();
+		}
+
+		@Override
 		void init() throws IOException {
-			theDocument.getWriter().write('<');
-			writeXmlContent(theDocument.getWriter(), theElementName, XmlContentType.ELEMENT_NAME);
+			theDocument.write("<");
+			writeXmlContent(theElementName, XmlContentType.ELEMENT_NAME, theDocument::write);
 		}
 
 		/** @return Whether this element's header has been closed to allow for content */
@@ -359,11 +410,11 @@ public class XmlSerialWriter {
 				throw new IllegalStateException("This element has already been closed");
 			if (isHeaderClosed)
 				throw new IllegalStateException("This element's header has already been closed to allow for content");
-			theDocument.getWriter().write(' ');
-			writeXmlContent(theDocument.getWriter(), attribute, XmlContentType.ATTRIBUTE_NAME);
-			theDocument.getWriter().write("=\"");
-			writeXmlContent(theDocument.getWriter(), value, XmlContentType.ATTRIBUTE_VALUE);
-			theDocument.getWriter().write('\"');
+			theDocument.write(" ");
+			writeXmlContent(attribute, XmlContentType.ATTRIBUTE_NAME, theDocument::write);
+			theDocument.write("=\"");
+			writeXmlContent(value, XmlContentType.ATTRIBUTE_VALUE, theDocument::write);
+			theDocument.write("\"");
 			return this;
 		}
 
@@ -415,7 +466,7 @@ public class XmlSerialWriter {
 			if (isEmpty)
 				isContentOnly = true;
 			preContent(!isContentOnly);
-			writeXmlContent(theDocument.getWriter(), content, XmlContentType.CONTENT);
+			writeXmlContent(content, XmlContentType.CONTENT, theDocument::write);
 			if (!contentHasNewLines && content.indexOf('\n') >= 0)
 				contentHasNewLines = true;
 			return this;
@@ -437,13 +488,13 @@ public class XmlSerialWriter {
 			assertWritable();
 			isClosing = true;
 			if (isEmpty) {
-				theDocument.getWriter().write(" />");
+				theDocument.write(" />");
 				isHeaderClosed = true;
 			} else {
 				preContent(!isContentOnly || contentHasNewLines);
-				theDocument.getWriter().write("</");
-				writeXmlContent(theDocument.getWriter(), theElementName, XmlContentType.ELEMENT_NAME);
-				theDocument.getWriter().write(">");
+				theDocument.write("</");
+				writeXmlContent(theElementName, XmlContentType.ELEMENT_NAME, theDocument::write);
+				theDocument.write(">");
 			}
 			isClosed = true;
 		}
@@ -462,7 +513,7 @@ public class XmlSerialWriter {
 	 * @throws IOException If the content cannot be written
 	 */
 	public static void writeXmlContent(Writer writer, String content) throws IOException {
-		writeXmlContent(writer, content, XmlContentType.CONTENT);
+		writeXmlContent(content, XmlContentType.CONTENT, writer::append);
 	}
 
 	enum XmlContentType {
@@ -498,7 +549,7 @@ public class XmlSerialWriter {
 	private XmlSerialWriter() {
 	}
 
-	static void writeXmlContent(Writer writer, String content, XmlContentType type) throws IOException {
+	static void writeXmlContent(String content, XmlContentType type, ExConsumer<CharSequence, IOException> write) throws IOException {
 		switch (type) {
 		case ATTRIBUTE_NAME:
 		case ELEMENT_NAME:
@@ -518,7 +569,7 @@ public class XmlSerialWriter {
 				if (Arrays.binarySearch(ILLEGAL_ELEMENT_CHARS, content.charAt(c)) >= 0)
 					throw new IllegalArgumentException("Element/attribute names may not contain " + content.charAt(c));
 			}
-			writer.write(content);
+			write.accept(content);
 			break;
 		case ATTRIBUTE_VALUE:
 		case CONTENT:
@@ -526,13 +577,13 @@ public class XmlSerialWriter {
 			for (int c = 0; c < content.length(); c++) {
 				int idx = Arrays.binarySearch(ESCAPE_CHARS, content.charAt(c));
 				if (idx >= 0) {
-					writer.write(content, start, c);
-					writer.write(BAD_CHAR_ESCAPES[idx]);
+					write.accept(new DefaultCharSubSequence(content, start, c));
+					write.accept(BAD_CHAR_ESCAPES[idx]);
 					start = c + 1;
 				}
 			}
 			if (start < content.length())
-				writer.write(content, start, content.length() - start);
+				write.accept(new DefaultCharSubSequence(content, start, content.length()));
 			break;
 		case COMMENT:
 			boolean wasDash = false;
@@ -544,7 +595,7 @@ public class XmlSerialWriter {
 				} else if (wasDash)
 					wasDash = false;
 			}
-			writer.write(content);
+			write.accept(content);
 			break;
 		}
 	}

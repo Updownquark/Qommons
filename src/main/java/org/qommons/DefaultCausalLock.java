@@ -28,15 +28,14 @@ public class DefaultCausalLock implements CausalLock {
 
 	@Override
 	public Transaction lock(boolean write, Object cause) {
-		ProgramTracker tracker = ProgramTracker.getThreadTracker();
 		Transaction t = theLock.lock(write, cause);
-		return addCause(t, write, cause, tracker);
+		return addCause(t, write, cause);
 	}
 
-	private Transaction addCause(Transaction valueLock, boolean write, Object cause, ProgramTracker tracker) {
+	private Transaction addCause(Transaction valueLock, boolean write, Object cause) {
 		CauseSupplier tCause;
 		Transaction causeFinish;
-		if (cause == null && (!write || hasCause(tracker))) {
+		if (cause == null && (!write || hasCause())) {
 			causeFinish = null;
 			tCause = null;
 		} else if (cause instanceof Cause) {
@@ -76,12 +75,11 @@ public class DefaultCausalLock implements CausalLock {
 
 	@Override
 	public Transaction tryLock(boolean write, Object cause) {
-		ProgramTracker tracker = ProgramTracker.getThreadTracker();
 		Transaction t = theLock.tryLock(write, cause);
-		return t == null ? null : addCause(t, write, cause, tracker);
+		return t == null ? null : addCause(t, write, cause);
 	}
 
-	private boolean hasCause(ProgramTracker tracker) {
+	private boolean hasCause() {
 		boolean exception = false;
 		do {
 			try {
@@ -103,6 +101,22 @@ public class DefaultCausalLock implements CausalLock {
 	@Override
 	public Collection<Cause> getCurrentCauses() {
 		return new CurrentCauses(theTransactionCauses);
+	}
+
+	@Override
+	public Causable getRootCausable() {
+		Iterator<CauseSupplier> causeIter = theTransactionCauses.iterator();
+		while (causeIter.hasNext()) {
+			CauseSupplier tCause = causeIter.next();
+			if (tCause.isTerminated())
+				causeIter.remove();
+			else {
+				Cause cause = tCause.get();
+				if (cause instanceof Causable)
+					return (Causable) cause;
+			}
+		}
+		return null;
 	}
 
 	@Override

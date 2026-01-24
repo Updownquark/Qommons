@@ -1,6 +1,7 @@
 package org.qommons;
 
 import org.qommons.collect.NullTolerantComparator;
+import org.qommons.fn.FunctionUtils;
 
 /** An item that has a name */
 public interface Named {
@@ -32,7 +33,7 @@ public interface Named {
 	}
 
 	/** A comparator to sort named items in a way that sorts embedded numbers well */
-	public static final NullTolerantComparator<Named> DISTINCT_NUMBER_TOLERANT = new NullTolerantComparator<>(LambdaUtils
+	public static final NullTolerantComparator<Named> DISTINCT_NUMBER_TOLERANT = new NullTolerantComparator<>(FunctionUtils
 		.printableComparator((n1, n2) -> StringUtils.compareNumberTolerant(n1.getName(), n2.getName(), true, true), () -> "By Name"),
 		false);
 }

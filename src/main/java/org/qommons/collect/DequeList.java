@@ -34,7 +34,12 @@ public interface DequeList<E> extends SequencedDeque<E>, RRList<E> {
 	 * @return An immutable {@link DequeList} with the given values
 	 */
 	public static <E> DequeList<E> of(E... values) {
-		return of(Arrays.asList(values));
+		if (values == null || values.length == 0)
+			return empty();
+		else if (values.length == 1)
+			return singleton(values[0]);
+		else
+			return of(Arrays.asList(values));
 	}
 
 	/**
@@ -156,6 +161,9 @@ public interface DequeList<E> extends SequencedDeque<E>, RRList<E> {
 		}
 		return removeIf(v -> !c.contains(v));
 	}
+
+	@Override
+	void clear();
 
 	@Override
 	DequeList<E> subList(int fromIndex, int toIndex);
@@ -547,7 +555,7 @@ public interface DequeList<E> extends SequencedDeque<E>, RRList<E> {
 		}
 
 		@Override
-		public boolean offerLast(Object e) {
+		public boolean offer(Object e) {
 			return false;
 		}
 
@@ -868,7 +876,7 @@ public interface DequeList<E> extends SequencedDeque<E>, RRList<E> {
 		}
 
 		@Override
-		public boolean offerLast(E e) {
+		public boolean offer(E e) {
 			return false;
 		}
 
