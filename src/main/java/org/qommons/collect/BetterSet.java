@@ -66,6 +66,20 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 		return ValueStoredCollection.super.retainAll(c);
 	}
 
+	/**
+	 * Ensures that this set's values are all and only those in the given collection. Equivalent to calling {@link #retainAll(Collection)}
+	 * followed by {@link #addAll(Collection)}.
+	 * 
+	 * @param newValues The collection with the values for this set
+	 * @return Whether any values were removed from or added to this set for the operation
+	 */
+	default boolean replaceAll(Collection<? extends E> newValues) {
+		boolean changed = retainAll(newValues);
+		if (addAll(newValues))
+			changed = true;
+		return changed;
+	}
+
 	@Override
 	default BetterSet<E> reverse() {
 		return new ReversedBetterSet<>(this);
