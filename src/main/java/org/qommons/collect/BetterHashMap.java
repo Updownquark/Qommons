@@ -33,7 +33,7 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 
 		HashMapBuilder() {
 			theSetBuilder = BetterHashSet.build().withDescription("better-hash-map");
-			withEquivalence(Objects::hash, Objects::equals);
+			withEquivalence(Objects::hashCode, Objects::equals);
 		}
 
 		/**
