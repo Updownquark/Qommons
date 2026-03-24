@@ -12,6 +12,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
+import org.qommons.TimeUtils.DayFormat.DayComponent;
 import org.qommons.collect.BetterCollections;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.collect.QuickSet;
@@ -2015,7 +2016,7 @@ public class TimeUtils {
 	}
 
 	/** Default time evaluation options */
-	public static final TimeEvaluationOptions DEFAULT_OPTIONS = new TimeEvaluationOptions(TimeZone.getDefault(), DateElementType.Day,
+	public static final TimeEvaluationOptions DEFAULT_OPTIONS = new TimeEvaluationOptions(TimeZone.getDefault(), DateElementType.Second,
 		DateElementType.SubSecond, false, RelativeInstantEvaluation.Closest);
 
 	/** Different options that can be used when evaluating and parsing times */
@@ -3540,23 +3541,26 @@ public class TimeUtils {
 				print = true;
 			else {
 				int field;
-				print = false;
-				switch (dayFormat.components.get(i).type) {
-				case Weekday:
-				case Day:
-					field = Calendar.DAY_OF_MONTH;
-					print |= cal1.get(field) != cal2.get(field);
-					//$FALL-THROUGH$
-				case Month:
-					field = Calendar.MONTH;
-					print |= cal1.get(field) != cal2.get(field);
-					//$FALL-THROUGH$
-				case Year:
-					field = Calendar.YEAR;
-					print |= cal1.get(field) != cal2.get(field);
-					break;
-				default:
-					break;
+				DayComponent comp = dayFormat.components.get(i);
+				print = options.getMinResolution().compareTo(comp.type) <= 0;
+				if (!print) {
+					switch (comp.type) {
+					case Weekday:
+					case Day:
+						field = Calendar.DAY_OF_MONTH;
+						print |= cal1.get(field) != cal2.get(field);
+						//$FALL-THROUGH$
+					case Month:
+						field = Calendar.MONTH;
+						print |= cal1.get(field) != cal2.get(field);
+						//$FALL-THROUGH$
+					case Year:
+						field = Calendar.YEAR;
+						print |= cal1.get(field) != cal2.get(field);
+						break;
+					default:
+						break;
+					}
 				}
 			}
 			if (print) {

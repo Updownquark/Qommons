@@ -469,7 +469,7 @@ public interface Format<T> {
 					n = Double.parseDouble(str);
 					pos.setErrorIndex(-1);
 					pos.setIndex(text.length());
-				} catch (NumberFormatException e) {
+				} catch (RuntimeException e) {
 				}
 			}
 		}

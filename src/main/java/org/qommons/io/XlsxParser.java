@@ -446,14 +446,14 @@ public class XlsxParser implements TabularFileParser {
 		}
 
 		@Override
-		public int getColumnOffset(int columnIndex) {
+		public long getColumnOffset(int columnIndex) {
 			if (theLastRow == null)
 				return 0;
 			Cell cell = theLastRow.getCells().get(columnIndex);
 			if (cell.getPosition() != null)
 				return cell.getPosition().getPosition();
 			else
-				return (int) getLastLineOffset() + columnIndex;
+				return getLastLineOffset() + columnIndex;
 		}
 
 		@Override
@@ -888,7 +888,7 @@ public class XlsxParser implements TabularFileParser {
 	}
 
 	@Override
-	public int getColumnOffset(int columnIndex) {
+	public long getColumnOffset(int columnIndex) {
 		return theCurrentSheet == null ? 0 : theCurrentSheet.getColumnOffset(columnIndex);
 	}
 

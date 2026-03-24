@@ -64,6 +64,14 @@ public interface JsonSerialWriter
 	public JsonSerialWriter writeString(String value) throws IOException;
 
 	/**
+	 * Creates a new string whose content can then be written.
+	 *
+	 * @return A writer that can be used to write the content of the string
+	 * @throws IOException If an error occurs writing to the underlying stream
+	 */
+	public java.io.Writer writeStringAsWriter() throws IOException;
+
+	/**
 	 * Writes a number value
 	 * 
 	 * @param value The number to write

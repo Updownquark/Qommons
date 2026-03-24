@@ -3,7 +3,6 @@ package org.qommons;
 import java.lang.ref.WeakReference;
 import java.time.Duration;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 import org.qommons.collect.ListenerList;
 import org.qommons.ex.ExSupplier;
@@ -24,14 +23,6 @@ import org.qommons.threading.QommonsTimer;
  * @param <X> The type of exception that may be thrown when creating the resource
  */
 public class DynamicCache<T, X extends Throwable> {
-	/**
-	 * A resource retrieved from a {@link DynamicCache}
-	 * 
-	 * @param <T> The type of the resource
-	 */
-	public interface Resource<T> extends Supplier<T>, Transaction {
-	}
-
 	private final ExSupplier<T, X> theCreator;
 	private final Consumer<? super T> theDestroyer;
 	private final int thePersistentCacheLimit;

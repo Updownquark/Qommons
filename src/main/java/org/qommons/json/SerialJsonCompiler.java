@@ -1,6 +1,9 @@
 /* SerialJsonCompiler.java Created Aug 20, 2010 by Andrew Butler, PSL */
 package org.qommons.json;
 
+import java.io.IOException;
+import java.io.StringWriter;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -55,6 +58,33 @@ public class SerialJsonCompiler implements JsonSerialWriter {
 	public JsonSerialWriter writeString(String value) {
 		push(value);
 		return this;
+	}
+
+	@Override
+	public Writer writeStringAsWriter() throws IOException {
+		StringWriter string = new StringWriter();
+		return new Writer() {
+			private boolean isWritten;
+
+			@Override
+			public void write(char[] cbuf, int off, int len) throws IOException {
+				if (isWritten)
+					throw new IOException("String is already written to JSON");
+				string.write(cbuf, off, len);
+			}
+
+			@Override
+			public void flush() throws IOException {
+			}
+
+			@Override
+			public void close() throws IOException {
+				if (!isWritten) {
+					isWritten = true;
+					SerialJsonCompiler.this.writeString(string.toString());
+				}
+			}
+		};
 	}
 
 	@Override

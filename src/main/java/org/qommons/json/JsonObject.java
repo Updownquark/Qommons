@@ -10,7 +10,7 @@ public class JsonObject {
 	/**
 	 * A placeholder key in an object for a property whose value is <code>null</code>. This is semantically different than a missing key.
 	 */
-	private static final Object NULL = new Object() {
+	public static final Object NULL = new Object() {
 		@Override
 		public String toString() {
 			return "null";
@@ -30,6 +30,22 @@ public class JsonObject {
 	 */
 	public boolean hasProperty(String key) {
 		return theValues.containsKey(key);
+	}
+
+	/**
+	 * 
+	 * @param key The key to get the value of
+	 * @return
+	 *         <ul>
+	 *         <li>The value stored in this object by the given key if it has been added with {@link #with(String, Object)} and not
+	 *         {@link #remove(String) removed}</li>
+	 *         <li>{@link #NULL} if null has been added for the key with {@link #with(String, Object)} and not {@link #remove(String)
+	 *         removed}</li>
+	 *         <li><code>null</code> if no value is present in this object for the key</li>
+	 *         </ul>
+	 */
+	public Object getNullable(String key) {
+		return theValues.get(key);
 	}
 
 	/**

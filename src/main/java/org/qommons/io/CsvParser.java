@@ -8,7 +8,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 
 import org.qommons.ArgumentParsing;
-import org.qommons.IntList;
+import org.qommons.LongList;
 import org.qommons.collect.QuickSet;
 import org.qommons.collect.QuickSet.QuickMap;
 
@@ -55,7 +55,7 @@ public class CsvParser implements TabularFileParser {
 	private int theEntryNumber;
 	private int theLastLineNumber;
 	private long theLastLineOffset;
-	private final IntList theLastLineColumnOffsets;
+	private final LongList theLastLineColumnOffsets;
 
 	private CharsetEncoder theCharSet;
 	private StringBuilder theCurrentLine;
@@ -75,7 +75,7 @@ public class CsvParser implements TabularFileParser {
 		theTabColumnOffset = 1;
 		theEntryNumber = -1;
 		theParseState = new CsvParseState();
-		theLastLineColumnOffsets = new IntList();
+		theLastLineColumnOffsets = new LongList();
 	}
 
 	/** @return The delimiter character used to parse CSV */
@@ -185,10 +185,10 @@ public class CsvParser implements TabularFileParser {
 			}
 
 			onColumn.accept(value);
-			theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theLastLineOffset));
+			theLastLineColumnOffsets.add(theParseState.getValueOffset() - theLastLineOffset);
 			do {
 				onColumn.accept(theParseState.parseColumn());
-				theLastLineColumnOffsets.add((int) (theParseState.getValueOffset() - theLastLineOffset));
+				theLastLineColumnOffsets.add(theParseState.getValueOffset() - theLastLineOffset);
 			} while (theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END);
 			theEntryNumber++;
 			return true;
@@ -256,7 +256,7 @@ public class CsvParser implements TabularFileParser {
 	}
 
 	@Override
-	public int getColumnOffset(int columnIndex) {
+	public long getColumnOffset(int columnIndex) {
 		return theLastLineColumnOffsets.get(columnIndex);
 	}
 

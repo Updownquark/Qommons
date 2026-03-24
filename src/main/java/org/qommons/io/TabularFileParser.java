@@ -110,7 +110,7 @@ public interface TabularFileParser extends AutoCloseable {
 	 * @param columnIndex The index of the column in the last line parsed
 	 * @return The offset of the specified column of the previous line from the beginning of the file
 	 */
-	int getColumnOffset(int columnIndex);
+	long getColumnOffset(int columnIndex);
 
 	/**
 	 * @param columnIndex The index of the column in the last line parsed
@@ -118,8 +118,8 @@ public interface TabularFileParser extends AutoCloseable {
 	 */
 	default FilePosition getColumnPosition(int columnIndex) {
 		int lineOffset = (int) getLastLineOffset();
-		int columnOffset = getColumnOffset(columnIndex);
-		return new FilePosition(columnOffset, getLastLineNumber(), columnOffset - lineOffset);
+		long columnOffset = getColumnOffset(columnIndex);
+		return new FilePosition((int) columnOffset, getLastLineNumber(), (int) (columnOffset - lineOffset));
 	}
 
 	/**
@@ -149,9 +149,9 @@ public interface TabularFileParser extends AutoCloseable {
 	 * @throws TextParseException always
 	 */
 	default void throwParseException(int columnIndex, int errorOffset, String message) throws TextParseException {
-		int colOffset = getColumnOffset(columnIndex);
-		throw new TextParseException(message, (int) getLastLineOffset() + colOffset + errorOffset, getLastLineNumber(),
-			colOffset + errorOffset);
+		long colOffset = getColumnOffset(columnIndex);
+		throw new TextParseException(message, (int) (getLastLineOffset() + colOffset + errorOffset), getLastLineNumber(),
+			(int) (colOffset + errorOffset));
 	}
 
 	/**
@@ -166,8 +166,8 @@ public interface TabularFileParser extends AutoCloseable {
 	 * @throws TextParseException always
 	 */
 	default void throwParseException(int columnIndex, int errorOffset, String message, Throwable cause) throws TextParseException {
-		int colOffset = getColumnOffset(columnIndex);
-		throw new TextParseException(message, colOffset + errorOffset, getLastLineNumber(), columnIndex, cause);
+		long colOffset = getColumnOffset(columnIndex);
+		throw new TextParseException(message, (int) (colOffset + errorOffset), getLastLineNumber(), columnIndex, cause);
 	}
 
 	@Override

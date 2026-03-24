@@ -1,5 +1,6 @@
 package org.qommons.threading;
 
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -8,7 +9,7 @@ import java.util.function.Supplier;
  * @param <T> The type of value to supply
  */
 public final class Singleton<T> implements Supplier<T> {
-	private Supplier<? extends T> theCreator;
+	private volatile Supplier<? extends T> theCreator;
 	private volatile T theValue;
 
 	private Singleton(Supplier<? extends T> creator) {
@@ -18,7 +19,7 @@ public final class Singleton<T> implements Supplier<T> {
 	@Override
 	public T get() {
 		T value = theValue;
-		if (value == null) {
+		if (value == null && theCreator != null) {
 			synchronized (this) {
 				value = theValue;
 				if (value == null) {
@@ -29,6 +30,28 @@ public final class Singleton<T> implements Supplier<T> {
 			}
 		}
 		return value;
+	}
+
+	/**
+	 * Performs an operation on this singleton's value if it has been instantiated via a call to {@link #get()}. This does nothing if the
+	 * value has not been instantiated.
+	 * 
+	 * @param operation The operation to perform on the value
+	 * @return Whether the value was instantiated, and therefore whether the operation was performed on it
+	 */
+	public boolean doIfPresent(Consumer<? super T> operation) {
+		T value = theValue;
+		boolean created;
+		if (value == null && theCreator != null) {
+			synchronized (this) {
+				value = theValue;
+				created = theCreator == null;
+			}
+		} else
+			created = true;
+		if (created)
+			operation.accept(value);
+		return created;
 	}
 
 	@Override

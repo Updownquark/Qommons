@@ -18,6 +18,41 @@ public class CollectionUtils {
 	private CollectionUtils() {}
 
 	/**
+	 * Tests whether 2 collections have the same values without regard to order
+	 * 
+	 * @param <T> The type of the first collection
+	 * @param <V> The type of the second collection
+	 * @param c1 The first collection
+	 * @param c2 The second collection
+	 * @param equals The equality test between elements of the 2 collections
+	 * @return Whether the 2 collections contained the same number of elements the same number of times
+	 */
+	public static <T, V> boolean equalsIgnoreOrder(List<? extends T> c1, Collection<? extends V> c2,
+		BiPredicate<? super T, ? super V> equals) {
+		if (c1 == null || c1.isEmpty())
+			return c2 == null || c2.isEmpty();
+		else if (c2 == null)
+			return false;
+		else if (c1.size() != c2.size())
+			return false;
+
+		BitSet found = new BitSet(c1.size());
+		for (V c2Value : c2) {
+			boolean valueFound = false;
+			for (int i = found.nextClearBit(0); !valueFound && i < c1.size(); i = found.nextClearBit(i + 1)) {
+				if (equals.test(c1.get(i), c2Value)) {
+					valueFound = true;
+					found.set(i);
+				}
+			}
+			if (!valueFound) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * Represents an element to be synchronized from one list to another
 	 * 
 	 * @param <L> The type of the list to adjust

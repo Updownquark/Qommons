@@ -502,7 +502,7 @@ public class SAJParser {
 			for(int i = 0; i < len; i++) {
 				int read = read();
 				if(read < 0)
-					return i;
+					return i > 0 ? i : -1;
 				cbuf[off + i] = (char) read;
 			}
 			return len;

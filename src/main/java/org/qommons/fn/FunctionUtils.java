@@ -219,6 +219,28 @@ public class FunctionUtils {
 		}
 	};
 
+	private static final BinaryOperator<Comparable<?>> MIN = printableBiOperator((v1, v2) -> {
+		if (v1 == null)
+			return v2;
+		else if (v2 == null)
+			return v1;
+		else if (((Comparable<Object>) v1).compareTo(v2) <= 0)
+			return v1;
+		else
+			return v2;
+	}, () -> "MIN", "MIN(Comparable)");
+
+	private static final BinaryOperator<Comparable<?>> MAX = printableBiOperator((v1, v2) -> {
+		if (v1 == null)
+			return v2;
+		else if (v2 == null)
+			return v1;
+		else if (((Comparable<Object>) v1).compareTo(v2) >= 0)
+			return v1;
+		else
+			return v2;
+	}, () -> "MAX", "MAX(Comparable)");
+
 	/**
 	 * @param o The lambda to check
 	 * @return Whether the given lambda has been configured to print
@@ -893,6 +915,81 @@ public class FunctionUtils {
 	}
 
 	/**
+	 * @param <T> The type of the operator
+	 * @param function The operator
+	 * @param print The printed representation of the operator
+	 * @return The printable operator
+	 */
+	public static <T> BinaryOperator<T> printableBiOperator(BinaryOperator<T> function, Supplier<String> print) {
+		return printableBiOperator(function, print, null);
+	}
+
+	/**
+	 * @param <T> The type of the operator
+	 * @param function The operator
+	 * @param print The printed representation of the operator
+	 * @param identifier The identifier for the operator
+	 * @return The printable operator
+	 */
+	public static <T> BinaryOperator<T> printableBiOperator(BinaryOperator<T> function, Supplier<String> print, Object identifier) {
+		if (function == null)
+			return null;
+		return new PrintableBiOperator<>(function, print, identifier);
+	}
+
+	/**
+	 * @param <T> The type of the comparable
+	 * @return An operator that takes the minimum of two comparable values
+	 */
+	public static <T extends Comparable<? super T>> BinaryOperator<T> MIN() {
+		return (BinaryOperator<T>) MAX;
+	}
+
+	/**
+	 * @param <T> The type of the comparable
+	 * @return An operator that takes the maximum of two comparable values
+	 */
+	public static <T extends Comparable<? super T>> BinaryOperator<T> MAX() {
+		return (BinaryOperator<T>) MAX;
+	}
+
+	/**
+	 * @param <T> The type to compare
+	 * @param compare The comparison implementation
+	 * @return An operator that takes the minimum of two values
+	 */
+	public static <T> BinaryOperator<T> MIN(Comparator<? super T> compare) {
+		return printableBiOperator((v1, v2) -> {
+			if (v1 == null)
+				return v2;
+			else if (v2 == null)
+				return v1;
+			else if (compare.compare(v1, v2) <= 0)
+				return v1;
+			else
+				return v2;
+		}, () -> "MIN");
+	}
+
+	/**
+	 * @param <T> The type to compare
+	 * @param compare The comparison implementation
+	 * @return An operator that takes the maximum of two values
+	 */
+	public static <T> BinaryOperator<T> MAX(Comparator<? super T> compare) {
+		return printableBiOperator((v1, v2) -> {
+			if (v1 == null)
+				return v2;
+			else if (v2 == null)
+				return v1;
+			else if (compare.compare(v1, v2) >= 0)
+				return v1;
+			else
+				return v2;
+		}, () -> "MIN");
+	}
+
+	/**
 	 * @param <T> The first argument type of the function
 	 * @param <U> The second argument type of the function
 	 * @param <V> The third argument type of the function
@@ -1529,6 +1626,30 @@ public class FunctionUtils {
 		@Override
 		public boolean test(T t, U u) {
 			return theLambda.test(t, u);
+		}
+
+		@Override
+		public boolean isTrivial() {
+			return false;
+		}
+	}
+
+	static class PrintableBiOperator<T> extends PrintableLambda<BinaryOperator<T>> implements BinaryOperator<T> {
+		PrintableBiOperator(BinaryOperator<T> function, String print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableBiOperator(BinaryOperator<T> function, Supplier<String> print, Object identifier) {
+			super(function, print, identifier);
+		}
+
+		PrintableBiOperator(BinaryOperator<T> function, Supplier<String> print) {
+			super(function, print);
+		}
+
+		@Override
+		public T apply(T t, T u) {
+			return theLambda.apply(t, u);
 		}
 
 		@Override

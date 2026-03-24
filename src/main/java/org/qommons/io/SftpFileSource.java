@@ -10,8 +10,8 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import org.qommons.DynamicCache;
-import org.qommons.DynamicCache.Resource;
 import org.qommons.QommonsUtils;
+import org.qommons.Resource;
 import org.qommons.ex.CheckedExceptionWrapper;
 import org.qommons.ex.ExBiConsumer;
 import org.qommons.io.BetterFile.CheckSumType;

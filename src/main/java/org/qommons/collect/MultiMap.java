@@ -72,6 +72,21 @@ public interface MultiMap<K, V> {
 	boolean addAll(K key, Collection<? extends V> values);
 
 	/**
+	 * Adds the entire content of another multi-map into this multi-map
+	 * 
+	 * @param map The multi-map whose content to add to this multi-map
+	 * @return Whether this map was changed as a result of the call
+	 */
+	default boolean addAll(MultiMap<? extends K, ? extends V> map) {
+		boolean added = false;
+		for (MultiEntry<? extends K, ? extends V> entry : map.entrySet()) {
+			if (addAll(entry.getKey(), entry.getValues()))
+				added = true;
+		}
+		return added;
+	}
+
+	/**
 	 * @param values The map whose key-value pairs to add into this map
 	 * @return Whether any entries were added to this map
 	 */

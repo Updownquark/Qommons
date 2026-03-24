@@ -1107,6 +1107,61 @@ public class StringUtils {
 	}
 
 	/**
+	 * Prints some content into a StringBuilder with a constant length. If the content is longer than the given length, only the first
+	 * <code>length</code> characters will be printed. If the content is shorter, it will be padded with spaces.
+	 * 
+	 * @param into The StringBuilder to print the content into
+	 * @param content The content to print
+	 * @param length The number of characters to append to the StringBuilder
+	 * @param alignment The alignment for the content if it is shorter than the given length:
+	 *        <ul>
+	 *        <li>&lt;0 to print the content before padding spaces</li>
+	 *        <li>0 to print the content in the middle of the padding spaces</li>
+	 *        <li>&gt;0 to print the content after padding spaces</li>
+	 *        </ul>
+	 * @return The StringBuilder
+	 */
+	public static StringBuilder appendConstantLength(StringBuilder into, CharSequence content, int length, int alignment) {
+		if (into == null)
+			into = new StringBuilder(length);
+		else
+			into.ensureCapacity(into.length() + length);
+		int contentLen, leftSpaces, rightSpaces;
+		boolean ellipsis;
+		if (content.length() > length) {
+			contentLen = length - 1;
+			ellipsis = true;
+			leftSpaces = rightSpaces = 0;
+		} else if (content.length() == length) {
+			contentLen = length - 1;
+			ellipsis = false;
+			leftSpaces = rightSpaces = 0;
+		} else {
+			ellipsis = false;
+			contentLen = content.length();
+			if (alignment < 0) {
+				leftSpaces = 0;
+				rightSpaces = length - contentLen;
+			} else if (alignment > 0) {
+				leftSpaces = length - contentLen;
+				rightSpaces = 0;
+			} else {
+				leftSpaces = (length - contentLen) / 2;
+				rightSpaces = length - contentLen - leftSpaces;
+			}
+		}
+		for (int i = 0; i < leftSpaces; i++)
+			into.append(' ');
+		for (int i = 0; i < contentLen; i++)
+			into.append(content.charAt(i));
+		if (ellipsis)
+			into.append('\u2026');
+		for (int i = 0; i < rightSpaces; i++)
+			into.append(' ');
+		return into;
+	}
+
+	/**
 	 * Just adds the specified number of tabs to the sequence
 	 * 
 	 * @param str The string builder to append to
@@ -1510,7 +1565,8 @@ public class StringUtils {
 		}
 
 		@Override
-		public void close() {}
+		public void close() {
+		}
 	}
 
 	/**
@@ -1602,6 +1658,20 @@ public class StringUtils {
 		<B extends BinaryAccumulator> B parse(Reader in, B out, LongConsumer byteCount) throws IOException;
 
 		/**
+		 * @param in The reader to parse with this encoding
+		 * @return The decoded binary stream
+		 */
+		InputStream parseAsStream(Reader in);
+
+		/**
+		 * @param str The character sequence to parse with this encoding
+		 * @return The decoded binary data as a stream
+		 */
+		default InputStream parseAsStream(CharSequence str) {
+			return parseAsStream(new CharSequenceReader<>(str));
+		}
+
+		/**
 		 * @param <B> The type of the binary data accumulator to accumulate the data into
 		 * @param str The character sequence to parse
 		 * @param out The binary data accumulator to accumulate the data into
@@ -1679,6 +1749,17 @@ public class StringUtils {
 		}
 
 		/**
+		 * @param bytes The int to encode as 4 bytes
+		 * @return The formatted data
+		 */
+		default String format(int bytes) {
+			byte[] intBytes = new byte[4];
+			for (int i = 0; i < intBytes.length; i++)
+				intBytes[i] = (byte) ((bytes >>> (i * 8)) & 0xff);
+			return format(intBytes);
+		}
+
+		/**
 		 * @param bytes The long to encode as 8 bytes
 		 * @return The formatted data
 		 */
@@ -1686,7 +1767,7 @@ public class StringUtils {
 			byte[] longBytes = new byte[8];
 			for (int i = 0; i < longBytes.length; i++)
 				longBytes[i] = (byte) ((bytes >>> (i * 8)) & 0xff);
-			return format(bytes);
+			return format(longBytes);
 		}
 	}
 
@@ -1756,6 +1837,84 @@ public class StringUtils {
 				byteCount.accept(count);
 			return out;
 		}
+
+		@Override
+		public InputStream parseAsStream(Reader in) {
+			return new HexReaderStream(in);
+		}
+
+		static class HexReaderStream extends InputStream {
+			private final Reader theHexData;
+
+			HexReaderStream(Reader hexData) {
+				theHexData = hexData;
+			}
+
+			@Override
+			public int read() throws IOException {
+				int ch = theHexData.read();
+				if (ch < 0)
+					return ch;
+				else if (ch >= HEX_DIGIT_VALUES.length)
+					throw new IOException("HEX encoding: '" + (char) ch + "' is not a valid HEX digit");
+				int digit1 = HEX_DIGIT_VALUES[ch];
+				if (digit1 < 0)
+					throw new IOException("HEX encoding: '" + (char) ch + "' is not a valid HEX digit");
+
+				digit1 <<= 4;
+				ch = theHexData.read();
+				if (ch < 0) { // Should have been padded, but we'll tolerate it
+					throw new IOException("HEX encoding: unexpected termination of HEX stream on an odd digit");
+				} else if (ch >= HEX_DIGIT_VALUES.length)
+					throw new IOException("HEX encoding: '" + (char) ch + "' is not a valid HEX digit");
+				int digit2 = HEX_DIGIT_VALUES[ch];
+				if (digit2 < 0)
+					throw new IOException("HEX encoding: '" + (char) ch + "' is not a valid HEX digit");
+				return digit1 | digit2;
+			}
+
+			@Override
+			public long skip(long n) throws IOException {
+				long skipped = theHexData.skip(n * 2);
+				return skipped / 2;
+			}
+
+			@Override
+			public int available() throws IOException {
+				// The Reader interface doesn't allow us to support this fully
+				if (theHexData.ready())
+					return 1;
+				else
+					return 0;
+			}
+
+			@Override
+			public void close() throws IOException {
+				theHexData.close();
+			}
+
+			@Override
+			public synchronized void mark(int readlimit) {
+				int readerRL = readlimit * 2;
+				if (readerRL <= readlimit)
+					readerRL = Integer.MAX_VALUE;
+				try {
+					theHexData.mark(readerRL);
+				} catch (IOException e) { // Can't believe the Reader and InputStream interfaces are so different
+					throw new IllegalStateException("Mark failed", e);
+				}
+			}
+
+			@Override
+			public synchronized void reset() throws IOException {
+				theHexData.reset();
+			}
+
+			@Override
+			public boolean markSupported() {
+				return theHexData.markSupported();
+			}
+		}
 	}
 
 	/**
@@ -1782,23 +1941,30 @@ public class StringUtils {
 	public static final char A_MINUS_0 = 'A' - '0';
 	/** <code>'a' - 'A'</code> */
 	public static final char a_MINUS_A = 'a' - 'A';
+	private static int[] HEX_DIGIT_VALUES = new int['f' + 1];
+
+	static {
+		Arrays.fill(HEX_DIGIT_VALUES, -1);
+		for (int i = 0; i < 10; i++)
+			HEX_DIGIT_VALUES['0' + i] = i;
+		for (int i = 10; i < 16; i++) {
+			HEX_DIGIT_VALUES['a' + i - 10] = i;
+			HEX_DIGIT_VALUES['A' + i - 10] = i;
+		}
+	}
 
 	/**
 	 * @param ch The hex character to parse
 	 * @return The digit (0-15) represented by the character
 	 */
 	public static int hexDigit(char ch) {
-		int dig = ch - '0';
-		if (dig < 0)
+		int index = ch;
+		if (index >= HEX_DIGIT_VALUES.length)
 			throw new IllegalArgumentException("Character " + ch + " (decimal " + (int) ch + ") is not a hex digit");
-		else if (dig < 10)
-			return dig;
-		dig -= A_MINUS_0;
-		if (dig >= 6)
-			dig -= a_MINUS_A;
-		if (dig < 0 || dig >= 6)
+		int value = HEX_DIGIT_VALUES[index];
+		if (value < 0)
 			throw new IllegalArgumentException("Character " + ch + " (decimal " + (int) ch + ") is not a hex digit");
-		return 10 + dig;
+		return value;
 	}
 
 	/**
@@ -1813,9 +1979,6 @@ public class StringUtils {
 	public static final String BASE_64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 	/** The padding character to use on the end of base-64 encoded sequences so that there are a multiple of 3 characters */
 	public static final char BASE_64_PADDING = '=';
-	private static final int ZERO_POSITION_64 = 52;
-	private static final int PLUS_POSITION_64 = ZERO_POSITION_64 + 10;
-	private static final int ZERO_MINUS_PLUS = '0' - '+';
 
 	/** Encodes data to and from base-64 sequences */
 	public static class Base64Encoder implements BinaryDataEncoder {
@@ -1946,6 +2109,118 @@ public class StringUtils {
 				byteCount.accept(count);
 			return out;
 		}
+
+		@Override
+		public InputStream parseAsStream(Reader in) {
+			return new Base64ReaderStream(in);
+		}
+
+		static class Base64ReaderStream extends InputStream {
+			private final Reader theBase64Data;
+			/**
+			 * Base-64 encoding can store 3 bytes in 4 characters. This means that input characters may contain bits from multiple output
+			 * bytes. So we have to keep state in between reads. The easiest way to do this is to read 4 byte chunks as needed and just
+			 * return the leftover bytes as requested.
+			 */
+			private int theLeftoverByte1;
+			private int theLeftoverByte2;
+
+			Base64ReaderStream(Reader base64Data) {
+				theBase64Data = base64Data;
+				theLeftoverByte1 = -1;
+				theLeftoverByte2 = -1;
+			}
+
+			@Override
+			public int read() throws IOException {
+				int read;
+				if (theLeftoverByte1 >= 0) {
+					read = theLeftoverByte1;
+					theLeftoverByte1 = -1;
+					return read;
+				} else if (theLeftoverByte2 >= 0) {
+					read = theLeftoverByte2;
+					theLeftoverByte2 = -1;
+					return read;
+				}
+				int ch, digit;
+				ch = theBase64Data.read();
+				if (ch < 0)
+					return -1;
+				try {
+					digit = BASE_64_DIGITS[ch];
+				} catch (NumberFormatException e) {
+					throw new IOException("Base64 encoding: '" + (char) ch + "' is not a valid base 64 digit");
+				}
+				if (digit < 0) { // Padding characters are not valid here
+					throw new IOException("Base64 encoding: '" + (char) ch + "' is not a valid base 64 digit");
+				}
+				read = digit;
+
+				ch = theBase64Data.read();
+				if (ch < 0)
+					throw new IOException("Base64 encoding: unexpected stream termination--a multiple of 4 digits is required");
+				try {
+					digit = BASE_64_DIGITS[ch];
+				} catch (NumberFormatException e) {
+					throw new IOException("Base64 encoding: '" + (char) ch + "' is not a valid base 64 digit");
+				}
+				if (digit < 0) { // Padding characters are not valid here
+					throw new IOException("Base64 encoding: '" + (char) ch + "' is not a valid base 64 digit");
+				}
+				read = (read << 6) | digit;
+
+				ch = theBase64Data.read();
+				if (ch < 0)
+					throw new IOException("Base64 encoding: unexpected stream termination--a multiple of 4 digits is required");
+				try {
+					digit = BASE_64_DIGITS[ch];
+				} catch (NumberFormatException e) {
+					throw new IOException("Base64 encoding: '" + (char) ch + "' is not a valid base 64 digit");
+				}
+				if (digit < 0) {
+					if (digit == -1) { // Padding
+						ch = theBase64Data.read();
+						if (ch < 0) {
+							throw new IOException("Additional padding character expected");
+						} else if (ch != BASE_64_PADDING)
+							throw new IOException("Padding character found mid-stream");
+						else if (theBase64Data.read() >= 0)
+							throw new IOException("Padding characters found before stream termination");
+						// 2 padding characters means 1 remainder byte
+						// We've accumulated 12 bytes of digit data, but only the highest 8 of them are significant
+						return read >> 4;
+					} else
+						throw new IOException("Base64 encoding: '" + (char) ch + "' is not a valid base 64 digit");
+				}
+				read = (read << 6) | digit;
+
+				ch = theBase64Data.read();
+				if (ch < 0)
+					throw new IOException("Base64 encoding: unexpected stream termination--a multiple of 4 digits is required");
+				try {
+					digit = BASE_64_DIGITS[ch];
+				} catch (NumberFormatException e) {
+					throw new IOException("Base64 encoding: '" + (char) ch + "' is not a valid base 64 digit");
+				}
+				if (digit < 0) {
+					if (digit == -1) { // Padding
+						if (theBase64Data.read() >= 0)
+							throw new IOException("Padding characters found before stream termination");
+						// 1 padding character means 2 remainder bytes
+						// We've accumulated 18 bytes of digit data, but only the highest 16 of them are significant
+						theLeftoverByte2 = (read >> 2) & 0xff;
+						return read >> 10;
+					}
+					throw new IOException("Base64 encoding: '" + (char) ch + "' is not a valid base 64 digit");
+				}
+				read = (read << 6) | digit;
+				theLeftoverByte2 = read & 0xff;
+				read >>= 8;
+				theLeftoverByte1 = read & 0xff;
+				return read >> 8;
+			}
+		}
 	}
 
 	/** @return An encoder that encodes and decodes data to and from 64-base sequences */
@@ -1953,32 +2228,26 @@ public class StringUtils {
 		return new Base64Encoder();
 	}
 
+	private static final int[] BASE_64_DIGITS = new int['z' + 1];
+
+	static {
+		Arrays.fill(BASE_64_DIGITS, -2);
+		for (int i = 0; i < BASE_64_CHARS.length(); i++)
+			BASE_64_DIGITS[BASE_64_CHARS.charAt(i)] = i;
+		BASE_64_DIGITS[BASE_64_PADDING] = -1;
+	}
+
 	/**
 	 * @param ch The 64-base character in a sequence
 	 * @return The digit (0-63) represented by the character
 	 */
 	public static int base64Digit(char ch) {
-		if (ch == '=')
-			return 0; // Padding
-		int dig = ch - '+';
-		if (dig < 0)
+		if (ch > BASE_64_DIGITS.length)
 			throw new IllegalArgumentException("Character " + ch + " (decimal " + (int) ch + ") is not a base-64 digit");
-		if (dig < 2)
-			return PLUS_POSITION_64 + dig;
-		dig -= ZERO_MINUS_PLUS;
-		if (dig < 0)
+		int digit = BASE_64_DIGITS[ch];
+		if (digit < 0)
 			throw new IllegalArgumentException("Character " + ch + " (decimal " + (int) ch + ") is not a base-64 digit");
-		if (dig < 10)
-			return ZERO_POSITION_64 + dig;
-		dig -= A_MINUS_0;
-		if (dig < 0)
-			throw new IllegalArgumentException("Character " + ch + " (decimal " + (int) ch + ") is not a base-64 digit");
-		if (dig < 26)
-			return dig;
-		dig -= a_MINUS_A;
-		if (dig < 0 || dig >= 26)
-			throw new IllegalArgumentException("Character " + ch + " (decimal " + (int) ch + ") is not a base-64 digit");
-		return 26 + dig;
+		return digit;
 	}
 
 	private static boolean isPadding(int base64Byte) {

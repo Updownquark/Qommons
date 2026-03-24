@@ -671,6 +671,16 @@ public class Range<C> implements Comparable<C> {
 		return theUpperBound;
 	}
 
+	/** @return The lower end point of this range */
+	public C lowerEndpoint() {
+		return theLowerBound.theValue;
+	}
+
+	/** @return The upper end point of this range */
+	public C upperEndpoint() {
+		return theUpperBound.theValue;
+	}
+
 	/**
 	 * @param value The value to compare with this range
 	 * @return

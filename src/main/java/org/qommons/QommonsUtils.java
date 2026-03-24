@@ -1793,6 +1793,22 @@ public class QommonsUtils {
 		}
 	}
 
+	/**
+	 * Just a simpler sleep method that handles interruptions without exception
+	 * 
+	 * @param time The number of milliseconds to sleep
+	 * @return Whether the sleep was interrupted
+	 */
+	public static boolean sleep(long time) {
+		try {
+			Thread.sleep(time);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return true;
+		}
+		return false;
+	}
+
 	private static final long SIGN_MASK = 1L << 63;
 	private static final long UNSIGNED_MASK = ~SIGN_MASK;
 
