@@ -1188,7 +1188,62 @@ public class StringUtils {
 		return str;
 	}
 
-	/** Recognized roman numeral digits */
+	/**
+	 * Converts newlines, tabs, and multiple spaces into text that will render correctly in HTML. If none of these character sequences are
+	 * present in the string, the string itself will be returned.
+	 * 
+	 * @param plainText The text to convert to HTML
+	 * @return The HTML-ified text
+	 */
+	public static String htmlIfy(String plainText) {
+		StringBuilder htmlStr = null;
+		boolean wasSpace = false, wasMultiSpace = true;
+		for (int c = 0; c < plainText.length(); c++) {
+			char ch = plainText.charAt(c);
+			switch (ch) {
+			case '\n':
+				if (htmlStr == null) {
+					htmlStr = new StringBuilder("<html>");
+					htmlStr.append(plainText, 0, c);
+				}
+				htmlStr.append("<br>");
+				break;
+			case '\t':
+				if (htmlStr == null) {
+					htmlStr = new StringBuilder("<html>");
+					htmlStr.append(plainText, 0, c);
+				}
+				htmlStr.append("&nbsp;&nbsp;&nbsp;&nbsp;");
+				break;
+			case ' ':
+				// htmlStr will always be non-null if wasMultiSpace is true; just suppressing a warning
+				if (wasMultiSpace && htmlStr != null)
+					htmlStr.append("&nbsp;");
+				else if (wasSpace) {
+					if (htmlStr == null) {
+						htmlStr = new StringBuilder("<html>");
+						htmlStr.append(plainText, 0, c);
+					}
+					htmlStr.append("&nbsp;");
+					wasMultiSpace = true;
+				} else
+					wasSpace = true;
+				break;
+			default:
+				if (htmlStr != null)
+					htmlStr.append(ch);
+				break;
+			}
+			if (ch != ' ')
+				wasSpace = wasMultiSpace = false;
+		}
+		if (htmlStr == null)
+			return plainText;
+		else
+			return htmlStr.append("</html>").toString();
+	}
+
+	/** Recognized Roman numeral digits */
 	public static final String ROMAN_NUMERALS = "IVXLCDM";
 
 	static {
@@ -1203,7 +1258,7 @@ public class StringUtils {
 	 */
 	public static String toRomanNumeral(int number) {
 		if (number <= 0)
-			return "N*";
+			return "N*"; // Roman numerals don't have zero or negative numbers
 		StringBuilder str = new StringBuilder();
 		int max = 10;
 		for (int i = 3; i < ROMAN_NUMERALS.length(); i += 3)
@@ -1223,37 +1278,7 @@ public class StringUtils {
 			char five = ROMAN_NUMERALS.charAt(fiveIdx);
 			char ten = ROMAN_NUMERALS.charAt(tenIdx);
 			int dec = number / max;
-			switch (dec) {
-			case 1:
-				str.append(one);
-				break;
-			case 2:
-				str.append(one).append(one);
-				break;
-			case 3:
-				str.append(one).append(one).append(one);
-				break;
-			case 4:
-				str.append(one).append(five);
-				break;
-			case 5:
-				str.append(five);
-				break;
-			case 6:
-				str.append(five).append(one);
-				break;
-			case 7:
-				str.append(five).append(one).append(one);
-				break;
-			case 8:
-				str.append(five).append(one).append(one).append(one);
-				break;
-			case 9:
-				str.append(one).append(ten);
-				break;
-			default:
-				break;
-			}
+			appendRomanNumeralDigit(str, dec, ten, five, one);
 
 			number -= dec * max;
 			max /= 10;
@@ -1262,6 +1287,40 @@ public class StringUtils {
 			oneIdx = tenIdx - 2;
 		}
 		return str.toString();
+	}
+
+	private static void appendRomanNumeralDigit(StringBuilder str, int digit, char ten, char five, char one) {
+		switch (digit) {
+		case 1:
+			str.append(one);
+			break;
+		case 2:
+			str.append(one).append(one);
+			break;
+		case 3:
+			str.append(one).append(one).append(one);
+			break;
+		case 4:
+			str.append(one).append(five);
+			break;
+		case 5:
+			str.append(five);
+			break;
+		case 6:
+			str.append(five).append(one);
+			break;
+		case 7:
+			str.append(five).append(one).append(one);
+			break;
+		case 8:
+			str.append(five).append(one).append(one).append(one);
+			break;
+		case 9:
+			str.append(one).append(ten);
+			break;
+		default:
+			break;
+		}
 	}
 
 	/** A source of binary data */
