@@ -86,10 +86,11 @@ public interface ExFunction<T, R, X extends Throwable> {
 
 	/**
 	 * @param <F> The type of the value to accept and return
+	 * @param <X> The type of exception that the identity function will (not) throw
 	 * @return The identity function
 	 */
-	static <F> ExFunction<F, F, RuntimeException> identity() {
-		return (ExFunction<F, F, RuntimeException>) IDENTITY;
+	static <F, X extends Throwable> ExFunction<F, F, X> identity() {
+		return (ExFunction<F, F, X>) IDENTITY;
 	}
 
 	/**

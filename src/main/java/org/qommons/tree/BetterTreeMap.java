@@ -2,6 +2,7 @@ package org.qommons.tree;
 
 import java.util.*;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -60,6 +61,30 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 	 */
 	public static <K> Builder<K, ?> build(Comparator<? super K> keyCompare) {
 		return new Builder<>(keyCompare);
+	}
+
+	/**
+	 * @param <K> The type of key for the map
+	 * @param <V> The type of value for the map
+	 * @param keyCompare The key comparator for the map
+	 * @return The new tree map
+	 */
+	public static <K, V> BetterTreeMap<K, V> create(Comparator<? super K> keyCompare) {
+		return create(keyCompare, null);
+	}
+
+	/**
+	 * @param <K> The type of key for the map
+	 * @param <V> The type of value for the map
+	 * @param keyCompare The key comparator for the map
+	 * @param build Optional configuration for the new tree map
+	 * @return The new tree map
+	 */
+	public static <K, V> BetterTreeMap<K, V> create(Comparator<? super K> keyCompare, Consumer<? super Builder<K, ?>> build) {
+		Builder<K, ?> builder = new Builder<>(keyCompare);
+		if (build != null)
+			build.accept(builder);
+		return builder.buildMap();
 	}
 
 	/** The key comparator for the map */

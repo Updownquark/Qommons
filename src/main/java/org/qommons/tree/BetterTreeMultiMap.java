@@ -3,6 +3,7 @@ package org.qommons.tree;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.Transaction;
@@ -23,6 +24,30 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 	 */
 	public static <K, V> Builder<K, V, ?> build(Comparator<? super K> keyCompare) {
 		return new Builder<>(keyCompare);
+	}
+
+	/**
+	 * @param <K> The type of keys for the multi-map
+	 * @param <V> The type of values for the multi-map
+	 * @param keyCompare The comparator for the key set's ordering
+	 * @return The new multi-map
+	 */
+	public static <K, V> BetterTreeMultiMap<K, V> create(Comparator<? super K> keyCompare) {
+		return BetterTreeMultiMap.<K, V> build(keyCompare).buildMultiMap();
+	}
+
+	/**
+	 * @param <K> The type of keys for the multi-map
+	 * @param <V> The type of values for the multi-map
+	 * @param keyCompare The comparator for the key set's ordering
+	 * @param build Optional configuration for the multi-map
+	 * @return The new multi-map
+	 */
+	public static <K, V> BetterTreeMultiMap<K, V> create(Comparator<? super K> keyCompare, Consumer<Builder<K, V, ?>> build) {
+		Builder<K, V, ?> builder = build(keyCompare);
+		if (build != null)
+			build.accept(builder);
+		return builder.buildMultiMap();
 	}
 
 	/**

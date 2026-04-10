@@ -134,6 +134,14 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 		return new HashSetBuilder<>("better-hash-set");
 	}
 
+	/**
+	 * @param <E> The type of the set to create
+	 * @return The new hash set
+	 */
+	public static <E> BetterHashSet<E> create() {
+		return BetterHashSet.build().build();
+	}
+
 	private final CollectionLockingStrategy theLocker;
 	private final ToIntFunction<Object> theHasher;
 	private final BiPredicate<Object, Object> theEquals;

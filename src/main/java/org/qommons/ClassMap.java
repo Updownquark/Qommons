@@ -14,7 +14,7 @@ import org.qommons.ex.ExSupplier;
  * 
  * @param <V> The type of values in the map
  */
-public class ClassMap<V> {
+public class ClassMap<V> implements Sealable {
 	/**
 	 * An action to perform on a node in the map tree
 	 * 
@@ -267,6 +267,7 @@ public class ClassMap<V> {
 	}
 
 	private final ClassMapEntry<Object, V> theRoot = new ClassMapEntry<>(null);
+	private boolean isSealed;
 
 	private static <T> Class<T> wrap(Class<T> type) {
 		if (type == null)
@@ -293,6 +294,16 @@ public class ClassMap<V> {
 			return (Class<T>) Void.class;
 		else
 			throw new IllegalStateException("Unrecognized primitive type: " + type.getName());
+	}
+
+	@Override
+	public boolean isSealed() {
+		return isSealed;
+	}
+
+	@Override
+	public void seal() {
+		isSealed = true;
 	}
 
 	/**
@@ -470,6 +481,8 @@ public class ClassMap<V> {
 	 * @return This map
 	 */
 	public synchronized ClassMap<V> with(Class<?> type, V value) {
+		if (isSealed)
+			throw new SealedException(ClassMap.this);
 		theRoot.compute(type, old -> value);
 		return this;
 	}
@@ -482,6 +495,8 @@ public class ClassMap<V> {
 	 * @return This map
 	 */
 	public synchronized ClassMap<V> put(Class<?> type, V value) {
+		if (isSealed)
+			throw new SealedException(ClassMap.this);
 		return with(type, value);
 	}
 
@@ -493,6 +508,8 @@ public class ClassMap<V> {
 	 * @return The new value mapped to the class
 	 */
 	public synchronized V computeIfAbsent(Class<?> type, Supplier<V> value) {
+		if (isSealed)
+			throw new SealedException(ClassMap.this);
 		return theRoot.compute(type, old -> old != null ? old : value.get());
 	}
 
@@ -506,6 +523,8 @@ public class ClassMap<V> {
 	 * @throws E If the supplier throws an exception when attempting to supply the missing value
 	 */
 	public synchronized <E extends Throwable> V computeIfAbsentEx(Class<?> type, ExSupplier<V, E> value) throws E {
+		if (isSealed)
+			throw new SealedException(ClassMap.this);
 		return theRoot.computeEx(type, old -> old != null ? old : value.get());
 	}
 
@@ -517,6 +536,8 @@ public class ClassMap<V> {
 	 * @return The new value mapped to the class
 	 */
 	public synchronized V compute(Class<?> type, Function<? super V, ? extends V> value) {
+		if (isSealed)
+			throw new SealedException(ClassMap.this);
 		return theRoot.compute(type, value);
 	}
 
@@ -525,6 +546,8 @@ public class ClassMap<V> {
 	 * @return This ClassMap
 	 */
 	public ClassMap<V> putAll(ClassMap<? extends V> other) {
+		if (isSealed)
+			throw new SealedException(ClassMap.this);
 		theRoot._putAll(other.theRoot);
 		return this;
 	}
@@ -540,6 +563,8 @@ public class ClassMap<V> {
 
 	/** Removes all values from this map */
 	public void clear() {
+		if (isSealed)
+			throw new SealedException(ClassMap.this);
 		theRoot.clear();
 	}
 

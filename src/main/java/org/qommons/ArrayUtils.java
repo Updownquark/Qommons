@@ -88,7 +88,7 @@ public final class ArrayUtils {
 		}
 		ret = Arrays.copyOf(anArray, anArray.length + 1);
 		System.arraycopy(anArray, 0, ret, 0, anIndex);
-		put(ret, anElement, anIndex);
+		ret[anIndex] = anElement;
 		System.arraycopy(anArray, anIndex, ret, anIndex + 1, anArray.length - anIndex);
 		return ret;
 	}

@@ -2,6 +2,7 @@ package org.qommons.tree;
 
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.collect.BetterSortedSet;
@@ -42,6 +43,29 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	 */
 	public static <E> Builder<E, BetterTreeSet<E>, ?> buildTreeSet(Comparator<? super E> compare) {
 		return new Builder<>(compare);
+	}
+
+	/**
+	 * @param <E> The type of elements for the set
+	 * @param compare The comparator for the set's ordering
+	 * @return The new set
+	 */
+	public static <E> BetterTreeSet<E> createTreeSet(Comparator<? super E> compare) {
+		return BetterTreeSet.<E> buildTreeSet(compare).build();
+	}
+
+	/**
+	 * @param <E> The type of elements for the set
+	 * @param compare The comparator for the set's ordering
+	 * @param build Optional configuration for the tree set
+	 * @return The new set
+	 */
+	public static <E> BetterTreeSet<E> createTreeSet(Comparator<? super E> compare,
+		Consumer<? super Builder<E, BetterTreeSet<E>, ?>> build) {
+		Builder<E, BetterTreeSet<E>, ?> builder = buildTreeSet(compare);
+		if (build != null)
+			build.accept(builder);
+		return builder.build();
 	}
 
 	/**

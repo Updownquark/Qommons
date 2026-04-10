@@ -3,6 +3,7 @@ package org.qommons.tree;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.NavigableSet;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.ThreadConstraint;
@@ -50,6 +51,29 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	 */
 	public static <E> Builder<E, SortedTreeList<E>, ?> buildTreeList(Comparator<? super E> compare) {
 		return new Builder<>(compare);
+	}
+
+	/**
+	 * @param <E> The type of elements for the list
+	 * @param compare The comparator for the list's ordering
+	 * @return The new sorted list
+	 */
+	public static <E> SortedTreeList<E> createTreeList(Comparator<? super E> compare) {
+		return SortedTreeList.<E> buildTreeList(compare).build();
+	}
+
+	/**
+	 * @param <E> The type of elements for the list
+	 * @param compare The comparator for the list's ordering
+	 * @param build Optional configuration for the new sorted list
+	 * @return The new sorted list
+	 */
+	public static <E> SortedTreeList<E> createTreeList(Comparator<? super E> compare,
+		Consumer<? super Builder<E, SortedTreeList<E>, ?>> build) {
+		Builder<E, SortedTreeList<E>, ?> builder = buildTreeList(compare);
+		if (build != null)
+			build.accept(builder);
+		return builder.build();
 	}
 
 	private final Comparator<? super E> theCompare;
@@ -412,7 +436,6 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 			return TreeBasedSortedList.super.subList(fromIndex, toIndex);
 		}
 	}
-
 
 	private class SortedMutableTreeNode implements MutableBinaryTreeNode<E> {
 		private final MutableBinaryTreeNode<E> theWrapped;

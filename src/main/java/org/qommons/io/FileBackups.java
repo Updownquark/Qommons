@@ -3,14 +3,10 @@ package org.qommons.io;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
-import java.util.Map;
 
 import org.qommons.StringUtils;
-import org.qommons.collect.BetterCollections;
-import org.qommons.collect.BetterSortedList.SortedSearchFilter;
 import org.qommons.collect.BetterSortedMap;
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.tree.BetterTreeMap;
@@ -18,29 +14,77 @@ import org.qommons.tree.BetterTreeSet;
 
 /** A backup strategy for frequently-updated files, e.g. application config */
 public class FileBackups {
+	private static final String DATE_PATTERN = "ddMMMyyyy_HHmmss.SSS";
 	/** The format to store the date of the backup in the file name */
-	public static final ThreadLocal<SimpleDateFormat> DATE_FORMAT = ThreadLocal
-		.withInitial(() -> new SimpleDateFormat("ddMMMyyyy_HHmmss.SSS"));
-	/** The backup times to keep files for */
-	public static final BetterSortedSet<Duration> BACKUP_TIMES = BetterCollections.unmodifiableSortedSet(//
-		BetterTreeSet.buildTreeSet(Duration::compareTo).build().with(//
-			Duration.ofSeconds(1), Duration.ofMinutes(5), Duration.ofMinutes(15), Duration.ofMinutes(30), //
-			Duration.ofHours(1), Duration.ofHours(2), Duration.ofHours(3), Duration.ofHours(4), //
-			Duration.ofHours(6), Duration.ofHours(12), Duration.ofHours(18), //
-			Duration.ofDays(1), Duration.ofDays(2), Duration.ofDays(3), Duration.ofDays(4), Duration.ofDays(5), Duration.ofDays(6), //
-			Duration.ofDays(7), Duration.ofDays(10), Duration.ofDays(14), Duration.ofDays(21), Duration.ofDays(30), //
-			Duration.ofDays(60), Duration.ofDays(90), Duration.ofDays(120), Duration.ofDays(180)));
+	public static final ThreadLocal<SimpleDateFormat> DATE_FORMAT = ThreadLocal.withInitial(() -> new SimpleDateFormat(DATE_PATTERN));
+
+	public static class FileBackupManager implements TemporalBackupScheme.BackupManager<BetterFile, IOException> {
+		private final BetterFile theRootDataDir;
+		private final String thePrefix;
+		private final String theSuffix;
+
+		public FileBackupManager(BetterFile rootDataDir, String prefix, String suffix) {
+			theRootDataDir = rootDataDir;
+			thePrefix = prefix;
+			theSuffix = suffix;
+		}
+
+		public String getPrefix() {
+			return thePrefix;
+		}
+
+		public String getSuffix() {
+			return theSuffix;
+		}
+
+		@Override
+		public Iterable<? extends BetterFile> getCurrentBackups() {
+			return theRootDataDir.listFiles();
+		}
+
+		@Override
+		public Instant getDate(BetterFile backup) {
+			String fileName = backup.getName();
+			try {
+				return getDate(fileName);
+			} catch (ParseException e) {
+				return null;
+			}
+		}
+
+		public Instant getDate(String fileName) throws ParseException {
+			if (!StringUtils.startsWithIgnoreCase(fileName, thePrefix) || !StringUtils.endsWithIgnoreCase(fileName, theSuffix) //
+				|| fileName.length() - thePrefix.length() - theSuffix.length() < 10)
+				return null;
+			fileName = fileName.substring(thePrefix.length(), fileName.length() - theSuffix.length());
+			if (fileName.length() != DATE_PATTERN.length())
+				return null;
+			Date date = DATE_FORMAT.get().parse(fileName);
+			return date.toInstant();
+		}
+
+		@Override
+		public void preserve(BetterFile backup) {
+		}
+
+		@Override
+		public void delete(BetterFile backup) throws IOException {
+			backup.delete(null);
+		}
+	};
 
 	private final BetterFile theTargetFile;
-	private final String thePrefix;
-	private final String theSuffix;
+	private final TemporalBackupScheme theBackupScheme;
+	private final FileBackupManager theBackupManager;
 
 	/** @param targetFile The file to back up */
 	public FileBackups(BetterFile targetFile) {
 		theTargetFile = targetFile;
+		theBackupScheme = new TemporalBackupScheme();
 		int dot = targetFile.getName().lastIndexOf('.');
-		thePrefix = dot < 0 ? targetFile.getName() : targetFile.getName().substring(0, dot + 1);
-		theSuffix = dot < 0 ? "" : targetFile.getName().substring(dot);
+		theBackupManager = new FileBackupManager(targetFile.getParent(), //
+			dot < 0 ? targetFile.getName() : targetFile.getName().substring(0, dot + 1), //
+			dot < 0 ? "" : targetFile.getName().substring(dot));
 	}
 
 	/** @return The file being backed up */
@@ -55,37 +99,11 @@ public class FileBackups {
 	 */
 	public void fileChanged() throws IOException {
 		BetterSortedMap<Long, BetterFile> backups = BetterTreeMap.build(Long::compareTo).buildMap();
-		long now = System.currentTimeMillis();
-		BetterFile newBackup = theTargetFile.getParent().at(//
-			new StringBuilder(thePrefix).append(DATE_FORMAT.get().format(new Date(now))).append(theSuffix).toString());
-		FileUtils.sync().from(theTargetFile).to(newBackup).sync();
-		backups.put(now, theTargetFile);
-		for (BetterFile file : theTargetFile.getParent().listFiles()) {
-			long backupTime;
-			try {
-				backupTime = getBackupTime(file.getName());
-				if (backupTime >= 0) {
-					backups.put(backupTime, file);
-				}
-			} catch (ParseException e) {
-				System.err.println(thePrefix + " backup " + file.getName() + " not parseable as a backup: " + e);
-			}
-		}
-		Duration lastBackupTime = null;
-		long lastBackup = 0;
-		for (Map.Entry<Long, BetterFile> backup : backups.entrySet()) {
-			Duration time = Duration.ofMillis(now - backup.getKey());
-			Duration backupTime = BACKUP_TIMES.search(time, SortedSearchFilter.PreferGreater).get();
-			if (lastBackupTime != null && backupTime.compareTo(lastBackupTime) > 0)
-				backupTime = lastBackupTime;
-			if (backupTime.equals(lastBackupTime)) {
-				if (Math.abs(now - backup.getKey() - backupTime.toMillis()) < Math.abs(now - lastBackup - backupTime.toMillis()))
-					backups.remove(lastBackup).delete(null);
-				else
-					backupTime = BACKUP_TIMES.lower(backupTime);
-			}
-			lastBackup = backup.getKey();
-			lastBackupTime = backupTime;
+		Instant now = Instant.now();
+		if (theBackupScheme.dataRenewed(now, theBackupManager)) {
+			// The new data fits in a now-unoccupied backup slot. Copy it to a new backup
+			BetterFile newBackup = getBackup(now);
+			FileUtils.sync().from(theTargetFile).to(newBackup).sync();
 		}
 	}
 
@@ -93,14 +111,9 @@ public class FileBackups {
 	public BetterSortedSet<Instant> getBackups() {
 		BetterSortedSet<Instant> backups = BetterTreeSet.buildTreeSet(Instant::compareTo).build();
 		for (BetterFile file : theTargetFile.getParent().listFiles()) {
-			long backupTime;
-			try {
-				backupTime = getBackupTime(file.getName());
-				if (backupTime >= 0)
-					backups.add(Instant.ofEpochMilli(backupTime));
-			} catch (ParseException e) {
-				System.err.println(thePrefix + " backup " + file.getName() + " not parseable as a backup: " + e);
-			}
+			Instant time = theBackupManager.getDate(file);
+			if (time != null)
+				backups.add(time);
 		}
 		return backups;
 	}
@@ -110,13 +123,8 @@ public class FileBackups {
 	 * @return The backup time of the file (millis since epoch) or -1 if the file is not a backup file
 	 * @throws ParseException If the file name has the form of a backup file, but its date cannot be parsed
 	 */
-	public long getBackupTime(String fileName) throws ParseException {
-		if (!StringUtils.startsWithIgnoreCase(fileName, thePrefix) || !StringUtils.endsWithIgnoreCase(fileName, theSuffix) //
-			|| fileName.length() - thePrefix.length() - theSuffix.length() < 10)
-			return -1;
-		fileName = fileName.substring(thePrefix.length(), fileName.length() - theSuffix.length());
-		Date date = DATE_FORMAT.get().parse(fileName);
-		return date.getTime();
+	public Instant getBackupTime(String fileName) throws ParseException {
+		return theBackupManager.getDate(fileName);
 	}
 
 	/**
@@ -125,8 +133,8 @@ public class FileBackups {
 	 */
 	public BetterFile getBackup(Instant backupTime) {
 		return theTargetFile.getParent().at(//
-			new StringBuilder(thePrefix).append(DATE_FORMAT.get().format(new Date(backupTime.toEpochMilli()))).append(theSuffix)
-				.toString());
+			new StringBuilder(theBackupManager.getPrefix()).append(DATE_FORMAT.get().format(new Date(backupTime.toEpochMilli())))
+				.append(theBackupManager.getSuffix()).toString());
 	}
 
 	/**
@@ -152,15 +160,14 @@ public class FileBackups {
 			e.printStackTrace();
 		}
 		for (BetterFile backup : file.getParent().listFiles()) {
-			long backupTime;
+			Instant backupTime;
 			try {
 				backupTime = oldBackup.getBackupTime(backup.getName());
 			} catch (ParseException e) {
-				backupTime = -1;
+				backupTime = null;
 			}
-			if (backupTime >= 0) {
-				BetterFile newBackup = theTargetFile.getParent().at(//
-					new StringBuilder(thePrefix).append(DATE_FORMAT.get().format(new Date(backupTime))).append(theSuffix).toString());
+			if (backupTime != null) {
+				BetterFile newBackup = getBackup(backupTime);
 				try {
 					backup.move(newBackup);
 				} catch (IOException e) {

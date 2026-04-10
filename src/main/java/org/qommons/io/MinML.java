@@ -15,6 +15,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import org.qommons.ArrayUtils;
 import org.qommons.Named;
 import org.qommons.QommonsUtils;
+import org.qommons.ex.ExConsumer;
 import org.qommons.ex.ExFunction;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Document;
@@ -1846,6 +1847,38 @@ public class MinML {
 					return null;
 			});
 			return found instanceof XmlAttribute ? (XmlAttribute) found : null;
+		}
+
+		/**
+		 * Parses all attributes in the current element open tag
+		 * 
+		 * @param forEach Accepts each attribute as it is encountered
+		 * @return Whether the element is now open; false if it was self-closing
+		 * @throws IOException If the document data could not be read
+		 * @throws TextParseException If the document could not be parsed, or if no such attribute was found and <code>required</code> was
+		 *         true
+		 * @throws IllegalStateException If this is called while the parser is not just after the beginning of an XML element (such as just
+		 *         after a successful call to {@link #startNextElement(String, boolean)} or this method)
+		 */
+		public boolean parseRemainingAttributes(ExConsumer<XmlAttribute, TextParseException> forEach)
+			throws IOException, TextParseException, IllegalStateException {
+			if (theState != XmlParseState.ElementDeclaration)
+				throw new IllegalStateException("This method must be called within an element declaration");
+			XmlComponent comp = getNextComponent();
+			while (true) {
+				switch (comp.getComponentType()) {
+				case Attribute:
+					forEach.accept((XmlAttribute) comp);
+					break;
+				case ElementOpen:
+					return true;
+				case ElementTerminal:
+					return false;
+				default:
+					break;
+				}
+				comp = getNextComponent();
+			}
 		}
 
 		/**

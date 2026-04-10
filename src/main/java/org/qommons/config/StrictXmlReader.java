@@ -10,12 +10,8 @@ import java.util.regex.Pattern;
 import org.qommons.Named;
 import org.qommons.Transaction;
 import org.qommons.ex.ExSupplier;
-import org.qommons.io.FilePosition;
-import org.qommons.io.PositionedContent;
-import org.qommons.io.MinML;
+import org.qommons.io.*;
 import org.qommons.io.MinML.XmlParseException;
-import org.qommons.io.TextParseException;
-import org.qommons.io.XmlSerialWriter;
 import org.w3c.dom.*;
 
 /**
@@ -30,8 +26,7 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @throws XmlParseException IF the XML could not be parsed
 	 */
 	public static StrictXmlReader ofRoot(InputStream in) throws IOException, XmlParseException {
-		MinML parser = new MinML();
-		return new StrictXmlReader(parser.parseDocument(null, in).getDocumentElement());
+		return ofRoot(null, in);
 	}
 
 	/**
@@ -41,8 +36,35 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @throws XmlParseException IF the XML could not be parsed
 	 */
 	public static StrictXmlReader ofRoot(Reader reader) throws IOException, XmlParseException {
+		return ofRoot(null, reader);
+	}
+
+	/**
+	 * @param fileLocation The location of the file. This can be anything, including null, and only matters when errors are thrown. When
+	 *        given, any {@link XmlParseException}s thrown will have a {@link LocatedFilePosition} for their
+	 *        {@link TextParseException#getPosition() position}.
+	 * @param in The input stream to parse
+	 * @return A {@link StrictXmlReader} for the root of the XML document contained parsed from stream
+	 * @throws IOException If the XML could not be read
+	 * @throws XmlParseException IF the XML could not be parsed
+	 */
+	public static StrictXmlReader ofRoot(String fileLocation, InputStream in) throws IOException, XmlParseException {
 		MinML parser = new MinML();
-		return new StrictXmlReader(parser.parseDocument(null, reader).getDocumentElement());
+		return new StrictXmlReader(parser.parseDocument(fileLocation, in).getDocumentElement());
+	}
+
+	/**
+	 * @param fileLocation The location of the file. This can be anything, including null, and only matters when errors are thrown. When
+	 *        given, any {@link XmlParseException}s thrown will have a {@link LocatedFilePosition} for their
+	 *        {@link TextParseException#getPosition() position}.
+	 * @param reader The text stream to parse
+	 * @return A {@link StrictXmlReader} for the root of the XML document contained parsed from stream
+	 * @throws IOException If the XML could not be read
+	 * @throws XmlParseException IF the XML could not be parsed
+	 */
+	public static StrictXmlReader ofRoot(String fileLocation, Reader reader) throws IOException, XmlParseException {
+		MinML parser = new MinML();
+		return new StrictXmlReader(parser.parseDocument(fileLocation, reader).getDocumentElement());
 	}
 
 	/** Returned from {@link #getElementOrMissing(String)} if the element is not present */

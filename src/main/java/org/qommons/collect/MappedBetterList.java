@@ -36,6 +36,10 @@ public class MappedBetterList<S, T> extends MappedList<S, T> implements BetterLi
 		return (BetterList<S>) super.getSource();
 	}
 
+	protected Function<? super T, ? extends S> getReverse() {
+		return theReverse;
+	}
+
 	@Override
 	public BetterList<CollectionElement<T>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
 		BetterList<CollectionElement<S>> sourceEls = getSource().getElementsBySource(sourceEl, sourceCollection);

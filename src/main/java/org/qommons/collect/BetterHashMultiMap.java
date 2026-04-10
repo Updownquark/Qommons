@@ -3,6 +3,7 @@ package org.qommons.collect;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
@@ -20,6 +21,19 @@ public class BetterHashMultiMap<K, V> extends AbstractBetterMultiMap<K, V> {
 	 */
 	public static <K, V> BetterHashMultiMap<K, V> create() {
 		return BetterHashMultiMap.<K, V> build().buildMultiMap();
+	}
+
+	/**
+	 * @param <K> The key-type for the map
+	 * @param <V> The value-type for the map
+	 * @param build Optional configuration for the multi-map
+	 * @return The new multi-map
+	 */
+	public static <K, V> BetterHashMultiMap<K, V> create(Consumer<? super Builder<K, V, ?>> build) {
+		Builder<K, V, ?> builder = build();
+		if (build != null)
+			build.accept(builder);
+		return builder.buildMultiMap();
 	}
 
 	/**

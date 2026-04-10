@@ -24,6 +24,14 @@ public class MappedCollection<S, T> extends AbstractCollection<T> {
 		theMap = map;
 	}
 
+	protected Collection<S> getWrapped() {
+		return theWrapped;
+	}
+
+	protected Function<? super S, ? extends T> getMap() {
+		return theMap;
+	}
+
 	@Override
 	public Iterator<T> iterator() {
 		return new MappedIterator<>(theWrapped.iterator(), theMap);
