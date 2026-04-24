@@ -10,7 +10,7 @@ public class CheckedExceptionWrapper extends RuntimeException {
 	/**
 	 * @param <X> The type of the cause to get
 	 * @param ex The checked exception wrapper to get the cause of
-	 * @param exType The type of the type of the cause to get
+	 * @param exType The type of the cause to get
 	 * @return The cause of the checked wrapper if it is of the given type
 	 * @throws CheckedExceptionWrapper The exception wrapper if the cause is not of the given type
 	 */
@@ -19,5 +19,15 @@ public class CheckedExceptionWrapper extends RuntimeException {
 			return (X) ex.getCause();
 		else
 			throw ex;
+	}
+
+	/**
+	 * @param <X> The type of the cause to check
+	 * @param exType The type of the cause to check
+	 * @throws X If the wrapped exception is of the given type
+	 */
+	public <X extends Throwable> void throwIfType(Class<X> exType) throws X {
+		if (exType.isInstance(getCause()))
+			throw (X) getCause();
 	}
 }

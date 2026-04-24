@@ -7,6 +7,10 @@ import java.util.List;
 
 import org.qommons.LongList;
 
+/**
+ * A {@link TabularFileParser} in which values are separated by any number of spaces. This format is nice because the spacing can be
+ * arranged such that the columns line up, making the format more human-readable.
+ */
 public class SpacedTabularFormat implements TabularFileParser {
 	private final Reader theReader;
 	private final long theFileLength;
@@ -17,6 +21,10 @@ public class SpacedTabularFormat implements TabularFileParser {
 	private int theRowCount;
 	private final LongList theColumnOffsets;
 
+	/**
+	 * @param reader The reader to retrieve the data from
+	 * @param fileLength The length of the file (may be -1, only needed for {@link #getFileLength()} and {@link #getParseProgress()})
+	 */
 	public SpacedTabularFormat(Reader reader, long fileLength) {
 		theReader = reader;
 		theLastLine = -1;

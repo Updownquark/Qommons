@@ -12,39 +12,41 @@ import java.util.function.Function;
  * @param <T> The type of this collection
  */
 public class MappedCollection<S, T> extends AbstractCollection<T> {
-	private final Collection<S> theWrapped;
+	private final Collection<S> theSource;
 	private final Function<? super S, ? extends T> theMap;
 
 	/**
-	 * @param wrapped The source collection to map
+	 * @param source The source collection to map
 	 * @param map The mapping function
 	 */
-	public MappedCollection(Collection<S> wrapped, Function<? super S, ? extends T> map) {
-		theWrapped = wrapped;
+	public MappedCollection(Collection<S> source, Function<? super S, ? extends T> map) {
+		theSource = source;
 		theMap = map;
 	}
 
-	protected Collection<S> getWrapped() {
-		return theWrapped;
+	/** @return The source collection */
+	protected Collection<S> getSource() {
+		return theSource;
 	}
 
+	/** @return The mapping function producing values in this collection from values in the source collection */
 	protected Function<? super S, ? extends T> getMap() {
 		return theMap;
 	}
 
 	@Override
 	public Iterator<T> iterator() {
-		return new MappedIterator<>(theWrapped.iterator(), theMap);
+		return new MappedIterator<>(theSource.iterator(), theMap);
 	}
 
 	@Override
 	public int size() {
-		return theWrapped.size();
+		return theSource.size();
 	}
 
 	@Override
 	public void clear() {
-		theWrapped.clear();
+		theSource.clear();
 	}
 
 	/**

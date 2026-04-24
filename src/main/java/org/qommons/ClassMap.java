@@ -1,10 +1,14 @@
 package org.qommons;
 
 import java.util.*;
+import java.util.Map.Entry;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.qommons.collect.BetterList;
+import org.qommons.collect.CircularArrayList;
+import org.qommons.collect.DequeList;
 import org.qommons.ex.ExFunction;
 import org.qommons.ex.ExSupplier;
 
@@ -88,7 +92,7 @@ public class ClassMap<V> implements Sealable {
 		}
 	}
 
-	static class ClassMapEntry<C, V> {
+	static class ClassMapEntry<C, V> implements Map.Entry<Class<C>, V> {
 		private final Class<C> theType;
 		private final List<ClassMapEntry<? extends C, V>> theSubMaps;
 		private V theValue;
@@ -108,6 +112,21 @@ public class ClassMap<V> implements Sealable {
 		/** @return The value stored for this map's {@link #getType() type} */
 		V getLocalValue() {
 			return theValue;
+		}
+
+		@Override
+		public Class<C> getKey() {
+			return theType;
+		}
+
+		@Override
+		public V getValue() {
+			return theValue;
+		}
+
+		@Override
+		public V setValue(V value) {
+			throw new UnsupportedOperationException();
 		}
 
 		/** @return The number of values stored in this map */
@@ -139,6 +158,13 @@ public class ClassMap<V> implements Sealable {
 			if (descend) {
 				for (ClassMapEntry<? extends C, V> subMap : theSubMaps)
 					subMap.descend(targetType, action, subTarget);
+			}
+		}
+
+		void forAll(BiPredicate<Class<?>, V> action) {
+			if (theType != null && action.test(theType, theValue)) {
+				for (ClassMapEntry<? extends C, V> subMap : theSubMaps)
+					subMap.forAll(action);
 			}
 		}
 
@@ -315,6 +341,56 @@ public class ClassMap<V> implements Sealable {
 	public void descend(Class<?> targetType, MapEntryAction<V> action) {
 		targetType = wrap(targetType);
 		theRoot.descend(targetType, action, false);
+	}
+
+	/**
+	 * A generalized query into the tree starting at all the root types
+	 * 
+	 * @param action The action to perform on map entries
+	 */
+	public void forAll(BiPredicate<Class<?>, V> action) {
+		theRoot.forAll(action);
+	}
+
+	/** @return All entries in this map */
+	public Collection<Map.Entry<? extends Class<?>, V>> entries() {
+		return new AbstractCollection<Map.Entry<? extends Class<?>, V>>() {
+			@Override
+			public Iterator<Entry<? extends Class<?>, V>> iterator() {
+				return new Iterator<Map.Entry<? extends Class<?>, V>>() {
+					private final DequeList<Iterator<? extends ClassMapEntry<?, V>>> theTypePath = new CircularArrayList<>();
+
+					{
+						theTypePath.add(Collections.singleton(theRoot).iterator());
+					}
+
+					@Override
+					public boolean hasNext() {
+						return !theTypePath.isEmpty();
+					}
+
+					@Override
+					public Map.Entry<? extends Class<?>, V> next() {
+						ClassMapEntry<?, V> type;
+						do {
+							Iterator<? extends ClassMapEntry<?, V>> typeIter = theTypePath.peekLast();
+							if (typeIter == null)
+								throw new NoSuchElementException();
+							type = typeIter.next();
+							if (!typeIter.hasNext())
+								theTypePath.removeLast();
+							theTypePath.add(type.theSubMaps.iterator());
+						} while (type.theType != null);
+						return type;
+					}
+				};
+			}
+
+			@Override
+			public int size() {
+				return theRoot.size();
+			}
+		};
 	}
 
 	/** @return Whether this map has no values in it */

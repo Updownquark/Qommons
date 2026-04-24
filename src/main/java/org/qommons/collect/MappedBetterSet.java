@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import org.qommons.Identifiable;
 import org.qommons.Lockable.CoreId;
@@ -17,7 +18,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * @param <S> The type of the source list
  * @param <T> The type of this list
  */
-public class MappedBetterList<S, T> extends MappedList<S, T> implements BetterList<T> {
+public class MappedBetterSet<S, T> extends MappedSet<S, T> implements BetterSet<T> {
 	private Object theIdentity;
 	private final Function<? super T, ? extends S> theReverse;
 
@@ -25,9 +26,11 @@ public class MappedBetterList<S, T> extends MappedList<S, T> implements BetterLi
 	 * @param wrapped The source list to map
 	 * @param map The mapping function
 	 * @param reverse The reverse function (only used for {@link #getElement(Object, boolean)})
+	 * @param containment
 	 */
-	public MappedBetterList(BetterList<S> wrapped, Function<? super S, T> map, Function<? super T, ? extends S> reverse) {
-		super(wrapped, map);
+	public MappedBetterSet(BetterSet<S> wrapped, Function<? super S, T> map, Predicate<Object> containment,
+		Function<? super T, ? extends S> reverse) {
+		super(wrapped, map, containment);
 		theReverse = reverse;
 	}
 
@@ -120,73 +123,78 @@ public class MappedBetterList<S, T> extends MappedList<S, T> implements BetterLi
 	}
 
 	@Override
-	public ListElement<T> getElement(int index) throws IndexOutOfBoundsException {
-		return map(getSource().getElement(index), getMap());
-	}
-
-	@Override
-	public boolean isContentControlled() {
-		return getSource().isContentControlled();
-	}
-
-	@Override
-	public ListElement<T> getElement(ElementId id) {
+	public CollectionElement<T> getElement(ElementId id) {
 		return map(getSource().getElement(id), getMap());
 	}
 
 	@Override
-	public ListElement<T> getElement(T value, boolean first) {
+	public CollectionElement<T> getElement(T value, boolean first) {
 		if (theReverse == null)
 			return null;
 		return map(getSource().getElement(theReverse.apply(value), first), getMap());
 	}
 
 	@Override
-	public ListElement<T> getTerminalElement(boolean first) {
+	public CollectionElement<T> getTerminalElement(boolean first) {
 		return map(getSource().getTerminalElement(first), getMap());
 	}
 
 	@Override
-	public MutableListElement<T> mutableElement(ElementId id) {
+	public MutableCollectionElement<T> mutableElement(ElementId id) {
 		return new MappedMutableElement<>(getSource().mutableElement(id), getMap());
 	}
 
 	@Override
-	public ListElement<T> addElement(T value, ElementId after, ElementId before, boolean first)
+	public CollectionElement<T> addElement(T value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
 		throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 	}
 
 	@Override
-	public ListElement<T> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
+	public CollectionElement<T> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 		throws UnsupportedOperationException, IllegalArgumentException {
 		return map(getSource().move(valueEl, after, before, first, afterRemove), getMap());
 	}
 
 	@Override
-	public BetterList<T> subList(int fromIndex, int toIndex) {
-		return BetterList.super.subList(fromIndex, toIndex);
+	public CollectionElement<T> getOrAdd(T value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
+		throw new UnsupportedOperationException(StdMsg.UNSUPPORTED_OPERATION);
 	}
 
 	@Override
-	public void removeRange(int fromIndex, int toIndex) {
-		super.removeRange(fromIndex, toIndex);
+	public boolean isConsistent(ElementId element) {
+		return true;
 	}
 
-	static <S, T> ListElement<T> map(ListElement<S> sourceEl, Function<? super S, ? extends T> map) {
+	@Override
+	public boolean checkConsistency() {
+		return false;
+	}
+
+	@Override
+	public <X> boolean repair(ElementId element, RepairListener<T, X> listener) {
+		return false;
+	}
+
+	@Override
+	public <X> boolean repair(RepairListener<T, X> listener) {
+		return false;
+	}
+
+	static <S, T> CollectionElement<T> map(CollectionElement<S> sourceEl, Function<? super S, ? extends T> map) {
 		return sourceEl == null ? null : new MappedElement<>(sourceEl, map);
 	}
 
-	static class MappedElement<S, T> implements ListElement<T> {
-		private final ListElement<S> theSource;
+	static class MappedElement<S, T> implements CollectionElement<T> {
+		private final CollectionElement<S> theSource;
 		private final Function<? super S, ? extends T> theMap;
 
-		MappedElement(ListElement<S> source, Function<? super S, ? extends T> map) {
+		MappedElement(CollectionElement<S> source, Function<? super S, ? extends T> map) {
 			theSource = source;
 			theMap = map;
 		}
 
-		protected ListElement<S> getSource() {
+		protected CollectionElement<S> getSource() {
 			return theSource;
 		}
 
@@ -205,18 +213,8 @@ public class MappedBetterList<S, T> extends MappedList<S, T> implements BetterLi
 		}
 
 		@Override
-		public ListElement<T> getAdjacent(boolean next) {
+		public CollectionElement<T> getAdjacent(boolean next) {
 			return map(theSource.getAdjacent(next), theMap);
-		}
-
-		@Override
-		public int getElementsBefore() {
-			return theSource.getElementsBefore();
-		}
-
-		@Override
-		public int getElementsAfter() {
-			return theSource.getElementsAfter();
 		}
 
 		@Override
@@ -225,19 +223,19 @@ public class MappedBetterList<S, T> extends MappedList<S, T> implements BetterLi
 		}
 	}
 
-	static class MappedMutableElement<S, T> extends MappedElement<S, T> implements MutableListElement<T> {
-		MappedMutableElement(MutableListElement<S> source, Function<? super S, ? extends T> map) {
+	static class MappedMutableElement<S, T> extends MappedElement<S, T> implements MutableCollectionElement<T> {
+		MappedMutableElement(MutableCollectionElement<S> source, Function<? super S, ? extends T> map) {
 			super(source, map);
 		}
 
 		@Override
-		protected MutableListElement<S> getSource() {
-			return (MutableListElement<S>) super.getSource();
+		protected MutableCollectionElement<S> getSource() {
+			return (MutableCollectionElement<S>) super.getSource();
 		}
 
 		@Override
-		public MutableListElement<T> getAdjacent(boolean next) {
-			MutableListElement<S> sourceAdj = getSource().getAdjacent(next);
+		public MutableCollectionElement<T> getAdjacent(boolean next) {
+			MutableCollectionElement<S> sourceAdj = getSource().getAdjacent(next);
 			return sourceAdj == null ? null : new MappedMutableElement<>(sourceAdj, getMap());
 		}
 

@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
@@ -137,6 +138,28 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 	/** @return A builder to create a new {@link BetterHashMap} */
 	public static HashMapBuilder<?> build() {
 		return new HashMapBuilder<>();
+	}
+
+	/**
+	 * @param <K> The type of keys for the map
+	 * @param <V> The type of values for the map
+	 * @return The new hash map
+	 */
+	public static <K, V> BetterHashMap<K, V> create() {
+		return BetterHashMap.build().build();
+	}
+
+	/**
+	 * @param <K> The type of keys for the map
+	 * @param <V> The type of values for the map
+	 * @param build Optional configuration for the new hash map
+	 * @return The new hash map
+	 */
+	public static <K, V> BetterHashMap<K, V> create(Consumer<? super HashMapBuilder<?>> build) {
+		HashMapBuilder<?> builder = build();
+		if (build != null)
+			build.accept(builder);
+		return builder.build();
 	}
 
 	private final BetterHashSet<Entry> theEntries;

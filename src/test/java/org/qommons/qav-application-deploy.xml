@@ -32,8 +32,8 @@
 				<require type="java" min="1.8.0" />
 			</requirements>
 		</distribution>
-		<!--<distribution name="Windows Distribution" file="Sage-8.8.3-rc.1.piz" explode="true"
-			description="Simple, portable zip archive containing Sage, executes via batch script">
+		<!--<distribution name="Windows Distribution" file="Test-App-1.2.3-rc.4.piz" explode="true"
+			description="Simple, portable zip archive containing Test App, executes via batch script">
 			<requirements>
 				<require type="OS">
 					<value>Windows</value>

@@ -235,6 +235,22 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		}
 	}
 
+	/**
+	 * @param keys The keys to add to this map
+	 * @param value The value for which to add the keys
+	 * @return Whether this map changed as a result of this call
+	 */
+	default boolean putAll(Iterable<? extends K> keys, V value) {
+		boolean changed = false;
+		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(keys, false, null)) {
+			for (K key : keys) {
+				if (value != put(key, value))
+					changed = true;
+			}
+		}
+		return changed;
+	}
+
 	@Override
 	default void clear() {
 		keySet().clear();
@@ -256,6 +272,16 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 	 */
 	default BetterMap<K, V> withAll(Map<? extends K, ? extends V> values) {
 		putAll(values);
+		return this;
+	}
+
+	/**
+	 * @param keys The keys to add to this map
+	 * @param value The value for which to add the keys
+	 * @return This map
+	 */
+	default BetterMap<K, V> withAll(Iterable<? extends K> keys, V value) {
+		putAll(keys, value);
 		return this;
 	}
 

@@ -12,19 +12,50 @@ import org.qommons.collect.BetterSortedSet;
 import org.qommons.tree.BetterTreeMap;
 import org.qommons.tree.BetterTreeSet;
 
+/**
+ * Logic utility for managing backups of a data set. This utility is agnostic as to what kind of data is it managing and only knows how to
+ * manage a time-stamped set of backups so that a variety of backup ages (but not too many) are kept.
+ */
 public class TemporalBackupScheme {
+	/**
+	 * A manager for a particular set of backups
+	 * 
+	 * @param <T> The type of backup to manage
+	 * @param <X> The type of exception this manager may throw
+	 */
 	public interface BackupManager<T, X extends Exception> {
+		/**
+		 * @return All current backups available for the data source
+		 * @throws X If inspection of the set of backups fails
+		 */
 		Iterable<? extends T> getCurrentBackups() throws X;
 
+		/**
+		 * @param backup The backup to get the date for
+		 * @return The time stamp of the data for which the backup was created
+		 * @throws X If inspection fails
+		 */
 		Instant getDate(T backup) throws X;
 
+		/**
+		 * Notifies this manager that the given backup (from {@link #getCurrentBackups()}) should be preserved
+		 * 
+		 * @param backup The backup
+		 * @throws X If this manager fails in any work it may need to do to preserve the backup
+		 */
 		void preserve(T backup) throws X;
 
+		/**
+		 * Notifies this manager that the given backup (from {@link #getCurrentBackups()}) should be deleted
+		 * 
+		 * @param backup The backup
+		 * @throws X If this manager fails in any work it may need to do to delete the backup
+		 */
 		void delete(T backup) throws X;
 	}
 
-	/** The backup times to keep data for */
-	public static final BetterSortedSet<Duration> DEFAULT_BACKUP_TIMES = BetterCollections.unmodifiableSortedSet(//
+	/** The default set of backup ages to keep data for */
+	public static final BetterSortedSet<Duration> DEFAULT_BACKUP_AGES = BetterCollections.unmodifiableSortedSet(//
 		BetterTreeSet.buildTreeSet(Duration::compareTo).build().with(//
 			Duration.ofSeconds(1), Duration.ofMinutes(5), Duration.ofMinutes(15), Duration.ofMinutes(30), //
 			Duration.ofHours(1), Duration.ofHours(2), Duration.ofHours(3), Duration.ofHours(4), //
@@ -35,16 +66,21 @@ public class TemporalBackupScheme {
 
 	private static final Object CURRENT_BACKUP = new Object();
 
-	private BetterSortedSet<Duration> theBackupTimes;
+	private BetterSortedSet<Duration> theBackupAges;
 
+	/** Creates a backup scheme with a {@link #DEFAULT_BACKUP_AGES default} set of backup ages */
 	public TemporalBackupScheme() {
-		theBackupTimes = DEFAULT_BACKUP_TIMES;
+		theBackupAges = DEFAULT_BACKUP_AGES;
 	}
 
-	public TemporalBackupScheme setBackupTypes(BetterSortedSet<Duration> backupTimes) {
-		if (backupTimes == null)
+	/**
+	 * @param backupAges The set of ages to back up data for
+	 * @return This backup scheme
+	 */
+	public TemporalBackupScheme setBackupAges(BetterSortedSet<Duration> backupAges) {
+		if (backupAges == null)
 			throw new NullPointerException();
-		theBackupTimes = backupTimes;
+		theBackupAges = backupAges;
 		return this;
 	}
 
@@ -56,7 +92,7 @@ public class TemporalBackupScheme {
 	 * @param <X> The type of exception the backup manager may throw
 	 * @param now The time stamp of the new copy of the data
 	 * @param manager The backup manager to provide data on the current set of backups as well as handle changes to that set
-	 * @return Whether the new data should be copied into a new backup
+	 * @return Whether the current data should be copied into a new backup
 	 * @throws X If the backup manager throws it
 	 */
 	public <T, X extends Exception> boolean dataRenewed(Instant now, BackupManager<T, X> manager) throws X {
@@ -79,7 +115,7 @@ public class TemporalBackupScheme {
 			Duration time = TimeUtils.between(now, backup.getKey());
 			if (time.isNegative())
 				continue;
-			Duration backupAge = theBackupTimes.search(time, SortedSearchFilter.PreferGreater).get();
+			Duration backupAge = theBackupAges.search(time, SortedSearchFilter.PreferGreater).get();
 			if (lastBackupAge != null && backupAge.compareTo(lastBackupAge) > 0)
 				backupAge = lastBackupAge;
 			Duration thisBackupAdherence = time.minus(backupAge).abs();

@@ -315,7 +315,7 @@ public class IterableUtils {
 	/**
 	 * @param <T> The type of the values to iterate over
 	 * @param iterator The iterator to wrap
-	 * @return An immutable iterator that returns the same information as <code>iterator</code> but disallows modification
+	 * @return An unmodifiable iterator that returns the same information as <code>iterator</code> but disallows modification
 	 */
 	public static <T> Iterator<T> unmodifiable(final Iterator<? extends T> iterator) {
 		if (iterator == null)
@@ -337,6 +337,63 @@ public class IterableUtils {
 			}
 		}
 		return new UnmodifiableIterator();
+	}
+
+	/**
+	 * @param <T> The type of the values to iterate over
+	 * @param iterator The list iterator to wrap
+	 * @return An unmodifiable list iterator that returns the same information as <code>iterator</code> but disallows modification
+	 */
+	public static <T> ListIterator<T> unmodifiable(final ListIterator<? extends T> iterator) {
+		if (iterator == null)
+			throw new NullPointerException();
+		class UnmodifiableListIterator implements ListIterator<T> {
+			@Override
+			public boolean hasNext() {
+				return iterator.hasNext();
+			}
+
+			@Override
+			public boolean hasPrevious() {
+				return iterator.hasPrevious();
+			}
+
+			@Override
+			public T next() {
+				return iterator.next();
+			}
+
+			@Override
+			public T previous() {
+				return iterator.previous();
+			}
+
+			@Override
+			public int nextIndex() {
+				return iterator.nextIndex();
+			}
+
+			@Override
+			public int previousIndex() {
+				return iterator.previousIndex();
+			}
+
+			@Override
+			public void remove() {
+				throw new UnsupportedOperationException();
+			}
+
+			@Override
+			public void set(T e) {
+				throw new UnsupportedOperationException();
+			}
+
+			@Override
+			public void add(T e) {
+				throw new UnsupportedOperationException();
+			}
+		}
+		return new UnmodifiableListIterator();
 	}
 
 	/**
@@ -599,27 +656,46 @@ public class IterableUtils {
 	public static <T, V> Betterable<V> map(Iterable<T> iterable, Function<? super T, ? extends V> map) {
 		if (iterable == null)
 			throw new NullPointerException();
-		class MappedIterator implements Iterator<V> {
-			private final Iterator<T> backing = iterable.iterator();
-
-			@Override
-			public boolean hasNext() {
-				return backing.hasNext();
-			}
-
-			@Override
-			public V next() {
-				return map.apply(backing.next());
-			}
-
-			@Override
-			public void remove() {
-				backing.remove();
-			}
-		}
-		return new ToStringIterable<>(MappedIterator::new);
+		return new ToStringIterable<>(() -> new MappedIterator<>(iterable.iterator(), map));
 	}
 
+	/**
+	 * @param <T> The type of the iterator to map
+	 * @param <V> The type of the iterator to produce
+	 * @param iterator The iterator to map the values of
+	 * @param map The mapping function for iterated values
+	 * @return An iterator whose values are those of the given iterator, mapped via the given function
+	 */
+	public static <T, V> Iterator<V> map(Iterator<T> iterator, Function<? super T, ? extends V> map) {
+		if (iterator == null)
+			throw new NullPointerException();
+		return new MappedIterator<>(iterator, map);
+	}
+
+	static class MappedIterator<T, V> implements Iterator<V> {
+		private final Iterator<T> theBacking;
+		private final Function<? super T, ? extends V> theMap;
+
+		MappedIterator(Iterator<T> backing, Function<? super T, ? extends V> map) {
+			theBacking = backing;
+			theMap = map;
+		}
+
+		@Override
+		public boolean hasNext() {
+			return theBacking.hasNext();
+		}
+
+		@Override
+		public V next() {
+			return theMap.apply(theBacking.next());
+		}
+
+		@Override
+		public void remove() {
+			theBacking.remove();
+		}
+	}
 	/**
 	 * @param <T> The type of the collection to map
 	 * @param <V> The type of the collection to produce

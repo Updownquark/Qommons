@@ -942,7 +942,7 @@ public class FunctionUtils {
 	 * @return An operator that takes the minimum of two comparable values
 	 */
 	public static <T extends Comparable<? super T>> BinaryOperator<T> MIN() {
-		return (BinaryOperator<T>) MAX;
+		return (BinaryOperator<T>) MIN;
 	}
 
 	/**

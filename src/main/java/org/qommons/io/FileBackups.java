@@ -7,9 +7,7 @@ import java.time.Instant;
 import java.util.Date;
 
 import org.qommons.StringUtils;
-import org.qommons.collect.BetterSortedMap;
 import org.qommons.collect.BetterSortedSet;
-import org.qommons.tree.BetterTreeMap;
 import org.qommons.tree.BetterTreeSet;
 
 /** A backup strategy for frequently-updated files, e.g. application config */
@@ -18,21 +16,29 @@ public class FileBackups {
 	/** The format to store the date of the backup in the file name */
 	public static final ThreadLocal<SimpleDateFormat> DATE_FORMAT = ThreadLocal.withInitial(() -> new SimpleDateFormat(DATE_PATTERN));
 
+	/** {@link TemporalBackupScheme.BackupManager} for files or directories */
 	public static class FileBackupManager implements TemporalBackupScheme.BackupManager<BetterFile, IOException> {
 		private final BetterFile theRootDataDir;
 		private final String thePrefix;
 		private final String theSuffix;
 
+		/**
+		 * @param rootDataDir The data directory in which the data and the backups will be located
+		 * @param prefix The prefix for the backup file/directory names (before the time stamp)
+		 * @param suffix The suffix for the backup file/directory names (after the time stamp)
+		 */
 		public FileBackupManager(BetterFile rootDataDir, String prefix, String suffix) {
 			theRootDataDir = rootDataDir;
 			thePrefix = prefix;
 			theSuffix = suffix;
 		}
 
+		/** @return The prefix for the backup file/directory names (before the time stamp) */
 		public String getPrefix() {
 			return thePrefix;
 		}
 
+		/** @return The suffix for the backup file/directory names (after the time stamp) */
 		public String getSuffix() {
 			return theSuffix;
 		}
@@ -45,22 +51,25 @@ public class FileBackups {
 		@Override
 		public Instant getDate(BetterFile backup) {
 			String fileName = backup.getName();
-			try {
-				return getDate(fileName);
-			} catch (ParseException e) {
-				return null;
-			}
+			return getDate(fileName);
 		}
 
-		public Instant getDate(String fileName) throws ParseException {
+		/**
+		 * @param fileName The name of the file or directory that may be a backup
+		 * @return The time stamp of the backup, or null if the name is not that of a backup managed by this manager
+		 */
+		public Instant getDate(String fileName) {
 			if (!StringUtils.startsWithIgnoreCase(fileName, thePrefix) || !StringUtils.endsWithIgnoreCase(fileName, theSuffix) //
 				|| fileName.length() - thePrefix.length() - theSuffix.length() < 10)
 				return null;
 			fileName = fileName.substring(thePrefix.length(), fileName.length() - theSuffix.length());
 			if (fileName.length() != DATE_PATTERN.length())
 				return null;
-			Date date = DATE_FORMAT.get().parse(fileName);
-			return date.toInstant();
+			try {
+				return DATE_FORMAT.get().parse(fileName).toInstant();
+			} catch (ParseException e) {
+				return null;
+			}
 		}
 
 		@Override
@@ -71,7 +80,7 @@ public class FileBackups {
 		public void delete(BetterFile backup) throws IOException {
 			backup.delete(null);
 		}
-	};
+	}
 
 	private final BetterFile theTargetFile;
 	private final TemporalBackupScheme theBackupScheme;
@@ -92,13 +101,17 @@ public class FileBackups {
 		return theTargetFile;
 	}
 
+	/** @return The backup scheme controlling the set of backups kept by this backup manager */
+	public TemporalBackupScheme getBackupScheme() {
+		return theBackupScheme;
+	}
+
 	/**
 	 * Tells this backup strategy that the target file has changed, so that it manages and prunes existing backups
 	 * 
 	 * @throws IOException If an exception occurs with the backup operation
 	 */
 	public void fileChanged() throws IOException {
-		BetterSortedMap<Long, BetterFile> backups = BetterTreeMap.build(Long::compareTo).buildMap();
 		Instant now = Instant.now();
 		if (theBackupScheme.dataRenewed(now, theBackupManager)) {
 			// The new data fits in a now-unoccupied backup slot. Copy it to a new backup
@@ -121,9 +134,8 @@ public class FileBackups {
 	/**
 	 * @param fileName The name of a potential backup file
 	 * @return The backup time of the file (millis since epoch) or -1 if the file is not a backup file
-	 * @throws ParseException If the file name has the form of a backup file, but its date cannot be parsed
 	 */
-	public Instant getBackupTime(String fileName) throws ParseException {
+	public Instant getBackupTime(String fileName) {
 		return theBackupManager.getDate(fileName);
 	}
 
@@ -160,12 +172,7 @@ public class FileBackups {
 			e.printStackTrace();
 		}
 		for (BetterFile backup : file.getParent().listFiles()) {
-			Instant backupTime;
-			try {
-				backupTime = oldBackup.getBackupTime(backup.getName());
-			} catch (ParseException e) {
-				backupTime = null;
-			}
+			Instant backupTime = oldBackup.getBackupTime(backup.getName());
 			if (backupTime != null) {
 				BetterFile newBackup = getBackup(backupTime);
 				try {

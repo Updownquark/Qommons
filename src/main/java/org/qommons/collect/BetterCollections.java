@@ -381,14 +381,14 @@ public class BetterCollections {
 	 * @param <E> The type of the element
 	 */
 	public static class UnmodifiableElementWrapper<E> implements MutableCollectionElement<E> {
-		private final UnmodifiableBetterCollection<E> theCollection;
+		private final BetterCollection<E> theCollection;
 		private final CollectionElement<? extends E> theWrapped;
 
 		/**
 		 * @param collection The unmodifiable collection this element is for
 		 * @param wrapped The element to wrap
 		 */
-		protected UnmodifiableElementWrapper(UnmodifiableBetterCollection<E> collection, CollectionElement<? extends E> wrapped) {
+		protected UnmodifiableElementWrapper(BetterCollection<E> collection, CollectionElement<? extends E> wrapped) {
 			theCollection = collection;
 			theWrapped = wrapped;
 		}
@@ -578,7 +578,7 @@ public class BetterCollections {
 		 * @param collection The unmodifiable list this element belongs to
 		 * @param wrapped The element to wrap
 		 */
-		protected UnmodifiableListElementWrapper(UnmodifiableBetterList<E> collection, ListElement<? extends E> wrapped) {
+		public UnmodifiableListElementWrapper(BetterList<E> collection, ListElement<? extends E> wrapped) {
 			super(collection, wrapped);
 		}
 

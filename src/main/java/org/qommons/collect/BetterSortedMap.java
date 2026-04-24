@@ -395,6 +395,12 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		return (BetterSortedMap<K, V>) BetterMap.super.withAll(values);
 	}
 
+	@Override
+	default BetterSortedMap<K, V> withAll(Iterable<? extends K> keys, V value) {
+		BetterMap.super.withAll(keys, value);
+		return this;
+	}
+
 	/**
 	 * @param <K> The key-type for the map
 	 * @param <V> The value-type for the map
