@@ -228,7 +228,12 @@ public class ModControlledMultiMap<K, V, M extends BetterMultiMap<K, V>> impleme
 	}
 
 	protected MultiEntryHandle<K, V> wrapEntry(MultiEntryHandle<K, V> backingEntry) {
-		return backingEntry == null ? null : new EntryWrapper(backingEntry);
+		if (backingEntry == null)
+			return null;
+		else if (backingEntry instanceof OrderedMultiEntry)
+			return new OrderedEntryWrapper((OrderedMultiEntry<K, V>) backingEntry);
+		else
+			return new EntryWrapper(backingEntry);
 	}
 
 	protected BetterCollection<V> wrapValues(K key, BetterCollection<V> values) {
@@ -281,6 +286,32 @@ public class ModControlledMultiMap<K, V, M extends BetterMultiMap<K, V>> impleme
 		@Override
 		public MultiEntryHandle<K, V> getAdjacent(boolean next) {
 			return wrapEntry(theBackingEntry.getAdjacent(next));
+		}
+	}
+
+	public class OrderedEntryWrapper extends EntryWrapper implements OrderedMultiEntry<K, V> {
+		protected OrderedEntryWrapper(OrderedMultiEntry<K, V> backingEntry) {
+			super(backingEntry);
+		}
+
+		@Override
+		protected OrderedMultiEntry<K, V> getBackingEntry() {
+			return (OrderedMultiEntry<K, V>) super.getBackingEntry();
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return getBackingEntry().getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return getBackingEntry().getElementsAfter();
+		}
+
+		@Override
+		public OrderedMultiEntry<K, V> getAdjacent(boolean next) {
+			return (OrderedMultiEntry<K, V>) super.getAdjacent(next);
 		}
 	}
 
@@ -513,32 +544,6 @@ public class ModControlledMultiMap<K, V, M extends BetterMultiMap<K, V>> impleme
 		@Override
 		protected OrderedMultiEntry<K, V> wrapEntry(MultiEntryHandle<K, V> backingEntry) {
 			return backingEntry == null ? null : new OrderedEntryWrapper((OrderedMultiEntry<K, V>) backingEntry);
-		}
-
-		public class OrderedEntryWrapper extends EntryWrapper implements OrderedMultiEntry<K, V> {
-			protected OrderedEntryWrapper(OrderedMultiEntry<K, V> backingEntry) {
-				super(backingEntry);
-			}
-
-			@Override
-			protected OrderedMultiEntry<K, V> getBackingEntry() {
-				return (OrderedMultiEntry<K, V>) super.getBackingEntry();
-			}
-
-			@Override
-			public int getElementsBefore() {
-				return getBackingEntry().getElementsBefore();
-			}
-
-			@Override
-			public int getElementsAfter() {
-				return getBackingEntry().getElementsAfter();
-			}
-
-			@Override
-			public OrderedMultiEntry<K, V> getAdjacent(boolean next) {
-				return (OrderedMultiEntry<K, V>) super.getAdjacent(next);
-			}
 		}
 	}
 }

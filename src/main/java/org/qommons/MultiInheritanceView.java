@@ -515,7 +515,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	 */
 	default Iterable<Node<K, V>> getEntries(K key, TypeMatch match, boolean valuedOnly) {
 		if (match == null) {
-		Iterable<Node<K, V>> nodes;
+			Iterable<Node<K, V>> nodes;
 			if (key == null) {
 				nodes = IterableUtils.depthFirstMulti(getRoots(), Node::getChildren, null);
 			} else {
@@ -566,14 +566,17 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 				Navigator<K, V> nav = new Navigator<K, V>() {
 					@Override
 					public Iterator<Node<K, V>> visit(Node<K, V> node) {
-						if (!inh.isExtension(key, node.getKey()))
-							return Collections.emptyIterator();
-						Iterator<Node<K, V>> childIter = node.visitChildren(this);
-						if (childIter.hasNext())
-							return childIter;
-						else if (!valuedOnly || node.getValue() != null)
-							return Collections.singleton(node).iterator();
-						else
+						if (inh.isExtension(key, node.getKey())) {
+							Iterator<Node<K, V>> childIter = node.visitChildren(this);
+							if (childIter.hasNext())
+								return childIter;
+							else if (!valuedOnly || node.getValue() != null)
+								return Collections.singleton(node).iterator();
+							else
+								return Collections.emptyIterator();
+						} else if (inh.isExtension(node.getKey(), key)) {
+							return node.visitChildren(this);
+						} else
 							return Collections.emptyIterator();
 					}
 				};
@@ -863,7 +866,11 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 					if (!valuedOnly || node.theValue != null)
 						return node;
 					else
-						findDirectDescendant(node.theChildren, node.theChildCount, key, valuedOnly, inh);
+						return findDirectDescendant(node.theChildren, node.theChildCount, key, valuedOnly, inh);
+				} else if (inh.isExtension(node.theKey, key)) {
+					Default<K, V>.NodeImpl found = findDirectDescendant(node.theChildren, node.theChildCount, key, valuedOnly, inh);
+					if (found != null)
+						return found;
 				}
 			}
 			return null;

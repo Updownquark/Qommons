@@ -176,7 +176,12 @@ public class ModControlledMap<K, V, M extends BetterMap<K, V>> implements Better
 	}
 
 	protected MutableMapEntryHandle<K, V> wrapMutable(MutableMapEntryHandle<K, V> backingEntry) {
-		return new MutableEntryWrapper(backingEntry);
+		if (backingEntry == null)
+			return null;
+		else if (backingEntry instanceof MutableOrderedMapEntry)
+			return new MutableOrderedEntryWrapper((MutableOrderedMapEntry<K, V>) backingEntry);
+		else
+			return new MutableEntryWrapper(backingEntry);
 	}
 
 	public class MutableEntryWrapper implements MutableMapEntryHandle<K, V> {
@@ -270,6 +275,33 @@ public class ModControlledMap<K, V, M extends BetterMap<K, V>> implements Better
 		@Override
 		public String toString() {
 			return theBackingEntry.toString();
+		}
+	}
+
+	public class MutableOrderedEntryWrapper extends MutableEntryWrapper implements MutableOrderedMapEntry<K, V> {
+		protected MutableOrderedEntryWrapper(MutableOrderedMapEntry<K, V> backingEntry) {
+			super(backingEntry);
+		}
+
+		@Override
+		protected MutableOrderedMapEntry<K, V> getBackingEntry() {
+			return (MutableOrderedMapEntry<K, V>) super.getBackingEntry();
+		}
+
+		@Override
+		public int getElementsBefore() {
+			return getBackingEntry().getElementsBefore();
+		}
+
+		@Override
+		public int getElementsAfter() {
+			return getBackingEntry().getElementsAfter();
+		}
+
+		@Override
+		public MutableOrderedMapEntry<K, V> getAdjacent(boolean next) {
+			MutableOrderedMapEntry<K, V> adj = getBackingEntry().getAdjacent(next);
+			return adj == null ? null : (MutableOrderedMapEntry<K, V>) wrapMutable(adj);
 		}
 	}
 
@@ -390,33 +422,6 @@ public class ModControlledMap<K, V, M extends BetterMap<K, V>> implements Better
 		@Override
 		public OrderedMapEntry<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
 			return getBacking().searchEntries(search, filter);
-		}
-
-		public class MutableOrderedEntryWrapper extends MutableEntryWrapper implements MutableOrderedMapEntry<K, V> {
-			protected MutableOrderedEntryWrapper(MutableOrderedMapEntry<K, V> backingEntry) {
-				super(backingEntry);
-			}
-
-			@Override
-			protected MutableOrderedMapEntry<K, V> getBackingEntry() {
-				return (MutableOrderedMapEntry<K, V>) super.getBackingEntry();
-			}
-
-			@Override
-			public int getElementsBefore() {
-				return getBackingEntry().getElementsBefore();
-			}
-
-			@Override
-			public int getElementsAfter() {
-				return getBackingEntry().getElementsAfter();
-			}
-
-			@Override
-			public MutableOrderedMapEntry<K, V> getAdjacent(boolean next) {
-				MutableOrderedMapEntry<K, V> adj = getBackingEntry().getAdjacent(next);
-				return adj == null ? null : wrapMutable(adj);
-			}
 		}
 	}
 }

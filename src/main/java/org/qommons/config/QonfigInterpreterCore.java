@@ -1,6 +1,7 @@
 package org.qommons.config;
 
 import java.util.*;
+import java.util.function.Predicate;
 
 import org.qommons.MultiInheritanceSet;
 import org.qommons.MultiInheritanceView;
@@ -37,8 +38,7 @@ public class QonfigInterpreterCore {
 		 * @throws QonfigInterpretationException If an error occurs initializing this session
 		 */
 		protected CoreSession(QonfigInterpreterCore interpreter, QonfigElement root, CoreSession source,
-			ExceptionThrowingReporting reporting)
-			throws QonfigInterpretationException {
+			ExceptionThrowingReporting reporting) throws QonfigInterpretationException {
 			theInterpreter = interpreter;
 			theParent = source;
 			theElement = root;
@@ -225,12 +225,28 @@ public class QonfigInterpreterCore {
 			ExBiConsumer<? super T, ? super CoreSession, QonfigInterpretationException> action) throws QonfigInterpretationException {
 			try (Transaction t = theReporting.interpreting()) {
 				MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(as);
-				QonfigCreatorHolder<T> creator = creators == null ? null
-					: (QonfigCreatorHolder<T>) creators.get(asType, TypeMatch.SUB_TYPE);
+				QonfigCreatorHolder<T> creator = null;
+				CoreSession session = this;
+				if (creators != null) {
+					for (QonfigCreatorHolder<?> c : creators.getAll(asType, TypeMatch.SUB_TYPE)) {
+						if (c.filter == null || c.filter.test(this)) {
+							creator = (QonfigCreatorHolder<T>) c;
+							break;
+						}
+					}
+				}
 				if (creator == null) {
 					as = getElement().getType();
 					creators = theInterpreter.theCreators.get(as);
-					creator = creators == null ? null : (QonfigCreatorHolder<T>) creators.get(asType, TypeMatch.SUB_TYPE);
+					session = asElement(as);
+					if (creators != null) {
+						for (QonfigCreatorHolder<?> c : creators.getAll(asType, TypeMatch.SUB_TYPE)) {
+							if (theElement.isInstance(c.element) && (c.filter == null || c.filter.test(session))) {
+								creator = (QonfigCreatorHolder<T>) c;
+								break;
+							}
+						}
+					}
 				}
 				if (creator == null) {
 					String msg = "No creator registered for element " + as.getDeclarer() + ":" + as + " and target type "
@@ -238,12 +254,7 @@ public class QonfigInterpreterCore {
 					reporting().error(msg);
 					return null;
 				}
-				CoreSession session;
-				if (theFocusType == creator.element)
-					session = this;
-				else if (theElement.isInstance(creator.element))
-					session = asElement(as);
-				else {
+				if (theFocusType != creator.element && !theElement.isInstance(creator.element)) {
 					String msg = "Element " + theElement + " is not an instance of " + as.getDeclarer() + ":" + as;
 					reporting().error(msg);
 					throw new IllegalStateException(msg);
@@ -505,11 +516,14 @@ public class QonfigInterpreterCore {
 	 */
 	protected static class QonfigCreatorHolder<T> {
 		final QonfigElementOrAddOn element;
+		final Predicate<? super AbstractQIS<?>> filter;
 		final Class<T> type;
 		final QonfigValueCreator<? extends T> creator;
 
-		QonfigCreatorHolder(QonfigElementOrAddOn element, Class<T> type, QonfigValueCreator<? extends T> creator) {
+		QonfigCreatorHolder(QonfigElementOrAddOn element, Predicate<? super AbstractQIS<?>> filter, Class<T> type,
+			QonfigValueCreator<? extends T> creator) {
 			this.element = element;
+			this.filter = filter;
 			this.type = type;
 			this.creator = creator;
 		}
@@ -689,8 +703,7 @@ public class QonfigInterpreterCore {
 		 * @param specialSessions Special session implementations configured for the builder
 		 * @return A new builder with the given data
 		 */
-		protected Builder builderFor(Set<QonfigToolkit> toolkits, QonfigToolkit toolkit,
-			ExceptionThrowingReporting reporting,
+		protected Builder builderFor(Set<QonfigToolkit> toolkits, QonfigToolkit toolkit, ExceptionThrowingReporting reporting,
 			Map<QonfigElementOrAddOn, MultiInheritanceMap2<Class<?>, QonfigCreatorHolder<?>>> creators,
 			Map<QonfigElementOrAddOn, MultiInheritanceMap2<Class<?>, List<QonfigModifierHolder<?>>>> modifiers,
 			MultiInheritanceMap2<Class<?>, SpecialSessionImplementation<?>> specialSessions) {
@@ -785,13 +798,26 @@ public class QonfigInterpreterCore {
 		 * @return This builder
 		 */
 		public <T> Builder createWith(QonfigElementOrAddOn element, Class<T> type, QonfigValueCreator<? extends T> creator) {
+			return createWith(element, null, type, creator);
+		}
+
+		/**
+		 * @param <T> The type to create
+		 * @param element The element-def to create values for
+		 * @param filter The filter that an element must meet for the creator to apply
+		 * @param type The type to create
+		 * @param creator The creator to interpret elements of the given type
+		 * @return This builder
+		 */
+		public <T> Builder createWith(QonfigElementOrAddOn element, Predicate<AbstractQIS<?>> filter, Class<T> type,
+			QonfigValueCreator<? extends T> creator) {
 			if (!dependsOn(element.getDeclarer()))
 				throw new IllegalArgumentException("Element " + element.getName() + " is from a toolkit not included in " + theToolkits);
 			theCreators.compute(element, (el, old) -> {
 				if (old == null)
 					old = MultiInheritanceView.createClassMap();
 				// If it already exists, assume this just called twice via dependencies
-				old.computeIfAbsent(type, () -> new QonfigCreatorHolder<>(element, type, creator));
+				old.computeIfAbsent(type, () -> new QonfigCreatorHolder<>(element, filter, type, creator));
 				return old;
 			});
 			return this;
@@ -805,12 +831,25 @@ public class QonfigInterpreterCore {
 		 * @return This builder
 		 */
 		public <T> Builder createWith(String elementName, Class<T> type, QonfigValueCreator<? extends T> creator) {
+			return createWith(elementName, null, type, creator);
+		}
+
+		/**
+		 * @param <T> The type to create
+		 * @param elementName The name of the element-def to create values for
+		 * @param filter The filter that an element must meet for the creator to apply
+		 * @param type The type to create
+		 * @param creator The creator to interpret elements of the given type
+		 * @return This builder
+		 */
+		public <T> Builder createWith(String elementName, Predicate<AbstractQIS<?>> filter, Class<T> type,
+			QonfigValueCreator<? extends T> creator) {
 			if (theToolkit == null)
 				throw new IllegalStateException("Use forToolkit(QonfigToolkit) first to get an interpreter for a toolkit");
 			QonfigElementOrAddOn element = theToolkit.getElementOrAddOn(elementName);
 			if (element == null)
 				throw new IllegalArgumentException("No such element '" + elementName + "' in toolkit " + theToolkit.getLocation());
-			return createWith(element, type, creator);
+			return createWith(element, filter, type, creator);
 		}
 
 		/**

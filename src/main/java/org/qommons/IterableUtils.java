@@ -653,7 +653,7 @@ public class IterableUtils {
 	 * @param map The mapping function for iterable values
 	 * @return An iterable whose values are those of the given iterable, mapped via the given function
 	 */
-	public static <T, V> Betterable<V> map(Iterable<T> iterable, Function<? super T, ? extends V> map) {
+	public static <T, V> Betterable<V> map(Iterable<? extends T> iterable, Function<? super T, ? extends V> map) {
 		if (iterable == null)
 			throw new NullPointerException();
 		return new ToStringIterable<>(() -> new MappedIterator<>(iterable.iterator(), map));
@@ -666,7 +666,7 @@ public class IterableUtils {
 	 * @param map The mapping function for iterated values
 	 * @return An iterator whose values are those of the given iterator, mapped via the given function
 	 */
-	public static <T, V> Iterator<V> map(Iterator<T> iterator, Function<? super T, ? extends V> map) {
+	public static <T, V> Iterator<V> map(Iterator<? extends T> iterator, Function<? super T, ? extends V> map) {
 		if (iterator == null)
 			throw new NullPointerException();
 		return new MappedIterator<>(iterator, map);

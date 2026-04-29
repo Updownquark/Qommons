@@ -429,7 +429,7 @@ public class CsvParser implements TabularFileParser {
 		boolean simple = true;
 		for (int c = 0; simple && c < string.length(); c++) {
 			char ch = string.charAt(c);
-			if (ch == delimiter || ch == '\n')
+			if (ch == delimiter || ch == '\n' || ch == '"')
 				simple = false;
 		}
 		if (simple)
@@ -444,6 +444,119 @@ public class CsvParser implements TabularFileParser {
 		}
 		str.append('"');
 		return str.toString();
+	}
+
+	/**
+	 * Escapes a CSV column value in a StringBuilder
+	 * 
+	 * @param str The StringBuilder containing the column value
+	 * @param start The start position of the CSV value
+	 * @param end The end position of the CSV value
+	 * @param delimiters Delimiters that must be escaped
+	 * @return The end position of the now-escaped CSV column value in the sequence
+	 */
+	public static int escapeCsv(StringBuilder str, int start, int end, char... delimiters) {
+		if (start >= end)
+			return end;
+		Arrays.sort(delimiters);
+		// Quote characters in the body of the value do not need to be escaped,
+		// but an initial quote character would signal to the parser that the CSV value is escaped, which would cause problems.
+		boolean simple = str.charAt(0) != '"';
+		for (int c = start; simple && c < end; c++) {
+			char ch = str.charAt(c);
+			if (Arrays.binarySearch(delimiters, ch) >= 0 || ch == '\n')
+				simple = false;
+		}
+		if (simple)
+			return end;
+		str.insert(start, '"');
+		end++;
+		for (int c = start + 1; c < end; c++) {
+			char ch = str.charAt(c);
+			if (ch == '"') {
+				c++;
+				str.insert(c, '"');
+			}
+		}
+		str.insert(end, '"');
+		return end + 1;
+	}
+
+	/** A result from the {@link CsvParser#fromCsv(CharSequence, int, int, int, char...)} method */
+	public static class ParsedCsvValue {
+		/** The parsed CSV value */
+		public final CharSequence parsed;
+		/**
+		 * The end of the CSV value in the source sequence. This is either the length of the sequence (the value was the last in the
+		 * sequence), or the index in the sequence of the delimiter that terminated the value.
+		 */
+		public final int sourceEnd;
+		/** The line number of the end of the CSV value */
+		public final int endLine;
+		/** The column number of the end of the CSV value */
+		public final int endColumn;
+
+		/**
+		 * @param parsed The parsed CSV value
+		 * @param sourceEnd The end of the CSV value in the source sequence. This is either the length of the sequence (the value was the
+		 *        last in the sequence), or the index in the sequence of the delimiter that terminated the value.
+		 * @param endLine The line number of the end of the CSV value
+		 * @param endColumn The column number of the end of the CSV value
+		 */
+		public ParsedCsvValue(CharSequence parsed, int sourceEnd, int endLine, int endColumn) {
+			this.parsed = parsed;
+			this.sourceEnd = sourceEnd;
+			this.endLine = endLine;
+			this.endColumn = endColumn;
+		}
+	}
+
+	/**
+	 * Parses a CSV column value from a sequence
+	 * 
+	 * @param text The sequence containing the CSV value
+	 * @param start The starting index of the CSV value in the sequence
+	 * @param startLine The line number at the value start position
+	 * @param startCol The column number at the value start position
+	 * @param delimiters The delimiters that may terminate the value
+	 * @return A structure containing the parsed value and information about its positioning
+	 * @throws TextParseException If the CSV value is escaped (begins with a '"'), but there is no terminating quotation mark
+	 */
+	public static ParsedCsvValue fromCsv(CharSequence text, int start, int startLine, int startCol, char... delimiters)
+		throws TextParseException {
+		Arrays.sort(delimiters);
+		int line = startLine, col = startCol;
+		if (start >= text.length() || text.charAt(start) != '"') {
+			for (int i = start; i < text.length(); i++) {
+				char ch = text.charAt(i);
+				if (Arrays.binarySearch(delimiters, ch) >= 0)
+					return new ParsedCsvValue(text.subSequence(start, i), i, line, col);
+				else if (ch == '\n') {
+					line++;
+					col = 0;
+				} else
+					col++;
+			}
+			return new ParsedCsvValue(start == 0 ? text : text.subSequence(start, text.length()), text.length(), line, col);
+		}
+		StringBuilder unescaped = new StringBuilder();
+		for (int i = start + 1; i < text.length(); i++) {
+			char ch = text.charAt(i);
+			col++;
+			if (ch == '"') {
+				int next = i + 1;
+				if (next < text.length() && text.charAt(next) == '"') {
+					i++;
+					col++;
+				} else
+					return new ParsedCsvValue(unescaped, i + 1, line, col);
+			} else {
+				line++;
+				col = 0;
+			}
+			unescaped.append(ch);
+		}
+		throw new TextParseException("Unmatched quote", start, startLine, startCol);
 	}
 
 	/**

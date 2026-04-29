@@ -183,7 +183,7 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 		if (msg != null)
 			throw new UnsupportedOperationException(msg);
 		CollectionElement<E> added = theBacking.addElement(value, after, before, first);
-		if (theListener != null)
+		if (added != null && theListener != null)
 			theListener.elementAdded(added);
 		return added;
 	}
@@ -426,7 +426,7 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 		}
 	}
 
-	static class ModControlledSet<E, C extends BetterSet<E>> extends ModControlledCollection<E, C> implements BetterSet<E> {
+	public static class ModControlledSet<E, C extends BetterSet<E>> extends ModControlledCollection<E, C> implements BetterSet<E> {
 		public ModControlledSet(C backing, CollectionModificationControl<E> control, CollectionModificationListener<E> listener) {
 			super(backing, control, listener);
 		}
@@ -485,7 +485,8 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 		}
 	}
 
-	static class ModControlledSortedList<E, C extends BetterSortedList<E>> extends ModControlledList<E, C> implements BetterSortedList<E> {
+	public static class ModControlledSortedList<E, C extends BetterSortedList<E>> extends ModControlledList<E, C>
+		implements BetterSortedList<E> {
 		public ModControlledSortedList(C backing, CollectionModificationControl<E> control, CollectionModificationListener<E> listener) {
 			super(backing, control, listener);
 		}

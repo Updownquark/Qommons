@@ -105,7 +105,7 @@ public interface Identifiable {
 		}
 
 		@Override
-		public AbstractIdentifiable alias(String alias) {
+		public Identifiable alias(String alias) {
 			theIdentity = AliasedIdentity.alias(getIdentity(), alias);
 			return this;
 		}

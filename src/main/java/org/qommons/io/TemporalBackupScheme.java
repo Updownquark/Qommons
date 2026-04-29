@@ -139,8 +139,12 @@ public class TemporalBackupScheme {
 			} else
 				backups.remove(backup.getKey());
 		}
-		if (lastBackupTime != null)
-			manager.preserve(backups.get(lastBackupTime));
+		if (lastBackupTime != null) {
+			T lastBackup = backups.get(lastBackupTime);
+			if (lastBackup == CURRENT_BACKUP)
+				return true;
+			manager.preserve(lastBackup);
+		}
 		return now.equals(backups.keySet().peekLast());
 	}
 }

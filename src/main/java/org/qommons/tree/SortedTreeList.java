@@ -30,6 +30,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 		/** @param compare The comparator for the list's ordering */
 		protected Builder(Comparator<? super E> compare) {
 			super(DEFAULT_DESCRIP);
+			if (compare == null)
+				throw new NullPointerException();
 			theCompare = compare;
 		}
 

@@ -83,7 +83,7 @@ public class FileBackups {
 	}
 
 	private final BetterFile theTargetFile;
-	private final TemporalBackupScheme theBackupScheme;
+	private TemporalBackupScheme theBackupScheme;
 	private final FileBackupManager theBackupManager;
 
 	/** @param targetFile The file to back up */
@@ -104,6 +104,15 @@ public class FileBackups {
 	/** @return The backup scheme controlling the set of backups kept by this backup manager */
 	public TemporalBackupScheme getBackupScheme() {
 		return theBackupScheme;
+	}
+
+	/**
+	 * @param backupScheme The backup scheme to control the set of backups kept by this backup manager
+	 * @return This file backup utility
+	 */
+	public FileBackups setBackupScheme(TemporalBackupScheme backupScheme) {
+		theBackupScheme = backupScheme;
+		return this;
 	}
 
 	/**
