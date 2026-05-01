@@ -343,8 +343,8 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 	}
 
 	/** @return A {@link Reader} that reads characters from this buffer */
-	public Reader asReader() {
-		class CCBReader extends Reader {
+	public UnfailingReader asReader() {
+		class CCBReader extends UnfailingReader {
 			private int theStreamOffset;
 
 			@Override
@@ -381,9 +381,9 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 	 * @param terminating If true, this reader will return -1 when the buffer is empty; otherwise the reader will return 0
 	 * @return A {@link Reader} that reads (and removes) characters off the front of this buffer
 	 */
-	public Reader asDeletingReader(boolean terminating) {
+	public UnfailingReader asDeletingReader(boolean terminating) {
 		int terminal = terminating ? -1 : 0;
-		class DeletingCCBReader extends Reader {
+		class DeletingCCBReader extends UnfailingReader {
 			@Override
 			public int read() {
 				return pop() & 0xff;
@@ -412,8 +412,8 @@ public class CircularCharBuffer extends AbstractCharSequence implements Appendab
 	}
 
 	/** @return A {@link Writer} that appends to the end of this buffer */
-	public Writer asWriter() {
-		class CBBWriter extends Writer {
+	public UnfailingWriter asWriter() {
+		class CBBWriter extends UnfailingWriter {
 			@Override
 			public void write(int b) {
 				CircularCharBuffer.this.append((char) b);

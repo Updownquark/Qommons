@@ -464,9 +464,17 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 	}
 
 	/** @return A {@link InputStream} that reads bytes from this buffer */
-	public InputStream asInputStream() {
-		class CBBInputStream extends InputStream {
-			private int theStreamOffset;
+	public UnfailingInputStream asInputStream() {
+		return asInputStream(0);
+	}
+
+	/**
+	 * @param offset The starting offset to read from
+	 * @return A {@link InputStream} that reads bytes from this buffer
+	 */
+	public UnfailingInputStream asInputStream(int offset) {
+		class CBBInputStream extends UnfailingInputStream {
+			private int theStreamOffset = offset;
 
 			@Override
 			public int read() {
@@ -500,8 +508,8 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 	}
 
 	/** @return A {@link InputStream} that reads (and removes) bytes off the front of this buffer */
-	public InputStream asDeletingInputStream() {
-		class DeletingCBBInputStream extends InputStream {
+	public UnfailingInputStream asDeletingInputStream() {
+		class DeletingCBBInputStream extends UnfailingInputStream {
 			@Override
 			public int read() {
 				return pop() & 0xff;
@@ -529,8 +537,8 @@ public class CircularByteBuffer implements StringUtils.BinaryAccumulator {
 	}
 
 	/** @return An {@link OutputStream} that appends to the end of this buffer */
-	public OutputStream asOutputStream() {
-		class CBBOutputStream extends OutputStream {
+	public UnfailingOutputStream asOutputStream() {
+		class CBBOutputStream extends UnfailingOutputStream {
 			@Override
 			public void write(int b) {
 				append((byte) b);

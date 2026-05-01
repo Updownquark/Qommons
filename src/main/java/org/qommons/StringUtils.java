@@ -2015,8 +2015,9 @@ public class StringUtils {
 	/**
 	 * @param ch The hex character to parse
 	 * @return The digit (0-15) represented by the character
+	 * @throws IllegalArgumentException If the given character is not a valid hex digit representation
 	 */
-	public static int hexDigit(char ch) {
+	public static int hexDigit(char ch) throws IllegalArgumentException {
 		int index = ch;
 		if (index >= HEX_DIGIT_VALUES.length)
 			throw new IllegalArgumentException("Character " + ch + " (decimal " + (int) ch + ") is not a hex digit");
