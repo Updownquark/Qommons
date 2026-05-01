@@ -13,7 +13,7 @@ public abstract class QonfigException extends TextParseException {
 	 * @param errorLength The length of the text where the exception occurrred
 	 * @param cause The cause of the exception
 	 */
-	public QonfigException(String message, LocatedFilePosition position, int errorLength, Throwable cause) {
+	protected QonfigException(String message, LocatedFilePosition position, int errorLength, Throwable cause) {
 		super(message, position, cause);
 		theErrorLength = errorLength;
 	}
@@ -23,7 +23,7 @@ public abstract class QonfigException extends TextParseException {
 	 * @param position The position in the file where the exception occurred
 	 * @param errorLength The length of the text where the exception occurrred
 	 */
-	public QonfigException(String message, LocatedFilePosition position, int errorLength) {
+	protected QonfigException(String message, LocatedFilePosition position, int errorLength) {
 		super(message, position);
 		theErrorLength = errorLength;
 	}
@@ -33,7 +33,7 @@ public abstract class QonfigException extends TextParseException {
 	 * @param position The position in the file where the exception occurred
 	 * @param errorLength The length of the text where the exception occurrred
 	 */
-	public QonfigException(LocatedFilePosition position, int errorLength, Throwable cause) {
+	protected QonfigException(LocatedFilePosition position, int errorLength, Throwable cause) {
 		super(cause.getMessage(), position, cause);
 		theErrorLength = errorLength;
 	}

@@ -1,5 +1,7 @@
 package org.qommons.io;
 
+import org.qommons.AbstractCharSequence;
+
 /** A {@link PositionedContent} that knows the file its in, so it can produce {@link LocatedFilePosition}s */
 public interface LocatedPositionedContent extends PositionedContent {
 	/** Empty content at position 0 */
@@ -53,6 +55,16 @@ public interface LocatedPositionedContent extends PositionedContent {
 		}
 
 		@Override
+		public int hashCode() {
+			return AbstractCharSequence.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return AbstractCharSequence.equals(this, obj);
+		}
+
+		@Override
 		public String toString() {
 			return "";
 		}
@@ -91,6 +103,10 @@ public interface LocatedPositionedContent extends PositionedContent {
 			return (LocatedPositionedContent) position;
 		else
 			return new Default(fileLocation, position);
+	}
+
+	public static LocatedPositionedContent of(String fileLocation, CharSequence content) {
+		return of(fileLocation, PositionedContent.of(content));
 	}
 
 	/** Default {@link LocatedPositionedContent} implementation */
@@ -147,6 +163,16 @@ public interface LocatedPositionedContent extends PositionedContent {
 			if (startIndex == 0 && endIndex == length())
 				return this;
 			return new Default(theFileLocation, theContent.subSequence(startIndex, endIndex));
+		}
+
+		@Override
+		public int hashCode() {
+			return AbstractCharSequence.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return AbstractCharSequence.equals(this, obj);
 		}
 
 		@Override
@@ -214,6 +240,16 @@ public interface LocatedPositionedContent extends PositionedContent {
 			if (startIndex == 0 && endIndex == length())
 				return this;
 			return new SimpleLine(getPosition(startIndex), theContent.substring(startIndex, endIndex));
+		}
+
+		@Override
+		public int hashCode() {
+			return AbstractCharSequence.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return AbstractCharSequence.equals(this, obj);
 		}
 
 		@Override

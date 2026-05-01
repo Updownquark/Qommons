@@ -7,7 +7,7 @@ import java.net.URL;
 import java.util.*;
 import java.util.function.Consumer;
 
-import org.qommons.config.QonfigInterpreterCore.Builder;
+import org.qommons.QommonsUtils;
 import org.qommons.io.ErrorReporting;
 import org.qommons.io.LocatedFilePosition;
 import org.qommons.io.MinML.XmlParseException;
@@ -43,7 +43,8 @@ public class QonfigApp {
 			throw new IllegalArgumentException("Could not parse toolkit definition XML '" + qonfigAppTKUrl.getPath() + "'", e);
 		} catch (QonfigParseException e) {
 			throw new IllegalStateException("Could not parse app toolkit definition '" + qonfigAppTKUrl.getPath() + "'", e);
-		} finally {}
+		} finally {
+		}
 		return QONFIG_APP_TOOLKIT;
 	}
 
@@ -58,25 +59,23 @@ public class QonfigApp {
 	 */
 	public static QonfigApp parseApp(URL appDefUrl, URL... appToolkits)
 		throws IOException, TextParseException, QonfigParseException, IllegalStateException {
+		Builder builder = build();
 		QonfigToolkit qonfigAppTK = getQonfigAppToolkit();
-		DefaultQonfigParser qonfigParser = new DefaultQonfigParser();
-		qonfigParser.withToolkit(qonfigAppTK);
+		builder.withToolkit(qonfigAppTK);
 
 		for (URL appToolkit : appToolkits) {
-			QonfigToolkit appTK;
-			try (InputStream aTKIn = appToolkit.openStream()) {
-				appTK = qonfigParser.parseToolkit(appToolkit, aTKIn, null);
+			try {
+				builder.withToolkit(appToolkit);
 			} catch (IOException e) {
 				throw new IOException("Could not read app toolkit definition '" + appToolkit.getPath() + "'", e);
 			} catch (XmlParseException e) {
 				throw new TextParseException("Could not parse toolkit definition XML '" + appToolkit.getPath() + "'", e.getPosition(), e);
 			}
-			qonfigParser.withToolkit(appTK);
 		}
 
 		QonfigDocument appDef;
 		try (InputStream appDefIn = appDefUrl.openStream()) {
-			appDef = qonfigParser.parseDocument(false, appDefUrl.toString(), appDefIn);
+			appDef = builder.getParser().parseDocument(false, appDefUrl.toString(), appDefIn);
 		} catch (IOException e) {
 			throw new IOException("Could not read Qonfig-App definition: " + appDefUrl, e);
 		} catch (XmlParseException e) {
@@ -84,18 +83,19 @@ public class QonfigApp {
 		}
 
 		String appFile = appDef.getRoot().getAttributeText(qonfigAppTK.getAttribute("qonfig-app", "app-file"));
+		builder.clear();
 
-		Set<QonfigToolkit> toolkits = new LinkedHashSet<>();
 		// Resolve the dependency toolkits
 		QonfigAttributeDef.Declared promiseNameAttr = qonfigAppTK.getAttribute("promise-fulfillment", "fulfills");
 		ClassLoader loader = Thread.currentThread().getContextClassLoader();
 		for (QonfigElement toolkitEl : appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "toolkit")) {
-			List<CustomValueType> valueTypes = create(toolkitEl.getChildrenInRole(qonfigAppTK, "toolkit", "value-type"),
-				CustomValueType.class);
-			Map<String, QonfigPromiseFulfillment> promiseFulfillment = new LinkedHashMap<>();
+			ToolkitConfig tkCfg = builder.buildToolkit();
+			for (CustomValueType valueType : create(toolkitEl.getChildrenInRole(qonfigAppTK, "toolkit", "value-type"),
+				CustomValueType.class))
+				tkCfg.withValueType(valueType);
 			for (QonfigElement pfEl : toolkitEl.getChildrenInRole(qonfigAppTK, "toolkit", "promise-fulfillment")) {
 				String promiseName = pfEl.getAttributeText(promiseNameAttr);
-				promiseFulfillment.put(promiseName, create(Collections.singleton(pfEl), QonfigPromiseFulfillment.class).get(0));
+				tkCfg.withPromise(promiseName, create(Collections.singleton(pfEl), QonfigPromiseFulfillment.class).get(0));
 			}
 			String toolkitDef = toolkitEl.getAttributeText(qonfigAppTK.getAttribute("toolkit", "def"));
 			URL toolkitURL = loader == null ? null : loader.getResource(toolkitDef);
@@ -113,9 +113,9 @@ public class QonfigApp {
 			}
 			if (toolkitURL == null)
 				throw new IllegalArgumentException("Could not find toolkit " + toolkitDef);
-			try (InputStream tkIn = toolkitURL.openStream()) {
-				toolkits.add(qonfigParser.parseToolkit(toolkitURL, tkIn, promiseFulfillment, //
-					valueTypes.toArray(new CustomValueType[valueTypes.size()])));
+
+			try {
+				tkCfg.buildToolkit(toolkitURL);
 			} catch (IOException e) {
 				throw new IllegalStateException("Could not read toolkit " + toolkitDef + ": " + e.getMessage(), e);
 			} catch (XmlParseException e) {
@@ -127,14 +127,16 @@ public class QonfigApp {
 			}
 		}
 
-		List<SpecialSessionImplementation<?>> sessionTypes = create(
+		for (SpecialSessionImplementation<?> sessionType : create(
 			appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "special-session"),
-			(Class<SpecialSessionImplementation<?>>) (Class<?>) SpecialSessionImplementation.class);
+			(Class<SpecialSessionImplementation<?>>) (Class<?>) SpecialSessionImplementation.class))
+			builder.withSessionType(sessionType);
 
-		List<QonfigInterpretation> interpretations = create(appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "interpretation"),
-			QonfigInterpretation.class);
+		for (QonfigInterpretation interpretation : create(appDef.getRoot().getChildrenInRole(qonfigAppTK, "qonfig-app", "interpretation"),
+			QonfigInterpretation.class))
+			builder.withInterpretation(interpretation);
 
-		return new QonfigApp(appDef, appFile, Collections.unmodifiableSet(toolkits), sessionTypes, interpretations);
+		return builder.build(appDef, appFile);
 	}
 
 	/**
@@ -190,11 +192,13 @@ public class QonfigApp {
 		return Collections.unmodifiableList(values);
 	}
 
-	private static <QIS extends SpecialSession<QIS>> void addSpecial(SpecialSessionImplementation<QIS> ssi, Builder coreBuilder) {
+	private static <QIS extends SpecialSession<QIS>> void addSpecial(SpecialSessionImplementation<QIS> ssi,
+		QonfigInterpreterCore.Builder coreBuilder) {
 		coreBuilder.withSpecial(ssi.getProvidedAPI(), ssi);
 	}
 
 	private final QonfigDocument theDocument;
+	private final String theLoadingLocation;
 	private final String theAppFile;
 	private final Set<QonfigToolkit> theToolkits;
 	private final List<SpecialSessionImplementation<?>> theSessionTypes;
@@ -207,10 +211,10 @@ public class QonfigApp {
 	 * @param sessionTypes All Qonfig session types configured to support the application
 	 * @param interpretations All Qonfig interpretations configured to support the application
 	 */
-	protected QonfigApp(QonfigDocument document, String appFile, Set<QonfigToolkit> toolkits,
-		List<SpecialSessionImplementation<?>> sessionTypes,
-		List<QonfigInterpretation> interpretations) {
+	protected QonfigApp(QonfigDocument document, String loadingLocation, String appFile, Set<QonfigToolkit> toolkits,
+		List<SpecialSessionImplementation<?>> sessionTypes, List<QonfigInterpretation> interpretations) {
 		theDocument = document;
+		theLoadingLocation = loadingLocation;
 		theAppFile = appFile;
 		theToolkits = toolkits;
 		theSessionTypes = sessionTypes;
@@ -224,7 +228,7 @@ public class QonfigApp {
 
 	/** @return The location of the document that defined this application */
 	public String getLocation() {
-		return theDocument.getLocation();
+		return theLoadingLocation;
 	}
 
 	/** @return The location of the file defining the user interface of the application */
@@ -313,9 +317,9 @@ public class QonfigApp {
 		appFileParsed(qonfigDoc);
 
 		// Build the interpreter
-		QonfigInterpreterCore.Builder coreBuilder = QonfigInterpreterCore
-			.build(new ErrorReporting.Default(qonfigDoc.getRoot().getFilePosition()),
-				getToolkits().toArray(new QonfigToolkit[getToolkits().size()]));
+		QonfigInterpreterCore.Builder coreBuilder = QonfigInterpreterCore.build(
+			new ErrorReporting.Default(qonfigDoc.getRoot().getFilePosition()),
+			getToolkits().toArray(new QonfigToolkit[getToolkits().size()]));
 
 		for (SpecialSessionImplementation<?> ssi : getSessionTypes())
 			addSpecial(ssi, coreBuilder);
@@ -342,5 +346,112 @@ public class QonfigApp {
 	@Override
 	public String toString() {
 		return theAppFile;
+	}
+
+	public static Builder build() {
+		return new Builder();
+	}
+
+	public static class Builder {
+		private DefaultQonfigParser theParser;
+		private final Set<QonfigToolkit> theToolkits;
+		private final List<SpecialSessionImplementation<?>> theSessionTypes;
+		private final List<QonfigInterpretation> theInterpretations;
+
+		Builder() {
+			theParser = new DefaultQonfigParser();
+			theToolkits = new HashSet<>();
+			theSessionTypes = new ArrayList<>();
+			theInterpretations = new ArrayList<>();
+		}
+
+		public DefaultQonfigParser getParser() {
+			return theParser;
+		}
+
+		public Builder withToolkit(QonfigToolkit toolkit) {
+			theToolkits.add(toolkit);
+			theParser.withToolkit(toolkit);
+			return this;
+		}
+
+		public Builder withToolkit(URL toolkitLocation) throws IOException, TextParseException, QonfigParseException {
+			QonfigToolkit appTK;
+			try (InputStream aTKIn = toolkitLocation.openStream()) {
+				appTK = theParser.parseToolkit(toolkitLocation, aTKIn, null);
+			}
+			withToolkit(appTK);
+			return this;
+		}
+
+		public ToolkitConfig buildToolkit() {
+			return new ToolkitConfig(this);
+		}
+
+		public Builder withToolkit(URL toolkitLocation, Consumer<ToolkitConfig> config)
+			throws IOException, TextParseException, QonfigParseException {
+			ToolkitConfig tkCfg = buildToolkit();
+			config.accept(tkCfg);
+			tkCfg.buildToolkit(toolkitLocation);
+			return this;
+		}
+
+		public Builder withSessionType(SpecialSessionImplementation<?> sessionType) {
+			theSessionTypes.add(sessionType);
+			return this;
+		}
+
+		public Builder withInterpretation(QonfigInterpretation interpretation) {
+			theInterpretations.add(interpretation);
+			return this;
+		}
+
+		public Builder clear() {
+			theToolkits.clear();
+			theSessionTypes.clear();
+			theInterpretations.clear();
+			theParser = new DefaultQonfigParser();
+			return this;
+		}
+
+		public QonfigApp build(QonfigDocument appDocument, String appFile) {
+			return new QonfigApp(appDocument, appDocument.getLocation(), appFile, QommonsUtils.unmodifiableDistinctCopy(theToolkits),
+				QommonsUtils.unmodifiableCopy(theSessionTypes), QommonsUtils.unmodifiableCopy(theInterpretations));
+		}
+
+		public QonfigApp build(String loadingLocation, String appFile) {
+			return new QonfigApp(null, loadingLocation, appFile, QommonsUtils.unmodifiableDistinctCopy(theToolkits),
+				QommonsUtils.unmodifiableCopy(theSessionTypes), QommonsUtils.unmodifiableCopy(theInterpretations));
+		}
+	}
+
+	public static class ToolkitConfig {
+		private final Builder theBuilder;
+		private final List<CustomValueType> theValueTypes;
+		private final Map<String, QonfigPromiseFulfillment> thePromiseFulfillment;
+
+		ToolkitConfig(Builder builder) {
+			theBuilder = builder;
+			theValueTypes = new ArrayList<>();
+			thePromiseFulfillment = new LinkedHashMap<>();
+		}
+
+		public ToolkitConfig withValueType(CustomValueType valueType) {
+			theValueTypes.add(valueType);
+			return this;
+		}
+
+		public ToolkitConfig withPromise(String promiseName, QonfigPromiseFulfillment fulfillment) {
+			thePromiseFulfillment.put(promiseName, fulfillment);
+			return this;
+		}
+
+		public Builder buildToolkit(URL toolkitLocation) throws IOException, TextParseException, QonfigParseException {
+			try (InputStream tkIn = toolkitLocation.openStream()) {
+				theBuilder.withToolkit(theBuilder.getParser().parseToolkit(toolkitLocation, tkIn, thePromiseFulfillment, //
+					theValueTypes.toArray(new CustomValueType[theValueTypes.size()])));
+			}
+			return theBuilder;
+		}
 	}
 }

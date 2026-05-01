@@ -26,6 +26,8 @@ import org.qommons.collect.BetterList;
 import org.qommons.collect.BetterSet;
 import org.qommons.collect.NullTolerantComparator;
 import org.qommons.collect.SimpleImmutableList;
+import org.qommons.ex.ExBiConsumer;
+import org.qommons.ex.ExBiPredicate;
 import org.qommons.ex.ExFunction;
 import org.qommons.ex.ExPredicate;
 import org.qommons.io.Format;
@@ -1221,6 +1223,68 @@ public class QommonsUtils {
 				set.add(map == null ? (V) value : map.apply(value));
 		}
 		return set;
+	}
+
+	/**
+	 * <p>
+	 * A vary simple comparison of the content of two iterables. This method simply goes through the content of both collections at the same
+	 * time. If the elements at a position in both iterables do not match, they are reported as a mismatch. If one iterable runs out of
+	 * values before the other, the remaining values will be resported to the mismatch function as well, with the other side
+	 * <code>null</code>.
+	 * </p>
+	 * <p>
+	 * Due to the simplicity of this method, it is really only useful to test whether two iterables match exactly or not. I.e. the mismatch
+	 * function should probably always throw an exception if the two values are not equal.
+	 * </p>
+	 * 
+	 * @param <S> The type of the values in the first iterable
+	 * @param <T> The type of the values in the second iterable
+	 * @param <X> The type of exception that the equality test and the mismatch accepter may throw
+	 * @param values1 The first iterable of values
+	 * @param values2 The second iterable of values
+	 * @param equal An equality test for values between the two collections. This may be null, in which {@link Objects#equals(Object)} will
+	 *        be used.
+	 * @param onMismatch The function to handle mis-matches between collection elements. If this is null, the first mismatch will cause this
+	 *        method to return <code>false</code>.
+	 * @return Whether the contents of the two iterables matched exactly
+	 * @throws X If the test or mismatch function throws it
+	 */
+	public static <S, T, X extends Throwable> boolean compareCollections(Iterable<? extends S> values1, Iterable<? extends T> values2,
+		ExBiPredicate<? super S, ? super T, ? extends X> equal, ExBiConsumer<? super S, ? super T, ? extends X> onMismatch) throws X {
+		Iterator<? extends S> iter1 = values1.iterator();
+		Iterator<? extends T> iter2 = values2.iterator();
+		boolean allEqual=true;
+		while (iter1.hasNext()) {
+			if (!iter2.hasNext()) {
+				if (onMismatch == null)
+					return false;
+				allEqual=false;
+				onMismatch.accept(iter1.next(), null);
+			} else {
+				S sourceValue = iter1.next();
+				T destValue = iter2.next();
+				boolean valuesEqual;
+				if(equal==null)
+					valuesEqual=Objects.equals(sourceValue, destValue);
+				else
+					valuesEqual=equal.test(sourceValue, destValue);
+				if (!valuesEqual) {
+					if (onMismatch == null)
+						return false;
+					allEqual=false;
+					onMismatch.accept(sourceValue, destValue);
+				}
+			}
+		}
+		if(iter2.hasNext()) {
+			if (onMismatch == null)
+				return false;
+			allEqual=false;
+			do {
+				onMismatch.accept(null, iter2.next());
+			}while (iter2.hasNext());
+		}
+		return allEqual;
 	}
 
 	/**

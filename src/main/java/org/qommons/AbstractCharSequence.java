@@ -24,29 +24,14 @@ public abstract class AbstractCharSequence implements CharSequence {
 		int h = hash;
 		int length = length();
 		if (h == 0 && length > 0) {
-			for (int i = 0; i < length; i++) {
-				h = 31 * h + charAt(i);
-			}
-			hash = h;
+			hash = hashCode(this);
 		}
 		return h;
 	}
 
 	@Override
 	public boolean equals(Object obj) {
-		if (obj == this)
-			return true;
-		else if (!(obj instanceof CharSequence))
-			return false;
-		CharSequence other = (CharSequence) obj;
-		int length = length();
-		if (other.length() != length)
-			return false;
-		for (int i = 0; i < length; i++) {
-			if (charAt(i) != other.charAt(i))
-				return false;
-		}
-		return true;
+		return equals(this, obj);
 	}
 
 	@Override
@@ -55,6 +40,30 @@ public abstract class AbstractCharSequence implements CharSequence {
 		for (int i = 0; i < ch.length; i++)
 			ch[i] = charAt(i);
 		return new String(ch);
+	}
+
+	public static int hashCode(CharSequence seq) {
+		int h = 0;
+		for (int i = 0; i < seq.length(); i++) {
+			h = 31 * h + seq.charAt(i);
+		}
+		return h;
+	}
+
+	public static boolean equals(CharSequence seq, Object obj) {
+		if (obj == seq)
+			return true;
+		else if (!(obj instanceof CharSequence))
+			return false;
+		CharSequence other = (CharSequence) obj;
+		int length = seq.length();
+		if (other.length() != length)
+			return false;
+		for (int i = 0; i < length; i++) {
+			if (seq.charAt(i) != other.charAt(i))
+				return false;
+		}
+		return true;
 	}
 
 	/**

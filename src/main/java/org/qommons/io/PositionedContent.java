@@ -1,5 +1,8 @@
 package org.qommons.io;
 
+import org.qommons.AbstractCharSequence;
+import org.qommons.ex.ExConsumer;
+
 /** Provides information about the position in the XML file of characters in XML content */
 public interface PositionedContent extends CharSequence {
 	/**
@@ -49,9 +52,67 @@ public interface PositionedContent extends CharSequence {
 		return new SubContentPosition(this, startIndex, endIndex);
 	}
 
+	default int indexOf(char ch) {
+		return indexOf(ch, 0);
+	}
+
+	default int indexOf(char ch, int fromIndex) {
+		for (int i = fromIndex; i < length(); i++) {
+			if (charAt(i) == ch)
+				return i;
+		}
+		return -1;
+	}
+
+	default int lastIndexOf(char ch) {
+		for (int i = length() - 1; i >= 0; i--) {
+			if (charAt(i) == ch)
+				return i;
+		}
+		return -1;
+	}
+
 	/** @return A string representing the file location at the start of this sequence */
 	default String toLocationString() {
 		return getPosition(0).toString();
+	}
+
+	public static PositionedContent of(CharSequence content) {
+		return new Simple(FilePosition.START, content);
+	}
+
+	/**
+	 * Parses a positioned content sequence as a list of values, separated by a delimiter
+	 * 
+	 * @param <C> The sub-type of PositionedContent to split
+	 * @param <X> The type of exception that may be thrown
+	 * @param content The content to parse
+	 * @param delimiter The delimiter separating items in the list
+	 * @param onItem The action to perform on each delimited sub-sequence
+	 * @return The number of items parsed from the sequence
+	 * @throws X If the action throws it
+	 */
+	public static <C extends PositionedContent, X extends Throwable> int split(C content, char delimiter, ExConsumer<? super C, X> onItem)
+		throws X {
+		int start = 0;
+		int items = 0;
+		for (int c = 0; c < content.length(); c++) {
+			char ch = content.charAt(c);
+			if (ch == delimiter || Character.isWhitespace(ch)) {
+				if (c > start || ch == delimiter) {
+					items++;
+					C itemContent = (C) content.subSequence(start, c);
+					onItem.accept(itemContent);
+				}
+				start = c + 1;
+			}
+		}
+		if (start < content.length()) {
+			items++;
+			C itemContent = (C) content.subSequence(start, content.length());
+			onItem.accept(itemContent);
+		}
+		return items;
 	}
 
 	/** A {@link PositionedContent} that is a sub-sequence of another */
@@ -128,6 +189,16 @@ public interface PositionedContent extends CharSequence {
 		}
 
 		@Override
+		public int hashCode() {
+			return AbstractCharSequence.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return AbstractCharSequence.equals(this, obj);
+		}
+
+		@Override
 		public String toString() {
 			StringBuilder str = new StringBuilder();
 			for (int c = theStart; c < theEnd; c++)
@@ -176,12 +247,12 @@ public interface PositionedContent extends CharSequence {
 
 		@Override
 		public int hashCode() {
-			return position.hashCode();
+			return AbstractCharSequence.hashCode(this);
 		}
 
 		@Override
 		public boolean equals(Object obj) {
-			return obj instanceof PositionedContent.Fixed && position.equals(((PositionedContent.Fixed) obj).position);
+			return AbstractCharSequence.equals(this, obj);
 		}
 
 		@Override
@@ -198,13 +269,13 @@ public interface PositionedContent extends CharSequence {
 	/** Simple {@link PositionedContent} implementation */
 	public static class Simple implements PositionedContent {
 		private final FilePosition theStart;
-		private final String theContent;
+		private final CharSequence theContent;
 
 		/**
 		 * @param start The start position
 		 * @param content The content
 		 */
-		public Simple(FilePosition start, String content) {
+		public Simple(FilePosition start, CharSequence content) {
 			theStart = start;
 			theContent = content;
 		}
@@ -221,7 +292,7 @@ public interface PositionedContent extends CharSequence {
 
 		@Override
 		public CharSequence getSourceContent(int from, int to) {
-			return theContent.substring(from, to);
+			return theContent.subSequence(from, to);
 		}
 
 		@Override
@@ -244,8 +315,18 @@ public interface PositionedContent extends CharSequence {
 		}
 
 		@Override
+		public int hashCode() {
+			return AbstractCharSequence.hashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return AbstractCharSequence.equals(this, obj);
+		}
+
+		@Override
 		public String toString() {
-			return theContent;
+			return theContent.toString();
 		}
 	}
 }
