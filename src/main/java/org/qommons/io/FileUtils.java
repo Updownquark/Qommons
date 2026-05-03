@@ -167,11 +167,11 @@ public class FileUtils extends MiniFileUtils {
 				throw new IllegalStateException("Didn't like the jar subsequence", e);
 			}
 			BetterFile jarFile = ofUrl(fileSource, jarUrl);
-			return jarFile.at(path.substring(div + 2));
+			return jarFile.at(path.substring(div + 2).replace("%20", " "));
 		default:
 			// Knock off the initial '/' so we know it's a relative path
 			path = url.getPath().substring(1);
-			return BetterFile.at(fileSource, path);
+			return BetterFile.at(fileSource, path.replace("%20", " "));
 		}
 	}
 

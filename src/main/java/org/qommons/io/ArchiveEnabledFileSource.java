@@ -642,12 +642,12 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public String getCheckSum(CheckSumType type, BooleanSupplier canceled) throws IOException {
-			throw new FileNotFoundException("No such entry");
+			throw new FileNotFoundException("No such entry: " + theName);
 		}
 
 		@Override
 		public InputStream read(long startFrom, BooleanSupplier canceled) throws IOException {
-			throw new FileNotFoundException("No such entry");
+			throw new FileNotFoundException("No such entry: " + theName);
 		}
 
 		@Override
@@ -691,7 +691,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 
 		@Override
 		public void move(List<String> newFilePath) throws IOException {
-			throw new IOException("No such archive entry");
+			throw new FileNotFoundException("No such entry: " + theName);
 		}
 
 		@Override
