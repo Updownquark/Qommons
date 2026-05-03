@@ -105,6 +105,11 @@ public interface LocatedPositionedContent extends PositionedContent {
 			return new Default(fileLocation, position);
 	}
 
+	/**
+	 * @param fileLocation The file location for the position
+	 * @param content The character content for the position
+	 * @return A simple file content sequence implemented as a single line starting from zero
+	 */
 	public static LocatedPositionedContent of(String fileLocation, CharSequence content) {
 		return of(fileLocation, PositionedContent.of(content));
 	}

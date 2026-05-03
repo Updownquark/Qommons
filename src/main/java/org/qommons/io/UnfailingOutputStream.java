@@ -3,6 +3,7 @@ package org.qommons.io;
 import java.io.IOException;
 import java.io.OutputStream;
 
+/** An {@link OutputStream} that cannot throw an {@link IOException}, e.g. because its content is in memory */
 public abstract class UnfailingOutputStream extends OutputStream {
 	@Override
 	public abstract void write(int b);

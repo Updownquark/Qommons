@@ -206,6 +206,7 @@ public class QonfigApp {
 
 	/**
 	 * @param document The document defining the app
+	 * @param loadingLocation The location relative to which to load the application file
 	 * @param appFile The location of the file containing the user interface definition of the application
 	 * @param toolkits All toolkits configured to support the application
 	 * @param sessionTypes All Qonfig session types configured to support the application
@@ -348,10 +349,12 @@ public class QonfigApp {
 		return theAppFile;
 	}
 
+	/** @return A builder for a QonfigApp */
 	public static Builder build() {
 		return new Builder();
 	}
 
+	/** Builds a QonfigElement */
 	public static class Builder {
 		private DefaultQonfigParser theParser;
 		private final Set<QonfigToolkit> theToolkits;
@@ -365,16 +368,30 @@ public class QonfigApp {
 			theInterpretations = new ArrayList<>();
 		}
 
+		/** @return The parser used by this builder to parse toolkits */
 		public DefaultQonfigParser getParser() {
 			return theParser;
 		}
 
+		/**
+		 * @param toolkit The toolkit to include
+		 * @return This builder
+		 */
 		public Builder withToolkit(QonfigToolkit toolkit) {
 			theToolkits.add(toolkit);
 			theParser.withToolkit(toolkit);
 			return this;
 		}
 
+		/**
+		 * Includes a toolkit
+		 * 
+		 * @param toolkitLocation The toolkit definition file location
+		 * @return This builder
+		 * @throws IOException If the toolkit file could not be read
+		 * @throws TextParseException If the toolkit file could not be parsed as XML
+		 * @throws QonfigParseException If the toolkit file could not be parsed as a Qonfig toolkit
+		 */
 		public Builder withToolkit(URL toolkitLocation) throws IOException, TextParseException, QonfigParseException {
 			QonfigToolkit appTK;
 			try (InputStream aTKIn = toolkitLocation.openStream()) {
@@ -384,10 +401,21 @@ public class QonfigApp {
 			return this;
 		}
 
+		/** @return Configuration for a toolkit to include */
 		public ToolkitConfig buildToolkit() {
 			return new ToolkitConfig(this);
 		}
 
+		/**
+		 * Includes a toolkit
+		 * 
+		 * @param toolkitLocation The toolkit definition file location
+		 * @param config Configuration for the toolkit definition
+		 * @return This builder
+		 * @throws IOException If the toolkit file could not be read
+		 * @throws TextParseException If the toolkit file could not be parsed as XML
+		 * @throws QonfigParseException If the toolkit file could not be parsed as a Qonfig toolkit
+		 */
 		public Builder withToolkit(URL toolkitLocation, Consumer<ToolkitConfig> config)
 			throws IOException, TextParseException, QonfigParseException {
 			ToolkitConfig tkCfg = buildToolkit();
@@ -396,16 +424,29 @@ public class QonfigApp {
 			return this;
 		}
 
+		/**
+		 * @param sessionType The session sub-type to support
+		 * @return This builder
+		 */
 		public Builder withSessionType(SpecialSessionImplementation<?> sessionType) {
 			theSessionTypes.add(sessionType);
 			return this;
 		}
 
+		/**
+		 * @param interpretation The Qonfig interpretation to support
+		 * @return This builder
+		 */
 		public Builder withInterpretation(QonfigInterpretation interpretation) {
 			theInterpretations.add(interpretation);
 			return this;
 		}
 
+		/**
+		 * Resets this builder
+		 * 
+		 * @return This builder
+		 */
 		public Builder clear() {
 			theToolkits.clear();
 			theSessionTypes.clear();
@@ -414,17 +455,29 @@ public class QonfigApp {
 			return this;
 		}
 
+		/**
+		 * @param appDocument The Qonfig document of the app loading file defining all the toolkits, session types, and interpretations that
+		 *        may be needed by the Qonfig application
+		 * @param appFile The Qonfig application file containing the actual content of the application
+		 * @return The QonfigApp to load the application
+		 */
 		public QonfigApp build(QonfigDocument appDocument, String appFile) {
 			return new QonfigApp(appDocument, appDocument.getLocation(), appFile, QommonsUtils.unmodifiableDistinctCopy(theToolkits),
 				QommonsUtils.unmodifiableCopy(theSessionTypes), QommonsUtils.unmodifiableCopy(theInterpretations));
 		}
 
+		/**
+		 * @param loadingLocation The location relative to which to load the application file
+		 * @param appFile The Qonfig application file containing the actual content of the application
+		 * @return The QonfigApp to load the application
+		 */
 		public QonfigApp build(String loadingLocation, String appFile) {
 			return new QonfigApp(null, loadingLocation, appFile, QommonsUtils.unmodifiableDistinctCopy(theToolkits),
 				QommonsUtils.unmodifiableCopy(theSessionTypes), QommonsUtils.unmodifiableCopy(theInterpretations));
 		}
 	}
 
+	/** Configuration for a toolkit to add to a QonfigApp via {@link Builder#buildToolkit()} */
 	public static class ToolkitConfig {
 		private final Builder theBuilder;
 		private final List<CustomValueType> theValueTypes;
@@ -436,16 +489,32 @@ public class QonfigApp {
 			thePromiseFulfillment = new LinkedHashMap<>();
 		}
 
+		/**
+		 * @param valueType The custom value type required by the toolkit
+		 * @return This toolkit configuration
+		 */
 		public ToolkitConfig withValueType(CustomValueType valueType) {
 			theValueTypes.add(valueType);
 			return this;
 		}
 
+		/**
+		 * @param promiseName The name of the promise to fulfill
+		 * @param fulfillment The promise fulfillment implementation for the promise
+		 * @return This toolkit configuration
+		 */
 		public ToolkitConfig withPromise(String promiseName, QonfigPromiseFulfillment fulfillment) {
 			thePromiseFulfillment.put(promiseName, fulfillment);
 			return this;
 		}
 
+		/**
+		 * @param toolkitLocation The toolkit definition file location
+		 * @return The {@link Builder} that the toolkit was added to
+		 * @throws IOException If the toolkit file could not be read
+		 * @throws TextParseException If the toolkit file could not be parsed as XML
+		 * @throws QonfigParseException If the toolkit file could not be parsed as a Qonfig toolkit
+		 */
 		public Builder buildToolkit(URL toolkitLocation) throws IOException, TextParseException, QonfigParseException {
 			try (InputStream tkIn = toolkitLocation.openStream()) {
 				theBuilder.withToolkit(theBuilder.getParser().parseToolkit(toolkitLocation, tkIn, thePromiseFulfillment, //

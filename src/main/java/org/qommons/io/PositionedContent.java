@@ -52,10 +52,20 @@ public interface PositionedContent extends CharSequence {
 		return new SubContentPosition(this, startIndex, endIndex);
 	}
 
+	/**
+	 * @param ch The character to find
+	 * @return The index of the first occurrence of the character in this sequence, or -1 if it does not occur
+	 */
 	default int indexOf(char ch) {
 		return indexOf(ch, 0);
 	}
 
+	/**
+	 * @param ch The character to find
+	 * @param fromIndex The index to begin the search from
+	 * @return The index of the first occurrence of the character in this sequence on or after the given start index, or -1 if there is no
+	 *         such occurrence
+	 */
 	default int indexOf(char ch, int fromIndex) {
 		for (int i = fromIndex; i < length(); i++) {
 			if (charAt(i) == ch)
@@ -64,8 +74,22 @@ public interface PositionedContent extends CharSequence {
 		return -1;
 	}
 
+	/**
+	 * @param ch The character to find
+	 * @return The index of the last occurrence of the character in this sequence, or -1 if it does not occur
+	 */
 	default int lastIndexOf(char ch) {
-		for (int i = length() - 1; i >= 0; i--) {
+		return lastIndexOf(ch, length() - 1);
+	}
+
+	/**
+	 * @param ch The character to find
+	 * @param fromIndex The index to begin the search from
+	 * @return The index of the last occurrence of the character in this sequence on or before the given start index, or -1 if there is no
+	 *         such occurrence
+	 */
+	default int lastIndexOf(char ch, int fromIndex) {
+		for (int i = fromIndex; i >= 0; i--) {
 			if (charAt(i) == ch)
 				return i;
 		}
@@ -77,6 +101,10 @@ public interface PositionedContent extends CharSequence {
 		return getPosition(0).toString();
 	}
 
+	/**
+	 * @param content The character content for the positioned content
+	 * @return A simple positioned content sequence implemented as a single line starting from zero
+	 */
 	public static PositionedContent of(CharSequence content) {
 		return new Simple(FilePosition.START, content);
 	}

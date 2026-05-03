@@ -18,6 +18,16 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * @param <T> The type of this list
  */
 public class MappedBetterCollection<S, T> extends MappedCollection<S, T> implements BetterCollection<T> {
+	/**
+	 * Creates a mapped better collection
+	 * 
+	 * @param <S> The type of the source collection
+	 * @param <T> The target type for the mapped collection
+	 * @param source The source collection to map
+	 * @param map The mapping function for source to target elements
+	 * @param reverse The optional reverse function for target to source elements
+	 * @return The mapped collections
+	 */
 	public static <S, T> MappedBetterCollection<S, T> map(BetterCollection<S> source, Function<? super S, T> map,
 		Function<? super T, ? extends S> reverse) {
 		if (source instanceof BetterSortedSet && reverse != null)
@@ -172,14 +182,23 @@ public class MappedBetterCollection<S, T> extends MappedCollection<S, T> impleme
 		return wrap(getSource().move(valueEl, after, before, first, afterRemove));
 	}
 
+	/**
+	 * @param sourceEl The source element
+	 * @return The mapped target element
+	 */
 	protected CollectionElement<T> wrap(CollectionElement<S> sourceEl) {
 		return sourceEl == null ? null : new MappedElement(sourceEl);
 	}
 
+	/**
+	 * @param sourceEl The source mutable element
+	 * @return The mapped target mutable element
+	 */
 	protected MutableCollectionElement<T> wrapMutable(MutableCollectionElement<S> sourceEl) {
 		return sourceEl == null ? null : new MappedMutableElement(sourceEl);
 	}
 
+	/** Default implementation for a mapped collection element */
 	protected class MappedElement implements CollectionElement<T> {
 		private final CollectionElement<S> theSource;
 
@@ -187,6 +206,7 @@ public class MappedBetterCollection<S, T> extends MappedCollection<S, T> impleme
 			theSource = source;
 		}
 
+		/** @return The wrapped source element */
 		protected CollectionElement<S> getSource() {
 			return theSource;
 		}
@@ -212,6 +232,7 @@ public class MappedBetterCollection<S, T> extends MappedCollection<S, T> impleme
 		}
 	}
 
+	/** Default implementation for a mapped mutable collection element */
 	protected class MappedMutableElement extends MappedElement implements MutableCollectionElement<T> {
 		MappedMutableElement(MutableCollectionElement<S> source) {
 			super(source);

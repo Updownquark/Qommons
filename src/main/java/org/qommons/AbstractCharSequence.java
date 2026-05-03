@@ -42,6 +42,12 @@ public abstract class AbstractCharSequence implements CharSequence {
 		return new String(ch);
 	}
 
+	/**
+	 * Default {@link CharSequence#hashCode()} implementation
+	 * 
+	 * @param seq The character sequence to hash
+	 * @return The hash code for the sequence
+	 */
 	public static int hashCode(CharSequence seq) {
 		int h = 0;
 		for (int i = 0; i < seq.length(); i++) {
@@ -50,6 +56,13 @@ public abstract class AbstractCharSequence implements CharSequence {
 		return h;
 	}
 
+	/**
+	 * Default {@link CharSequence#equals(Object)} implementation
+	 * 
+	 * @param seq The character sequence to compare
+	 * @param obj The other object to compare
+	 * @return Whether the other object is also a character sequence whose content is the same as the given sequence
+	 */
 	public static boolean equals(CharSequence seq, Object obj) {
 		if (obj == seq)
 			return true;

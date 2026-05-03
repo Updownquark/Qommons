@@ -11,10 +11,20 @@ import java.util.function.Function;
  * @param <T> The type of this set
  */
 public class MappedBetterSortedList<S, T> extends MappedBetterList<S, T> implements BetterSortedList<T> {
+	/**
+	 * Mapped comparator implementation
+	 * 
+	 * @param <S> The type of source elements
+	 * @param <T> The type of target elements this comparator can compare
+	 */
 	public static class MappedComparator<S, T> implements Comparator<T> {
 		private final Comparator<? super S> theSource;
 		private final Function<? super T, ? extends S> theReverse;
 
+		/**
+		 * @param source The source value comparator
+		 * @param reverse The reverse function to transform mapped values into source values
+		 */
 		public MappedComparator(Comparator<? super S> source, Function<? super T, ? extends S> reverse) {
 			theSource = source;
 			theReverse = reverse;

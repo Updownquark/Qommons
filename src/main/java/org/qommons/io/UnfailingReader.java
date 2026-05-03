@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.CharBuffer;
 
+/** A {@link Reader} that cannot throw an {@link IOException}, e.g. because its content is in memory */
 public abstract class UnfailingReader extends Reader {
 	@Override
 	public int read(CharBuffer target) {

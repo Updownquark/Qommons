@@ -9,8 +9,6 @@ import java.util.function.Function;
  * @param <T> The type of this list
  */
 public class MappedBetterList<S, T> extends MappedBetterCollection<S, T> implements BetterList<T> {
-	private Object theIdentity;
-
 	/**
 	 * @param wrapped The source list to map
 	 * @param map The mapping function

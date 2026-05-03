@@ -8,34 +8,118 @@ import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 
+/**
+ * A {@link BetterCollection} that allows control over attempted modifications and listening for such modifications
+ * 
+ * @param <E> The type of values in the collection
+ * @param <C> The sub type of this collection
+ */
 public class ModControlledCollection<E, C extends BetterCollection<E>> implements BetterCollection<E> {
+	/**
+	 * Interface determining which collection modifications are allowed
+	 * 
+	 * @param <E> The type of elements in the controlled collection
+	 */
 	public interface CollectionModificationControl<E> {
+		/**
+		 * Implementation for {@link BetterCollection#canAdd(Object, ElementId, ElementId)}
+		 * 
+		 * @param value The value to be added
+		 * @param after The element to add the value after
+		 * @param before The element to add the value before
+		 * @return Whether the value can be added
+		 */
 		String canAdd(E value, ElementId after, ElementId before);
 
+		/**
+		 * Implementation for {@link MutableCollectionElement#canRemove()}
+		 * 
+		 * @param element The element to remove
+		 * @return Whether the element can be removed
+		 */
 		String canRemove(CollectionElement<E> element);
 
+		/**
+		 * Implementation for {@link MutableCollectionElement#isEnabled()}
+		 * 
+		 * @param element The element to modify
+		 * @return Whether the element can be modified
+		 */
 		String isModifiable(CollectionElement<E> element);
 
+		/**
+		 * Implementation for {@link MutableCollectionElement#isAcceptable(Object)}
+		 * 
+		 * @param element The element to modify
+		 * @param newValue The value to set for the element
+		 * @return Whether the element can be modified with the given value
+		 */
 		String isAcceptable(CollectionElement<E> element, E newValue);
 
+		/**
+		 * Implementation for {@link BetterCollection#canMove(ElementId, ElementId, ElementId)}
+		 * 
+		 * @param element The element to move
+		 * @param after The element to move the element after
+		 * @param before The element to move the element before
+		 * @return Whether the element can be moved
+		 */
 		String canMove(CollectionElement<E> element, ElementId after, ElementId before);
 	}
 
+
+	/**
+	 * Interface reporting any modifications to a collection
+	 * 
+	 * @param <E> The type of elements in the controlled collection
+	 */
 	public interface CollectionModificationListener<E> {
+		/** @param element The element that was added */
 		void elementAdded(CollectionElement<E> element);
 
+		/**
+		 * Called before an element is removed from a collection. This method may do the removal itself, or it may do nothing.
+		 * 
+		 * @param element The element to be removed
+		 */
 		void elementPreRemove(MutableCollectionElement<E> element);
 
+		/** @param element The element that was removed */
 		void elementRemoved(CollectionElement<E> element);
 
+		/**
+		 * @param element The element that was replaced with {@link MutableCollectionElement#set(Object)}
+		 * @param previousValue The previous value in the element
+		 */
 		void elementReplaced(CollectionElement<E> element, E previousValue);
 
-
+		/**
+		 * Called before an element is moved in the collection
+		 * 
+		 * @param element The element that will be moved
+		 * @param after The element that the target element will be moved after
+		 * @param before The element that the target element will be moved before
+		 * @return Data that will be passed to {@link #elementMoved(CollectionElement, Object)} after the move operation
+		 */
 		Object elementPreMove(CollectionElement<E> element, ElementId after, ElementId before);
 
+		/**
+		 * @param element The element that was moved
+		 * @param moveData The data returned from {@link #elementPreMove(CollectionElement, ElementId, ElementId)} before the move
+		 */
 		void elementMoved(CollectionElement<E> element, Object moveData);
 	}
 
+	/**
+	 * Creates a collection that is modification-controlled
+	 * 
+	 * @param <E> The type of elements in the collection
+	 * @param <C> The sub-type of the collection
+	 * @param collection The collection to control
+	 * @param control The optional modification controller
+	 * @param listener The optional modification listener
+	 * @return The modification-controlled collection
+	 */
 	public static <E, C extends BetterCollection<E>> C controlCollection(C collection, CollectionModificationControl<E> control,
 		CollectionModificationListener<E> listener) {
 		if (collection instanceof BetterSortedSet)
@@ -54,6 +138,11 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 	private final CollectionModificationControl<E> theControl;
 	private final CollectionModificationListener<E> theListener;
 
+	/**
+	 * @param backing The collection to control
+	 * @param control The optional modification controller
+	 * @param listener The optional modification listener
+	 */
 	protected ModControlledCollection(C backing, CollectionModificationControl<E> control, CollectionModificationListener<E> listener) {
 		theBacking = backing;
 		theControl = control;
@@ -65,10 +154,12 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 		return theBacking;
 	}
 
+	/** @return The modification controller for this collection. May be null if this collection is not actually modification-restricted. */
 	public CollectionModificationControl<E> getControl() {
 		return theControl;
 	}
 
+	/** @return The modification listener for this collection. May be null */
 	protected CollectionModificationListener<E> getListener() {
 		return theListener;
 	}
@@ -247,17 +338,24 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 		return theBacking.toString();
 	}
 
+	/**
+	 * @param backingElement The source mutable element
+	 * @return The wrapped modification-controlled element
+	 */
 	protected MutableCollectionElement<E> wrapMutable(MutableCollectionElement<E> backingElement) {
 		return new MutableElementWrapper(backingElement);
 	}
 
+	/** Default implementation for {@link ModControlledCollection#wrapMutable(MutableCollectionElement)} */
 	public class MutableElementWrapper implements MutableCollectionElement<E> {
 		private final MutableCollectionElement<E> theBackingElement;
 
+		/** @param backingElement The source mutable element */
 		protected MutableElementWrapper(MutableCollectionElement<E> backingElement) {
 			theBackingElement = backingElement;
 		}
 
+		/** @return The source mutable element */
 		protected MutableCollectionElement<E> getBackingElement() {
 			return theBackingElement;
 		}
@@ -346,7 +444,18 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 		}
 	}
 
+	/**
+	 * List implementation of {@link ModControlledCollection}
+	 * 
+	 * @param <E> The type of elements in the list
+	 * @param <C> The sub-type of the list
+	 */
 	public static class ModControlledList<E, C extends BetterList<E>> extends ModControlledCollection<E, C> implements BetterList<E> {
+		/**
+		 * @param backing The list to control
+		 * @param control The optional modification controller
+		 * @param listener The optional modification listener
+		 */
 		public ModControlledList(C backing, CollectionModificationControl<E> control, CollectionModificationListener<E> listener) {
 			super(backing, control, listener);
 		}
@@ -398,7 +507,9 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 			return getBacking().isContentControlled();
 		}
 
+		/** Default mod-controlled list element implementation */
 		public class MutableListElementWrapper extends MutableElementWrapper implements MutableListElement<E> {
+			/** @param backingElement The source element to control */
 			protected MutableListElementWrapper(MutableListElement<E> backingElement) {
 				super(backingElement);
 			}
@@ -426,7 +537,18 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 		}
 	}
 
+	/**
+	 * Set implementation of {@link ModControlledCollection}
+	 * 
+	 * @param <E> The type of elements in the set
+	 * @param <C> The sub-type of the set
+	 */
 	public static class ModControlledSet<E, C extends BetterSet<E>> extends ModControlledCollection<E, C> implements BetterSet<E> {
+		/**
+		 * @param backing The set to control
+		 * @param control The optional modification controller
+		 * @param listener The optional modification listener
+		 */
 		public ModControlledSet(C backing, CollectionModificationControl<E> control, CollectionModificationListener<E> listener) {
 			super(backing, control, listener);
 		}
@@ -485,8 +607,19 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 		}
 	}
 
+	/**
+	 * Sorted list implementation of {@link ModControlledCollection}
+	 * 
+	 * @param <E> The type of elements in the sorted list
+	 * @param <C> The sub-type of the sorted list
+	 */
 	public static class ModControlledSortedList<E, C extends BetterSortedList<E>> extends ModControlledList<E, C>
 		implements BetterSortedList<E> {
+		/**
+		 * @param backing The sorted list to control
+		 * @param control The optional modification controller
+		 * @param listener The optional modification listener
+		 */
 		public ModControlledSortedList(C backing, CollectionModificationControl<E> control, CollectionModificationListener<E> listener) {
 			super(backing, control, listener);
 		}
@@ -531,8 +664,19 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 		}
 	}
 
+	/**
+	 * Sorted set implementation of {@link ModControlledCollection}
+	 * 
+	 * @param <E> The type of elements in the sorted set
+	 * @param <C> The sub-type of the sorted set
+	 */
 	public static class ModControlledSortedSet<E, C extends BetterSortedSet<E>> extends ModControlledSortedList<E, C>
 		implements BetterSortedSet<E> {
+		/**
+		 * @param backing The sorted set to control
+		 * @param control The optional modification controller
+		 * @param listener The optional modification listener
+		 */
 		public ModControlledSortedSet(C backing, CollectionModificationControl<E> control, CollectionModificationListener<E> listener) {
 			super(backing, control, listener);
 		}

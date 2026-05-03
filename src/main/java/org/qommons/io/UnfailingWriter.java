@@ -3,6 +3,7 @@ package org.qommons.io;
 import java.io.IOException;
 import java.io.Writer;
 
+/** A {@link Writer} that cannot throw an {@link IOException}, e.g. because its content is in memory */
 public abstract class UnfailingWriter extends Writer {
 	@Override
 	public void write(int c) {

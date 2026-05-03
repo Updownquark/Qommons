@@ -18,7 +18,7 @@ public class MappedBetterSet<S, T> extends MappedBetterCollection<S, T> implemen
 	 * @param wrapped The source list to map
 	 * @param map The mapping function
 	 * @param reverse The reverse function (used for {@link #getElement(Object, boolean)} and modification)
-	 * @param containment
+	 * @param containment The optional containment test for this set
 	 */
 	public MappedBetterSet(BetterSet<S> wrapped, Function<? super S, T> map, Predicate<Object> containment,
 		Function<? super T, ? extends S> reverse) {
@@ -31,6 +31,7 @@ public class MappedBetterSet<S, T> extends MappedBetterCollection<S, T> implemen
 		return (BetterSet<S>) super.getSource();
 	}
 
+	/** @return The overridden containment test for this set */
 	protected Predicate<Object> getContainment() {
 		return theContainment;
 	}
