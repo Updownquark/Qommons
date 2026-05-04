@@ -271,7 +271,7 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 		public void delete(DirectorySyncResults results) throws IOException {
 			if (!Files.exists(thePath))
 				return;
-			boolean dir = isDirectory();
+			boolean dir = !isFile();
 			if (dir) {
 				try {
 					discoverContents(child -> {
@@ -288,7 +288,12 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 						throw e;
 				}
 			}
-			Files.delete(thePath);
+			try {
+				Files.delete(thePath);
+			} catch (AccessDeniedException e) {
+				if (!thePath.toFile().delete()) // Don't know why, but sometimes this way succeeds
+					throw e;
+			}
 			if (results != null)
 				results.deleted(dir);
 		}

@@ -112,7 +112,7 @@ public class TemporalBackupScheme {
 		// How close the previous (next older) backup was to the configured backup age
 		Duration lastBackupAdherence = null;
 		for (Map.Entry<Instant, T> backup : backups.entrySet()) {
-			Duration time = TimeUtils.between(now, backup.getKey());
+			Duration time = TimeUtils.between(backup.getKey(), now);
 			if (time.isNegative())
 				continue;
 			Duration backupAge = theBackupAges.search(time, SortedSearchFilter.PreferGreater).get();
@@ -129,20 +129,26 @@ public class TemporalBackupScheme {
 				}
 			} else { // The backup fits into a configured backup slot that up to this point may be unoccupied
 				preserveThis = true;
-				if (lastBackupTime != null)
-					manager.preserve(backups.get(lastBackupTime));
+				if (lastBackupTime != null) {
+					T lastBackup = backups.get(lastBackupTime);
+					// System.out.println("Preserving " + lastBackup + " (" + lastBackupTime + ") in slot " + lastBackupAge);
+					manager.preserve(lastBackup);
+				}
 			}
 			if (preserveThis) {
 				lastBackupTime = backup.getKey();
 				lastBackupAge = backupAge;
 				lastBackupAdherence = thisBackupAdherence;
-			} else
+			} else {
+				manager.delete(backup.getValue());
 				backups.remove(backup.getKey());
+			}
 		}
 		if (lastBackupTime != null) {
 			T lastBackup = backups.get(lastBackupTime);
 			if (lastBackup == CURRENT_BACKUP)
 				return true;
+			// System.out.println("Preserving " + lastBackup + " (" + lastBackupTime + ") in slot " + lastBackupAge);
 			manager.preserve(lastBackup);
 		}
 		return now.equals(backups.keySet().peekLast());
