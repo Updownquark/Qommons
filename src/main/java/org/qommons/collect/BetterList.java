@@ -429,11 +429,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 	@Override
 	default BetterListSequence<E> sequence(ElementId after, ElementId before, boolean forward, ElementId position, boolean atStart) {
-		return new BetterListSequence<>(this, after, before, forward, position, atStart);
+		return new BetterListSequenceImpl<>(this, after, before, forward, position, atStart);
 	}
 
 	@Override
-	default ListSequence<E> sequence(int start, int end, int position, boolean forward) {
+	default BetterListSequence<E> sequence(int start, int end, int position, boolean forward) {
 		if (start < 0 || start > end)
 			throw new IndexOutOfBoundsException(start + " to " + end);
 		int size = size();
@@ -883,11 +883,32 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	}
 
 	/**
+	 * A {@link BetterCollection.BetterSequence} returned by a {@link BetterList}
+	 * 
+	 * @param <E> The type of elements in the sequence
+	 */
+	public interface BetterListSequence<E> extends BetterSequence<E>, ListSequence<E> {
+		@Override
+		ListElement<E> getCurrent() throws NoSuchElementException;
+
+		@Override
+		MutableListElement<E> mutableCurrent() throws NoSuchElementException;
+
+		@Override
+		ListElement<E> get(boolean next);
+
+		@Override
+		default int getIndex() throws IllegalStateException {
+			return getCurrent().getElementsBefore();
+		}
+	}
+
+	/**
 	 * {@link BetterCollection.BetterSequence}/{@link ListSequence} combination for {@link BetterList}s
 	 * 
 	 * @param <E> The type of values in the sequence
 	 */
-	public class BetterListSequence<E> extends BetterSequence<E> implements ListSequence<E> {
+	public class BetterListSequenceImpl<E> extends BetterSequenceImpl<E> implements BetterListSequence<E> {
 		/**
 		 * @param collection The collection to iterate over
 		 * @param lowBound The minimum element to iterate over
@@ -897,7 +918,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		 * @param atStart Whether, if <code>position</code> is null, to start before the beginning or after the end of the sequence (by this
 		 *        collection's reckoning, regardless of the <code>forward</code> parameter)
 		 */
-		public BetterListSequence(BetterList<E> collection, ElementId lowBound, ElementId highBound, boolean forward, ElementId position,
+		public BetterListSequenceImpl(BetterList<E> collection, ElementId lowBound, ElementId highBound, boolean forward,
+			ElementId position,
 			boolean atStart) {
 			super(collection, lowBound, highBound, forward, position, atStart);
 		}
@@ -905,6 +927,16 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		@Override
 		public ListElement<E> getCurrent() throws NoSuchElementException {
 			return (ListElement<E>) super.getCurrent();
+		}
+
+		@Override
+		public MutableListElement<E> mutableCurrent() throws NoSuchElementException {
+			return (MutableListElement<E>) super.mutableCurrent();
+		}
+
+		@Override
+		public ListElement<E> get(boolean next) {
+			return (ListElement<E>) super.get(next);
 		}
 
 		@Override

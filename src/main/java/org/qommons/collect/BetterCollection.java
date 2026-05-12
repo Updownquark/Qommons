@@ -820,7 +820,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * @return The sequence
 	 */
 	default BetterSequence<E> sequence(ElementId after, ElementId before, boolean forward, ElementId position, boolean atStart) {
-		return new BetterSequence<>(this, after, before, forward, position, atStart);
+		return new BetterSequenceImpl<>(this, after, before, forward, position, atStart);
 	}
 
 	@Override
@@ -979,11 +979,69 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	}
 
 	/**
+	 * A {@link Sequence} returned by a {@link BetterCollection}
+	 * 
+	 * @param <E> The type of elements in the sequence
+	 */
+	public interface BetterSequence<E> extends Sequence<E> {
+		/**
+		 * @return The collection element at the current sequence position
+		 * @throws NoSuchElementException If the sequence is not positioned on an element
+		 */
+		CollectionElement<E> getCurrent() throws NoSuchElementException;
+
+		/**
+		 * @return The mutable collection element at the current sequence position
+		 * @throws NoSuchElementException If the sequence is not positioned on an element
+		 */
+		MutableCollectionElement<E> mutableCurrent() throws NoSuchElementException;
+
+		/**
+		 * Retrieves either the next or previous element in the sequence relative to the current position. This method has no side effects
+		 * on the sequence.
+		 * 
+		 * @param next Whether to retrieve the next or previous element
+		 * @return The element adjacent to this sequence's position, or null if this is the terminal element on the given end
+		 */
+		CollectionElement<E> get(boolean next);
+
+		@Override
+		default boolean has(boolean next) {
+			return get(next) != null;
+		}
+
+		@Override
+		default E get() throws IllegalStateException {
+			return getCurrent().get();
+		}
+
+		@Override
+		default String canRemove() {
+			return mutableCurrent().canRemove();
+		}
+
+		@Override
+		default String isSettable() {
+			return mutableCurrent().isEnabled();
+		}
+
+		@Override
+		default String isAcceptable(E newValue) {
+			return mutableCurrent().isAcceptable(newValue);
+		}
+
+		@Override
+		default void set(E newValue) throws UnsupportedOperationException, IllegalArgumentException, IllegalStateException {
+			mutableCurrent().set(newValue);
+		}
+	}
+
+	/**
 	 * Default {@link BetterCollection#sequence()} implementation for {@link BetterCollection}s
 	 * 
 	 * @param <E> The type of values in the sequence
 	 */
-	public class BetterSequence<E> implements Sequence<E> {
+	public class BetterSequenceImpl<E> implements BetterSequence<E> {
 		private final BetterCollection<E> theCollection;
 		private final CollectionElement<E> theLowBound;
 		private final CollectionElement<E> theHighBound;
@@ -1001,7 +1059,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		 * @param atStart Whether, if <code>position</code> is null, to start before the beginning or after the end of the sequence (by this
 		 *        collection's reckoning, regardless of the <code>forward</code> parameter)
 		 */
-		public BetterSequence(BetterCollection<E> collection, ElementId lowBound, ElementId highBound, boolean forward, ElementId position,
+		public BetterSequenceImpl(BetterCollection<E> collection, ElementId lowBound, ElementId highBound, boolean forward,
+			ElementId position,
 			boolean atStart) {
 			theCollection = collection;
 			theLowBound = lowBound == null ? null : theCollection.getElement(lowBound);
@@ -1017,20 +1076,14 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			return theCollection;
 		}
 
-		/**
-		 * @return The collection element at the current sequence position
-		 * @throws NoSuchElementException If the sequence is not positioned on an element
-		 */
+		@Override
 		public CollectionElement<E> getCurrent() throws NoSuchElementException {
 			if (current == null)
 				throw new NoSuchElementException();
 			return current;
 		}
 
-		/**
-		 * @return The mutable collection element at the current sequence position
-		 * @throws NoSuchElementException If the sequence is not positioned on an element
-		 */
+		@Override
 		public MutableCollectionElement<E> mutableCurrent() throws NoSuchElementException {
 			if (current == null)
 				throw new NoSuchElementException();
@@ -1044,13 +1097,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			return current != null;
 		}
 
-		/**
-		 * Retrieves either the next or previous element in the sequence relative to the current position. This method has no side effects
-		 * on the sequence.
-		 * 
-		 * @param next Whether to retrieve the next or previous element.
-		 * @return The element adjacent to this sequence's position
-		 */
+		@Override
 		public CollectionElement<E> get(boolean next) {
 			boolean realForward = next ^ isReversed;
 			CollectionElement<E> bound = realForward ? theHighBound : theLowBound;
@@ -1080,21 +1127,6 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public boolean has(boolean next) {
-			return get(next) != null;
-		}
-
-		@Override
-		public E get() throws IllegalStateException {
-			return getCurrent().get();
-		}
-
-		@Override
-		public String canRemove() {
-			return mutableCurrent().canRemove();
-		}
-
-		@Override
 		public void remove() throws UnsupportedOperationException, IllegalStateException {
 			CollectionElement<E> next = get(true);
 			if (next == null)
@@ -1104,21 +1136,6 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			current = next;
 			if (next == null)
 				isAtStart = !isReversed;
-		}
-
-		@Override
-		public String isSettable() {
-			return mutableCurrent().isEnabled();
-		}
-
-		@Override
-		public String isAcceptable(E newValue) {
-			return mutableCurrent().isAcceptable(newValue);
-		}
-
-		@Override
-		public void set(E newValue) throws UnsupportedOperationException, IllegalArgumentException, IllegalStateException {
-			mutableCurrent().set(newValue);
 		}
 
 		@Override

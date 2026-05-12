@@ -76,6 +76,7 @@ public class CsvParser implements TabularFileParser {
 		theEntryNumber = -1;
 		theParseState = new CsvParseState();
 		theLastLineColumnOffsets = new LongList();
+		theCurrentLine = new StringBuilder();
 	}
 
 	/** @return The delimiter character used to parse CSV */
@@ -118,7 +119,6 @@ public class CsvParser implements TabularFileParser {
 		if (theEntryNumber > 0 || thePassedBlankLines > 0)
 			throw new IllegalStateException("Cannot start accounting for bytes after reading data");
 		theCharSet = charSet.newEncoder();
-		theCurrentLine = new StringBuilder();
 		return this;
 	}
 
@@ -196,7 +196,9 @@ public class CsvParser implements TabularFileParser {
 			if (theCharSet != null) {
 				int length = theCharSet.encode(CharBuffer.wrap(theCurrentLine)).limit();
 				theCurrentByteOffset += length;
-			}
+			} else
+				theCurrentByteOffset += theCurrentLine.length();
+			theCurrentLine.setLength(0);
 		}
 	}
 

@@ -8,6 +8,7 @@ import org.qommons.QommonsUtils;
 import org.qommons.collect.BetterList;
 import org.qommons.config.QonfigElement.AttributeValue;
 import org.qommons.config.QonfigElement.QonfigValue;
+import org.qommons.config.QonfigToolkit.ToolkitDef;
 import org.qommons.io.FilePosition;
 import org.qommons.io.LocatedFilePosition;
 import org.qommons.io.LocatedPositionedContent;
@@ -703,6 +704,21 @@ public interface QonfigElementView<E extends PartialQonfigElement, X extends Thr
 	}
 
 	/**
+	 * @param toolkitDef The definition of the toolkit to get
+	 * @return The resolved toolkit
+	 * @throws IllegalArgumentException If the toolkit could not be resolved
+	 */
+	default QonfigToolkit getToolkit(ToolkitDef toolkitDef) throws IllegalArgumentException {
+		QonfigToolkit tk;
+		tk = getElement().getDocument().getDocToolkit().getDependenciesByDefinition()
+			.getOrDefault(toolkitDef.name, Collections.emptyNavigableMap())//
+			.get(toolkitDef);
+		if (tk == null)
+			throw new IllegalArgumentException("No such toolkit found in view: " + toolkitDef);
+		return tk;
+	}
+
+	/**
 	 * @param toolkit The toolkit to get the type from
 	 * @param name The name of the type
 	 * @return The type with the given name declared by the given toolkit or one of its dependencies
@@ -736,6 +752,22 @@ public interface QonfigElementView<E extends PartialQonfigElement, X extends Thr
 	 *         </ul>
 	 */
 	default QonfigElementOrAddOn getType(String toolkitDef, String name) {
+		QonfigToolkit toolkit = toolkitDef == null ? getFocusType().getDeclarer() : getToolkit(toolkitDef);
+		return getType(toolkit, name);
+	}
+
+	/**
+	 * @param toolkitDef The definition of the toolkit declaring the type declaring the member to get the view for
+	 * @param name The name of the type to get the definition for
+	 * @return The Qonfig type of the referenced element or add-on
+	 * @throws IllegalArgumentException If
+	 *         <ul>
+	 *         <li>The toolkit reference could not be resolved</li>
+	 *         <li>No such type with the given name is declared by the given toolkit or its dependencies</li>
+	 *         <li>No such type is declared by the given toolkit and multiple such types are declared by its dependencies</li>
+	 *         </ul>
+	 */
+	default QonfigElementOrAddOn getType(ToolkitDef toolkitDef, String name) {
 		QonfigToolkit toolkit = toolkitDef == null ? getFocusType().getDeclarer() : getToolkit(toolkitDef);
 		return getType(toolkit, name);
 	}
@@ -794,6 +826,22 @@ public interface QonfigElementView<E extends PartialQonfigElement, X extends Thr
 	 * @throws X If the view could not be created
 	 */
 	default V asElement(String toolkitDef, String focusTypeName) throws IllegalArgumentException, X {
+		return asElement(getType(toolkitDef, focusTypeName));
+	}
+
+	/**
+	 * @param toolkitDef The definition of the toolkit declaring the type declaring the member to get the view for
+	 * @param focusTypeName The name of the element/add-on type to interpret the element as (the new {@link #getFocusType()} focus type)
+	 * @return A view based off this view but being interpreted as the given element
+	 * @throws IllegalArgumentException If
+	 *         <ul>
+	 *         <li>The toolkit reference could not be resolved</li>
+	 *         <li>No such type with the given name is declared by the given toolkit or its dependencies</li>
+	 *         <li>No such type is declared by the given toolkit and multiple such types are declared by its dependencies</li>
+	 *         </ul>
+	 * @throws X If the view could not be created
+	 */
+	default V asElement(ToolkitDef toolkitDef, String focusTypeName) throws IllegalArgumentException, X {
 		return asElement(getType(toolkitDef, focusTypeName));
 	}
 

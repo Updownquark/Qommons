@@ -145,7 +145,10 @@ public interface Causable extends CausalLock.Cause {
 			return theKey.execute(cause, this);
 		}
 
-		/** @return Whether this effect has been {@link #execute(Causable) executed} */
+		/**
+		 * @return Whether this effect has been {@link #execute(Causable) executed}. This boolean will be reset to false if its
+		 *         {@link #getKey()} is used for {@link Causable#onFinish(CausableKey)} on the same cause
+		 */
 		public boolean isExecuted() {
 			return isExecuted;
 		}
@@ -214,6 +217,14 @@ public interface Causable extends CausalLock.Cause {
 		public void clear() {
 			if (theData != null)
 				theData.clear();
+		}
+
+		Effect reset() {
+			if (isExecuted) {
+				clear();
+				isExecuted = false;
+			}
+			return this;
 		}
 	}
 
@@ -289,7 +300,7 @@ public interface Causable extends CausalLock.Cause {
 				throw new IllegalStateException("This cause has already terminated");
 			if (theKeys == null)
 				theKeys = new LinkedHashMap<>();
-			return theKeys.computeIfAbsent(key, Effect::new);
+			return theKeys.computeIfAbsent(key, Effect::new).reset();
 		}
 
 		@Override
@@ -312,7 +323,8 @@ public interface Causable extends CausalLock.Cause {
 			// These events may trigger onRootFinish calls, which add more actions to this causable
 			// Though this cycle is allowed, care must be taken by callers to ensure it does not become infinite
 			try {
-				Causable.terminateFull(theKeys, this);
+				if(theKeys!=null)
+					Causable.terminate(theKeys.values(), this);
 			} finally {
 				isTerminated = true;
 			}
@@ -362,61 +374,54 @@ public interface Causable extends CausalLock.Cause {
 	/**
 	 * Runs the termination sequence against a set of effects for a cause
 	 * 
-	 * @param keys The key->effect map to execute
-	 * @param cause The cause to execute the effects against
-	 */
-	public static void terminateFull(Map<CausableKey, Effect> keys, Causable cause) {
-		if (keys == null)
-			return;
-		while (!keys.isEmpty())
-			terminate(keys.values(), cause);
-	}
-
-	/**
-	 * Runs the termination sequence against a set of effects for a cause
-	 * 
 	 * @param effects The effects to execute
 	 * @param cause The cause to execute the effects against
 	 */
 	public static void terminate(Collection<Effect> effects, Causable cause) {
-		LinkedList<Transaction> postActions = null;
-		int onlyPostActions = 0;
-		while (effects.size() > onlyPostActions) {
-			onlyPostActions = 0;
-			int expectedSize = effects.size();
-			Iterator<Effect> keyIter = effects.iterator();
-			while (effects.size() == expectedSize && keyIter.hasNext()) {
-				Effect effect = keyIter.next();
-				if (!effect.getKey().hasPrimaryAction()) {
-					onlyPostActions++;
-					continue;
-				}
-				keyIter.remove();
-				expectedSize--;
-				Transaction postAction = effect.execute(cause);
-				if (postAction != null) {
-					if (postActions == null)
-						postActions = new LinkedList<>();
-					postActions.addFirst(postAction);
+		if (effects == null)
+			return;
+		/* Here's the sequence:
+		 * 1) For each effect, execute it.  If it had a post-action, add it to the list of them to execute later.
+		 * 2) Go through the list of effects again, in case any were added or reset by a new call to onFinish().
+		 * 		Pass over old effects that were not reset.
+		 * 3) Repeat until there are no new or reset effects.
+		 * 4) Execute all the post-actions
+		 * 5) Check the list of effects yet again in case any new were added or any were reset.
+		 * 6) Repeat steps 2-5 continually until there are no new or reset effects.
+		 */
+		List<Transaction> postActions = null;
+		int executedCount = 0;
+		boolean anyNewExecuted = true;
+		while (anyNewExecuted) {
+			anyNewExecuted = false;
+			boolean keepExecuting = true;
+			while (keepExecuting) {
+				keepExecuting = false;
+				int i = 0;
+				int effectCount = effects.size();
+				for (Effect effect : effects) {
+					if (effect.isExecuted())
+						continue; // Done via a previous iteration
+					anyNewExecuted = keepExecuting = true;
+					Transaction postAction = effect.execute(cause);
+					if (i >= executedCount) { // Otherwise, this is an old effect that was reset
+						if (postAction != null) {
+							if (postActions == null)
+								postActions = new ArrayList<>(effects.size() - executedCount + 2);
+							postActions.add(postAction);
+						}
+						executedCount++;
+					}
+					if (effects.size() != effectCount) { // New effect
+						break;
+					}
 				}
 			}
-		}
-		while (!effects.isEmpty()) {
-			Iterator<Effect> keyIter = effects.iterator();
-			int expectedSize = effects.size();
-			while (effects.size() == expectedSize && keyIter.hasNext()) {
-				Effect effect = keyIter.next();
-				keyIter.remove();
-				expectedSize--;
-				Transaction postAction = effect.execute(cause);
-				if (postAction != null)
-					postAction.close();
+			// All effects have been executed
+			if (anyNewExecuted && postActions != null) {
+				for (int i = postActions.size() - 1; i >= 0; i--)
+					postActions.get(i).close();
 			}
-		}
-		if (postActions != null) {
-			for (Transaction key : postActions)
-				key.close();
-			postActions.clear();
 		}
 	}
 

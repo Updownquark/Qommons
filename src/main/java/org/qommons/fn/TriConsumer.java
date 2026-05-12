@@ -1,5 +1,6 @@
 package org.qommons.fn;
 
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 
@@ -42,6 +43,10 @@ public interface TriConsumer<T, U, V> {
 	 */
 	default BiConsumer<T, U> curry3(V arg3) {
 		return new TriConsumerCurry3<>(this, arg3);
+	}
+
+	default TriConsumer<T, U, V> andThen(TriConsumer<? super T, ? super U, ? super V> next) {
+		return new AndThenTriConsumer<>(this, next);
 	}
 
 	/**
@@ -191,6 +196,39 @@ public interface TriConsumer<T, U, V> {
 		@Override
 		public String toString() {
 			return theSource + ".curry3(" + theArg3 + ")";
+		}
+	}
+
+	class AndThenTriConsumer<T, U, V> implements TriConsumer<T, U, V> {
+		private final TriConsumer<? super T, ? super U, ? super V>[] theConsumers;
+
+		public AndThenTriConsumer(TriConsumer<? super T, ? super U, ? super V>... consumers) {
+			theConsumers = consumers;
+		}
+
+		@Override
+		public void accept(T arg1, U arg2, V arg3) {
+			for (TriConsumer<? super T, ? super U, ? super V> consumer : theConsumers)
+				consumer.accept(arg1, arg2, arg3);
+		}
+
+		@Override
+		public int hashCode() {
+			return Arrays.hashCode(theConsumers);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (!(obj instanceof AndThenTriConsumer))
+				return false;
+			return Arrays.equals(theConsumers, ((AndThenTriConsumer<?, ?, ?>) obj).theConsumers);
+		}
+
+		@Override
+		public String toString() {
+			return Arrays.toString(theConsumers);
 		}
 	}
 }

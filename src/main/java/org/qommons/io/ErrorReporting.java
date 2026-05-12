@@ -153,10 +153,12 @@ public interface ErrorReporting {
 			if (message != null) {
 				w.append(' ').append(message);
 			}
-			if (fileLocation != null)
-				w.append("\n\t at ").append(fileLocation.toString());
-			if (codeLocation != null)
-				w.append("\n\t at ").append(codeLocation.toString());
+			if (severity != IssueSeverity.INFO) {
+				if (fileLocation != null)
+					w.append("\n\t at ").append(fileLocation.toString());
+				if (codeLocation != null)
+					w.append("\n\t at ").append(codeLocation.toString());
+			}
 			w.append('\n');
 			if (cause != null) {
 				w.append("Caused by: ");

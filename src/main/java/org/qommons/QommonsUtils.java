@@ -12,6 +12,11 @@ import java.lang.reflect.Method;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BooleanSupplier;
@@ -874,6 +879,17 @@ public class QommonsUtils {
 	 */
 	public static <T> NullTolerantComparator<T> nullTolerant(Comparator<T> wrapped, boolean nullsFirst) {
 		return new NullTolerantComparator<>(wrapped, nullsFirst);
+	}
+
+	/**
+	 * @param dateStr The text to parse
+	 * @param format The DateTimeFormatter to do the parsing
+	 * @return The parsed instant
+	 * @throws DateTimeParseException If the formatting was not matched by the input
+	 */
+	public static Instant parseInstant(CharSequence dateStr, DateTimeFormatter format) throws DateTimeParseException {
+		LocalDateTime localTime = LocalDateTime.from(format.parse(dateStr));
+		return localTime.atOffset(ZoneOffset.UTC).toInstant();
 	}
 
 	/**
