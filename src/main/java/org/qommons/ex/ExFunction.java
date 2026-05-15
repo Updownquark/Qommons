@@ -94,6 +94,17 @@ public interface ExFunction<T, R, X extends Throwable> {
 	}
 
 	/**
+	 * @param <T> The type of the argument (ignored)
+	 * @param <R> The type of the value returned (constant)
+	 * @param <X> The type of the exception that is never thrown
+	 * @param value The value for the function to return
+	 * @return An {@link ExFunction} that always returns the given value
+	 */
+	static <T, R, X extends Throwable> ExFunction<T, R, X> constant(R value) {
+		return new ConstantExFunction<>(value);
+	}
+
+	/**
 	 * Implements {@link ExFunction#unsafe()}
 	 * 
 	 * @param <T> The argument type
@@ -310,6 +321,46 @@ public interface ExFunction<T, R, X extends Throwable> {
 		@Override
 		public String toString() {
 			return theFunction + ".consume(" + theConsumer + ")";
+		}
+	}
+
+	/**
+	 * Implementation of {@link ExFunction#constant(Object)}
+	 * 
+	 * @param <T> The type of the argument (ignored)
+	 * @param <R> The type of the value returned (constant)
+	 * @param <X> The type of the exception that is never thrown
+	 */
+	class ConstantExFunction<T, R, X extends Throwable> implements ExFunction<T, R, X> {
+		private final R theValue;
+
+		public ConstantExFunction(R value) {
+			theValue = value;
+		}
+
+		@Override
+		public R apply(T value) {
+			return theValue;
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hashCode(theValue);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			else if (obj instanceof ConstantExFunction)
+				return Objects.equals(theValue, ((ConstantExFunction<?, ?, ?>) obj).theValue);
+			else
+				return false;
+		}
+
+		@Override
+		public String toString() {
+			return String.valueOf(theValue);
 		}
 	}
 }
