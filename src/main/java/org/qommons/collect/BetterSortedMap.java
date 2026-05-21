@@ -93,7 +93,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		boolean first, Runnable preAdd, Runnable postAdd) {
 		if (after != null || before != null) {
 			// If the given elements constrain the search space, we can probably be faster than the general method below
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				ElementId best = first ? after : before;
 				ElementId worst = first ? before : after;
 				if (best != null) {
@@ -173,7 +173,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 		}
 		// Key is not present
 		boolean newEntry = false;
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			if (found != null && found.getElementId().isPresent()) {
 				// Get the comparison again in case the element's value was replaced
 				compare = comparator().compare(key, found.getKey());

@@ -55,6 +55,14 @@ public interface ListenerQueue<E> extends PureQueue<E>, Stamped {
 	 * @param action The action to perform on each value in this queue
 	 */
 	void forEach(Consumer<? super E> action);
+	
+	/**
+	 * Provides the given consumer with each value in this queue. This method only differs from {@link #forEach(Consumer)} in that this
+	 * method does not cause concurrent {@link #isFiring()} calls to return true and it does not increment the stamp.
+	 * 
+	 * @param action The action to perform on each value in this queue.
+	 */
+	void visitEach(Consumer<? super E> action);
 
 	/**
 	 * @return Whether {@link #forEach(Consumer)} is currently being called. It is implementation-dependent whether this is specific to the

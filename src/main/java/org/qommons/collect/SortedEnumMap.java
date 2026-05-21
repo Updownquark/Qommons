@@ -4,7 +4,6 @@ import java.util.*;
 
 import org.qommons.ArrayUtils;
 import org.qommons.Identifiable;
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedList.SortedSearchFilter;
@@ -82,23 +81,18 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 	}
 
 	@Override
-	public boolean isLockSupported() {
-		return theLocker.isLockSupported();
-	}
-
-	@Override
 	public ThreadConstraint getThreadConstraint() {
 		return theLocker.getThreadConstraint();
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return theLocker.lock(write, cause);
+	public Transaction lock(boolean tryOnly) {
+		return theLocker.lock(tryOnly);
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return theLocker.tryLock(write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		return theLocker.lockWrite(tryOnly, cause);
 	}
 
 	@Override
@@ -149,7 +143,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 	@Override
 	public int size() {
 		int size = 0;
-		try (Transaction t = theLocker.lock(false, null)) {
+		try (Transaction t = theLocker.lock(false)) {
 			for (EnumEntry entry : theEntries) {
 				if (entry != null)
 					size++;
@@ -160,7 +154,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 	@Override
 	public boolean containsValue(Object value) {
-		try (Transaction t = theLocker.lock(false, null)) {
+		try (Transaction t = theLocker.lock(false)) {
 			for (EnumEntry entry : theEntries) {
 				if (entry != null && Objects.equals(entry, value))
 					return true;
@@ -189,7 +183,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 	@Override
 	public V put(K key, V value) {
 		int index = key.ordinal();
-		try (Transaction t = theLocker.lock(true, null)) {
+		try (Transaction t = theLocker.lockWrite(false, null)) {
 			EnumEntry entry = theEntries[index];
 			theLocker.modified();
 			if (entry == null) {
@@ -204,7 +198,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 	public V remove(Object key) {
 		if (!theKeyType.isInstance(key))
 			return null;
-		try (Transaction t = theLocker.lock(true, null)) {
+		try (Transaction t = theLocker.lockWrite(false, null)) {
 			int index = ((K) key).ordinal();
 			EnumEntry entry = theEntries[index];
 			if (entry == null)
@@ -217,7 +211,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 	@Override
 	public void clear() {
-		try (Transaction t = theLocker.lock(true, null)) {
+		try (Transaction t = theLocker.lockWrite(false, null)) {
 			if (isEmpty())
 				return;
 			Arrays.fill(theEntries, null);
@@ -282,7 +276,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
 		if (before != null && key.compareTo(keyId(before).theKey) > 0)
 			throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT_POSITION);
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			int index = key.ordinal();
 			EnumEntry entry = theEntries[index];
 			if (entry == null)
@@ -376,7 +370,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		public int getElementsBefore() {
 			K key = theId.theKey;
 			int index = 0;
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				for (int i = 0; i < theKeys.length; i++) {
 					if (theKeys[i] == key)
 						return index;
@@ -391,7 +385,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		public int getElementsAfter() {
 			K key = theId.theKey;
 			int index = 0;
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				for (int i = theKeys.length - 1; i >= 0; i--) {
 					if (theKeys[i] == key)
 						return index;
@@ -483,7 +477,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 		@Override
 		public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (!theEntry.getElementId().isPresent())
 					throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
 				theEntry.set(value);
@@ -501,7 +495,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 		@Override
 		public void remove() throws UnsupportedOperationException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (!theEntry.getElementId().isPresent())
 					throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
 				theEntries[theEntry.getElementId().theKey.ordinal()] = null;
@@ -547,13 +541,13 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return SortedEnumMap.this.lock(write, cause);
+		public Transaction lock(boolean tryOnly) {
+			return SortedEnumMap.this.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return SortedEnumMap.this.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return SortedEnumMap.this.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -628,7 +622,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 		@Override
 		public ListElement<K> getElement(int index) throws IndexOutOfBoundsException {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				K[] keys = toArray();
 				return getElement(keys[index], true);
 			}
@@ -743,7 +737,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 				@Override
 				public void remove() {
-					try (Transaction t = lock(true, null)) {
+					try (Transaction t = lockWrite(false, null)) {
 						if (theIndex == 0 || theEntries[theIndex - 1] == null)
 							throw new IllegalStateException("remove() must be called after next()");
 						theEntries[theIndex - 1] = null;
@@ -760,7 +754,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 		@Override
 		public K[] toArray() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				List<K> list = new ArrayList<>(theKeys.length);
 				for (int i = 0; i < theKeys.length; i++) {
 					if (theEntries[i] != null)
@@ -825,7 +819,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 			public int getElementsBefore() {
 				K key = theId.theKey;
 				int index = 0;
-				try (Transaction t = lock(false, null)) {
+				try (Transaction t = lock(false)) {
 					for (int i = 0; i < theKeys.length; i++) {
 						if (theKeys[i] == key)
 							return index;
@@ -840,7 +834,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 			public int getElementsAfter() {
 				K key = theId.theKey;
 				int index = 0;
-				try (Transaction t = lock(false, null)) {
+				try (Transaction t = lock(false)) {
 					for (int i = theKeys.length - 1; i >= 0; i--) {
 						if (theKeys[i] == key)
 							return index;
@@ -916,7 +910,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 			@Override
 			public void remove() throws UnsupportedOperationException {
-				try (Transaction t = lock(true, null)) {
+				try (Transaction t = lockWrite(false, null)) {
 					int index = getElementId().theKey.ordinal();
 					if (theEntries[index] == null || theEntries[index].getElementId() != getElementId())
 						throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
@@ -949,13 +943,13 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return SortedEnumMap.this.lock(write, cause);
+		public Transaction lock(boolean tryOnly) {
+			return SortedEnumMap.this.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return SortedEnumMap.this.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return SortedEnumMap.this.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -985,7 +979,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 		@Override
 		public ListElement<Map.Entry<K, V>> getElement(int index) throws IndexOutOfBoundsException {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				K[] keys = theKeySet.toArray();
 				return new EntryElement(theEntries[keys[index].ordinal()]);
 			}
@@ -1202,13 +1196,13 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return SortedEnumMap.this.lock(write, cause);
+		public Transaction lock(boolean tryOnly) {
+			return SortedEnumMap.this.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return SortedEnumMap.this.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return SortedEnumMap.this.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -1218,7 +1212,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 		@Override
 		public OrderedMapEntry<K, V> getElement(V value, boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (first) {
 					for (int i = 0; i < theEntries.length; i++) {
 						if (theEntries[i] != null && Objects.equals(theEntries[i].get(), value))
@@ -1304,7 +1298,7 @@ public class SortedEnumMap<K extends Enum<K>, V> extends AbstractMap<K, V> imple
 
 		@Override
 		public OrderedMapEntry<K, V> getElement(int index) throws IndexOutOfBoundsException {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				int i = 0;
 				for (int j = 0; j < theEntries.length; j++) {
 					if (theEntries[j] != null) {

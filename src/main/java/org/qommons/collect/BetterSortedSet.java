@@ -276,7 +276,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	default BetterList<E> subList(int fromIndex, int toIndex) {
 		if(!BetterCollections.simplifyDuplicateOperations())
 			return BetterSortedList.super.subList(fromIndex, toIndex);
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			// Be inclusive so that adds succeed as often as possible
 			Comparable<? super E> from = fromIndex == 0 ? null : searchFor(get(fromIndex - 1), 1);
 			Comparable<? super E> to = toIndex == size() ? null : searchFor(get(toIndex), -1);

@@ -9,7 +9,6 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.qommons.*;
-import org.qommons.Lockable.CoreId;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.tree.BetterTreeList;
 
@@ -54,7 +53,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	 * @return The first or last entry in this map, or null if the map is empty
 	 */
 	default MultiEntryHandle<K, V> getTerminalEntry(boolean first) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			CollectionElement<K> keyEl = keySet().getTerminalElement(first);
 			return keyEl == null ? null : getEntryById(keyEl.getElementId());
 		}
@@ -83,7 +82,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	 * @return The entry in this map with the given key, or null if no such entry exists
 	 */
 	default MultiEntryHandle<K, V> getEntry(K key) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			CollectionElement<K> keyElement = keySet().getElement(key, true);
 			return keyElement == null ? null : getEntryById(keyElement.getElementId());
 		}
@@ -96,7 +95,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	 * @return The value entry in this map with the given key and value, or null if no such entry exists
 	 */
 	default MultiEntryValueHandle<K, V> getEntry(K key, V value, boolean first) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			MultiEntryHandle<K, V> keyElement = getEntry(key);
 			if (keyElement == null)
 				return null;
@@ -255,7 +254,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 
 	@Override
 	default boolean removeAll(K key) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			Collection<V> values = get(key);
 			if (values.isEmpty())
 				return false;
@@ -293,7 +292,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	 * @return The hash code of the multi-map's contents
 	 */
 	public static int hashCode(BetterMultiMap<?, ?> map) {
-		try (Transaction t = map.lock(false, null)) {
+		try (Transaction t = map.lock(false)) {
 			int hash = 0;
 			for (MultiEntryHandle<?, ?> entry : map.entrySet()) {
 				int entryHash = Objects.hash(entry.getKey()) * 17 + entry.getValues().hashCode();
@@ -314,8 +313,8 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		if (!(obj instanceof MultiMap))
 			return false;
 		MultiMap<?, ?> other = (MultiMap<?, ?>) obj;
-		try (Transaction t = Lockable.lockAll(Lockable.lockable(map, false, false), //
-			other instanceof Transactable ? Lockable.lockable((Transactable) other, false, false) : null)) {
+		try (Transaction t = Lockable.lockAll(false, map, //
+			other instanceof Lockable ? (Lockable) other : null)) {
 			if (map.keySet().size() != other.keySet().size() || map.valueSize() != other.valueSize())
 				return false;
 			for (MultiEntryHandle<?, ?> entry : map.entrySet()) {
@@ -334,7 +333,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 	 */
 	public static String toString(BetterMultiMap<?, ?> map) {
 		StringBuilder str = new StringBuilder().append('{');
-		try (Transaction t = map.lock(false, null)) {
+		try (Transaction t = map.lock(false)) {
 			boolean firstEntry = true;
 			for (MultiEntryHandle<?, ?> entry : map.entrySet()) {
 				if (!firstEntry)
@@ -434,7 +433,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 
 		@Override
 		public CollectionElement<MultiEntryHandle<K, V>> getTerminalElement(boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				CollectionElement<K> keyEl = getMap().keySet().getTerminalElement(first);
 				return keyEl == null ? null : entryFor(getMap().getEntryById(keyEl.getElementId()));
 			}
@@ -504,18 +503,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return getMap().isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return getMap().lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return getMap().lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return getMap().tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return getMap().lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -545,7 +539,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 
 		@Override
 		public MultiEntryHandle<K, V>[] toArray() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return toArray(new MultiEntryHandle[size()]);
 			}
 		}
@@ -725,18 +719,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return getMap().isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return getMap().lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return getMap().lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return getMap().tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return getMap().lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -786,7 +775,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 
 		@Override
 		public CollectionElement<MultiEntryValueHandle<K, V>> getTerminalElement(boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				CollectionElement<K> keyEl = getMap().keySet().getTerminalElement(first);
 				if (keyEl == null)
 					return null;
@@ -826,7 +815,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 						.map(valueEl -> entryFor(getMap().getEntryById(keyEl.getElementId(), valueEl.getElementId())))));
 			}
 			// No choice but to go key-by-key
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				CollectionElement<K> keyEl = getMap().keySet().getTerminalElement(true);
 				while (keyEl != null) {
 					MultiEntryHandle<K, V> entry = getMap().getEntryById(keyEl.getElementId());
@@ -878,7 +867,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			if (kvAfter != null && kvBefore != null && kvAfter.compareTo(kvBefore) >= 0)
 				throw new IllegalArgumentException("after is after before");
 
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (kvAfter != null) {
 					MultiEntryHandle<K, V> afterEntry = getMap().getEntryById(kvAfter.keyId);
 					if (keysEqual(afterEntry.getKey(), value.getKey())) {
@@ -924,7 +913,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			if (kvAfter != null && kvBefore != null && kvAfter.compareTo(kvBefore) >= 0)
 				throw new IllegalArgumentException("after is after before");
 
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (kvAfter != null) {
 					MultiEntryHandle<K, V> afterEntry = getMap().getEntryById(kvAfter.keyId);
 					if (keysEqual(afterEntry.getKey(), value.getKey())) {
@@ -1237,13 +1226,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theMap.lock(write, cause);
+		public Transaction lock(boolean tryOnly) {
+			return theMap.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theMap.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theMap.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -1311,7 +1300,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 					.map(valueEl -> entryFor(theMap.getEntryById(keyEl.getElementId(), valueEl.getElementId())))));
 			}
 			// No choice but to go key-by-key
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				CollectionElement<K> keyEl = theMap.keySet().getTerminalElement(true);
 				while (keyEl != null) {
 					MultiEntryHandle<K, V> entry = theMap.getEntryById(keyEl.getElementId());
@@ -1870,12 +1859,12 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
+		public Transaction lock(boolean tryOnly) {
 			return Transaction.NONE;
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
 			return Transaction.NONE;
 		}
 
@@ -1947,18 +1936,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theEntry.getValues().isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theEntry.getValues().lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theEntry.getValues().lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theEntry.getValues().tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theEntry.getValues().lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -2116,13 +2100,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theSource.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theSource.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theSource.lock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theSource.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -2158,7 +2142,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 			String msg = canReverse();
 			if (msg != null)
 				throw new UnsupportedOperationException(msg);
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				boolean[] added = new boolean[1];
 				MultiEntryHandle<K, V> entry = getSource().getOrPutEntry(key, k -> {
 					BetterList<V> values = BetterTreeList.<V> build().build();
@@ -2207,7 +2191,7 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 
 		@Override
 		public X put(K key, X value) {
-			try (Transaction t = getSource().lock(true, null)) {
+			try (Transaction t = getSource().lockWrite(false, null)) {
 				BetterCollection<V> values = getSource().get(key);
 				return reverse(values, value);
 			}
@@ -2530,13 +2514,13 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theSource.lock(write, cause);
+		public Transaction lock(boolean tryOnly) {
+			return theSource.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theSource.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theSource.lockWrite(tryOnly, cause);
 		}
 
 		@Override

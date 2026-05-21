@@ -3,6 +3,7 @@ package org.qommons;
 import java.awt.EventQueue;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -210,6 +211,31 @@ public interface ThreadConstraint {
 		if (cs.size() == 1)
 			return cs.get(0);
 		return new UnionConstraint(QommonsUtils.unmodifiableCopy(cs));
+	}
+
+	/**
+	 * @param components The thread-constrained components to determine whether a thread is an {@link #isEventThread() event thread}.
+	 * @return A constraint that supports modification to any of the given constraints' event threads, and uses the first
+	 *         invocation-supporting constraint to support invocation (if any).
+	 */
+	public static ThreadConstraint union(ThreadConstrained... components) {
+		ThreadConstraint[] constraints = new ThreadConstraint[components.length];
+		for (int i = 0; i < components.length; i++)
+			constraints[i] = components[i] == null ? ThreadConstraint.NONE : components[i].getThreadConstraint();
+		return union(constraints);
+	}
+
+	/**
+	 * @param components The thread-constrained components to determine whether a thread is an {@link #isEventThread() event thread}.
+	 * @return A constraint that supports modification to any of the given constraints' event threads, and uses the first
+	 *         invocation-supporting constraint to support invocation (if any).
+	 */
+	public static ThreadConstraint union(Collection<? extends ThreadConstrained> components) {
+		ThreadConstraint[] constraints = new ThreadConstraint[components.size()];
+		int i = 0;
+		for (ThreadConstrained component : components)
+			constraints[i++] = component == null ? ThreadConstraint.NONE : component.getThreadConstraint();
+		return union(constraints);
 	}
 
 	/**

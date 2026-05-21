@@ -6,7 +6,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.qommons.*;
-import org.qommons.Lockable.CoreId;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 import org.qommons.fn.FunctionUtils;
@@ -34,23 +33,18 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 	}
 
 	@Override
-	default boolean isLockSupported() {
-		return keySet().isLockSupported();
-	}
-
-	@Override
 	default ThreadConstraint getThreadConstraint() {
 		return keySet().getThreadConstraint();
 	}
 
 	@Override
-	default Transaction lock(boolean write, Object cause) {
-		return keySet().lock(write, cause);
+	default Transaction lock(boolean tryOnly) {
+		return keySet().lock(tryOnly);
 	}
 
 	@Override
-	default Transaction tryLock(boolean write, Object cause) {
-		return keySet().tryLock(write, cause);
+	default Transaction lockWrite(boolean tryOnly, Object cause) {
+		return keySet().lock(tryOnly);
 	}
 
 	@Override
@@ -134,7 +128,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 	 * @return The first or last entry in this map, or null if the map is empty
 	 */
 	default MapEntryHandle<K, V> getTerminalEntry(boolean first) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			CollectionElement<K> keyEl = keySet().getTerminalElement(first);
 			return keyEl == null ? null : getEntryById(keyEl.getElementId());
 		}
@@ -194,7 +188,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 
 	@Override
 	default V remove(Object key) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			MapEntryHandle<K, V> entry = getEntry((K) key);
 			if (entry == null)
 				return null;
@@ -229,7 +223,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 
 	@Override
 	default void putAll(Map<? extends K, ? extends V> m) {
-		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(m, false, null)) {
+		try (Transaction t = lockWrite(false, null); Transaction ct = Lockable.lockLockable(m, false)) {
 			for (Map.Entry<? extends K, ? extends V> entry : m.entrySet())
 				put(entry.getKey(), entry.getValue());
 		}
@@ -242,7 +236,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 	 */
 	default boolean putAll(Iterable<? extends K> keys, V value) {
 		boolean changed = false;
-		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(keys, false, null)) {
+		try (Transaction t = lockWrite(false, null); Transaction ct = Lockable.lockLockable(keys, false)) {
 			for (K key : keys) {
 				if (value != put(key, value))
 					changed = true;
@@ -463,7 +457,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 	 * @return The non-null handle of the entry for the given key
 	 */
 	default MapEntryHandle<K, V> computeEntryIfAbsent(K key, Function<? super K, ? extends V> value, boolean first) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			MapEntryHandle<K, V> entry = getEntry(key);
 			if (entry == null)
 				entry = putEntry(key, value.apply(key), first);
@@ -490,7 +484,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 
 	@Override
 	default V computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			MapEntryHandle<K, V> handle = getEntry(key);
 			if (handle != null) {
 				MutableMapEntryHandle<K, V> mutableEntry = mutableEntry(handle.getElementId());
@@ -508,7 +502,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 
 	@Override
 	default V compute(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			ValueHolder<V> value = new ValueHolder<>();
 			MapEntryHandle<K, V> entry = getOrPutEntry(key, k -> {
 				V newValue = remappingFunction.apply(k, null);
@@ -552,7 +546,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 	 */
 	static int hashCode(BetterMap<?, ?> map) {
 		int hashCode = 0;
-		try (Transaction t = map.lock(false, null)) {
+		try (Transaction t = map.lock(false)) {
 			for (Map.Entry<?, ?> entry : map.entrySet())
 				hashCode += Objects.hashCode(entry.getKey()) * 7 + Objects.hash(entry.getValue());
 		}
@@ -570,8 +564,8 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		if (!(obj instanceof Map))
 			return false;
 		Map<?, ?> other = (Map<?, ?>) obj;
-		try (Transaction t = Lockable.lockAll(Lockable.lockable(map, false, null), //
-			other instanceof Transactable ? Lockable.lockable((Transactable) other, false, null) : null)) {
+		try (Transaction t = Lockable.lockAll(false, map, //
+			other instanceof Lockable ? (Lockable) other : null)) {
 			if (map.size() != other.size())
 				return false;
 			Iterator<? extends Map.Entry<?, ?>> thisIter = map.entrySet().iterator();
@@ -818,18 +812,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theMap.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theMap.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theMap.lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theMap.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theMap.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -1027,7 +1016,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 					@Override
 					public V setValue(V value) {
 						// Since the Map interface expects entries in the entrySet to support setValue, we'll allow this type of mutability
-						try (Transaction t = lock(true, null)) {
+						try (Transaction t = lockWrite(false, null)) {
 							V current = theEntry.get();
 							theMap.mutableEntry(getEntry().getElementId()).setValue(value);
 							return current;
@@ -1179,18 +1168,13 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theMap.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theMap.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theMap.lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theMap.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theMap.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -1253,7 +1237,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 
 		@Override
 		public CollectionElement<V> getElement(V value, boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				CollectionElement<V> el = getTerminalElement(first);
 				while (el != null) {
 					if (Objects.equals(el.get(), value))
@@ -1339,17 +1323,12 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return true;
-		}
-
-		@Override
-		public Transaction lock(boolean write, Object cause) {
+		public Transaction lock(boolean tryOnly) {
 			return Transaction.NONE;
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
 			return Transaction.NONE;
 		}
 

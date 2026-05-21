@@ -2,7 +2,6 @@ package org.qommons;
 
 import java.util.*;
 
-import org.qommons.Lockable.CoreId;
 import org.qommons.collect.SimpleDeque;
 
 /** A lock that keeps track of the causes by which it is write-locked for eventing */
@@ -22,33 +21,30 @@ public class DefaultCausalLock implements CausalLock {
 	}
 
 	@Override
-	public boolean isLockSupported() {
-		return theLock.isLockSupported();
+	public Transaction lock(boolean tryOnly) {
+		return theLock.lock(tryOnly);
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		Transaction t = theLock.lock(write, cause);
-		return addCause(t, write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		Transaction t = theLock.lockWrite(tryOnly, cause);
+		return t == null ? null : addCause(t, cause);
 	}
 
-	private Transaction addCause(Transaction valueLock, boolean write, Object cause) {
+	private Transaction addCause(Transaction valueLock, Object cause) {
 		CauseSupplier tCause;
 		Transaction causeFinish;
-		if (cause == null && (!write || hasCause())) {
+		if (cause == null && hasCause()) {
 			causeFinish = null;
 			tCause = null;
 		} else if (cause instanceof Cause) {
 			tCause = new ConstantCause((Cause) cause);
 			causeFinish = null;
-		} else if (write) {
+		} else {
 			tCause = new LazyCause(cause);
 			causeFinish = ((LazyCause) tCause)::close;
-		} else {
-			tCause = null;
-			causeFinish = null;
 		}
-		if (write && tCause != null) {
+		if (tCause != null) {
 			theTransactionCauses.add(tCause);
 		}
 		return new Transaction() {
@@ -66,17 +62,11 @@ public class DefaultCausalLock implements CausalLock {
 						e.printStackTrace();
 					}
 				}
-				if (write && tCause != null)
+				if (tCause != null)
 					theTransactionCauses.removeLastOccurrence(tCause);
 				valueLock.close();
 			}
 		};
-	}
-
-	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		Transaction t = theLock.tryLock(write, cause);
-		return t == null ? null : addCause(t, write, cause);
 	}
 
 	private boolean hasCause() {

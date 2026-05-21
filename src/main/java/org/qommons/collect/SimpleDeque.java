@@ -251,6 +251,15 @@ public class SimpleDeque<E> implements SequencedDeque<E>, ListenerQueue<E> {
 	}
 
 	@Override
+	public void visitEach(Consumer<? super E> action) {
+		Node node = theFirst;
+		while (node != null) {
+			action.accept(node.value);
+			node = node.next;
+		}
+	}
+
+	@Override
 	public boolean isFiring() {
 		return isFiring != 0;
 	}

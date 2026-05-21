@@ -7,12 +7,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.qommons.Identifiable;
-import org.qommons.Lockable.CoreId;
-import org.qommons.QommonsUtils;
-import org.qommons.ThreadConstraint;
-import org.qommons.Transactable;
-import org.qommons.Transaction;
+import org.qommons.*;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.ex.CheckedExceptionWrapper;
 import org.qommons.ex.ExFunction;
@@ -262,7 +257,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 	@Override
 	default boolean addAll(int index, Collection<? extends E> c) {
-		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lockWrite(false, null); Transaction ct = Lockable.lockLockable(c, false)) {
 			int sz = size();
 			if (index < 0 || index > sz)
 				throw new IndexOutOfBoundsException(index + " of " + sz);
@@ -318,7 +313,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 * @return The element at which the value was added
 	 */
 	default ListElement<E> addElement(int index, E element) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			int sz = size();
 			if (index < 0 || index > sz)
 				throw new IndexOutOfBoundsException(index + " of " + sz);
@@ -371,7 +366,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 	@Override
 	default E remove(int index) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			CollectionElement<E> el = getElement(index);
 			E value = el.get();
 			mutableElement(el.getElementId())//
@@ -382,7 +377,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 	@Override
 	default void removeRange(int fromIndex, int toIndex) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			if (fromIndex == size() || fromIndex == toIndex)
 				return;
 			CollectionElement<E> el = getElement(fromIndex);
@@ -403,7 +398,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 	@Override
 	default E set(int index, E element) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			CollectionElement<E> el = getElement(index);
 			E value = el.get();
 			mutableElement(el.getElementId())//
@@ -517,7 +512,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	 * @return A new, immutable list containing all elements of this list that match the given filter
 	 */
 	default BetterList<E> quickFilter(Predicate<? super E> filter) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			ArrayList<E> copy = new ArrayList<>();
 			for (E value : this) {
 				if (filter.test(value))
@@ -671,7 +666,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public ListElement<E> getElement(int index) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return getWrapped().getElement(reflect(index, false)).reverse();
 			}
 		}
@@ -991,38 +986,22 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theWrapped.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			check();
+			return theWrapped.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
 			check();
-			Transaction t = theWrapped.lock(write, cause);
-			if (write) {
-				updated();
-				return () -> {
-					updated();
-					t.close();
-				};
-			} else
-				return t;
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			check();
-			Transaction t = theWrapped.tryLock(write, cause);
+			Transaction t = theWrapped.lockWrite(tryOnly, cause);
 			if (t == null)
 				return null;
-			if (write) {
+			updated();
+			return () -> {
 				updated();
-				return () -> {
-					updated();
-					t.close();
-				};
-			} else
-				return t;
+				t.close();
+			};
 		}
 
 		@Override
@@ -1078,7 +1057,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public ListElement<E> getElement(E value, boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (isEmpty())
 					return null;
 				ListElement<E> firstMatch = theWrapped.getElement(value, first);
@@ -1113,7 +1092,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public ListElement<E> getElement(ElementId id) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				ListElement<E> wrapped = theWrapped.getElement(id);
 				int index = wrapped.getElementsBefore();
 				if (index < theStart || index >= theEnd)
@@ -1124,7 +1103,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public MutableListElement<E> mutableElement(ElementId id) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				MutableListElement<E> wrapped = theWrapped.mutableElement(id);
 				int index = wrapped.getElementsBefore();
 				if (index < theStart || index >= theEnd)
@@ -1135,7 +1114,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public ListElement<E> getElement(int index) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return wrapElement(theWrapped.getElement(theStart + checkIndex(index, false)));
 			}
 		}
@@ -1177,7 +1156,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public Object[] toArray() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				Object[] array = new Object[size()];
 				for (int i = 0; i < array.length; i++)
 					array[i] = get(i);
@@ -1187,7 +1166,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public <T> T[] toArray(T[] a) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				T[] array = a.length >= size() ? a : (T[]) Array.newInstance(a.getClass().getComponentType(), size());
 				for (int i = 0; i < array.length; i++)
 					array[i] = (T) get(i);
@@ -1337,7 +1316,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 			@Override
 			public void remove() throws UnsupportedOperationException {
-				try (Transaction t = lock(true, null)) {
+				try (Transaction t = lockWrite(false, null)) {
 					getWrappedEl().remove();
 					theEnd--;
 					updated();
@@ -1355,14 +1334,14 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public E get(int index) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theWrapped.get(checkIndex(index, false) + theStart);
 			}
 		}
 
 		@Override
 		public String canAdd(E value, ElementId after, ElementId before) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (after == null && theStart > 0)
 					after = theWrapped.getElement(theStart - 1).getElementId();
 				int wrapSize = theWrapped.size();
@@ -1377,7 +1356,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 			throws UnsupportedOperationException, IllegalArgumentException {
 			ListElement<E> newEl;
 			int wrapSize;
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (after == null && theStart > 0)
 					after = theWrapped.getElement(theStart - 1).getElementId();
 				wrapSize = theWrapped.size();
@@ -1401,7 +1380,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		@Override
 		public ListElement<E> addElement(int index, E element) {
 			ListElement<E> newEl;
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				newEl = theWrapped.addElement(theStart + checkIndex(index, true), element);
 				if (newEl != null) {
 					theEnd++;
@@ -1419,7 +1398,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (after == null && theStart > 0)
 					after = theWrapped.getElement(theStart - 1).getElementId();
 				int wrapSize = theWrapped.size();
@@ -1432,7 +1411,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		@Override
 		public ListElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (after == null && theStart > 0)
 					after = theWrapped.getElement(theStart - 1).getElementId();
 				int wrapSize = theWrapped.size();
@@ -1445,7 +1424,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public boolean addAll(int index, Collection<? extends E> c) {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				int preSize = theWrapped.size();
 				if (!theWrapped.addAll(theStart + checkIndex(index, true), c))
 					return false;
@@ -1456,7 +1435,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public void clear() {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				int sz = theWrapped.size();
 				if (sz <= theStart)
 					return;
@@ -1745,17 +1724,12 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return true;
-		}
-
-		@Override
-		public Transaction lock(boolean write, Object cause) {
+		public Transaction lock(boolean tryOnly) {
 			return Transaction.NONE;
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
 			return Transaction.NONE;
 		}
 
@@ -2159,6 +2133,8 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		private final Object[] theValues;
 
 		public BetterArrayList(Object[] values) {
+			if (values == null || values.length == 0)
+				throw new IllegalArgumentException("Do not use this class with no values");
 			theValues = values;
 		}
 
@@ -2174,12 +2150,22 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 
 		@Override
 		public boolean isEmpty() {
-			return theValues.length == 0;
+			return false;
 		}
 
 		@Override
 		public E get(int index) {
 			return (E) theValues[index];
+		}
+
+		@Override
+		public Iterator<E> iterator() {
+			return iterator(true);
+		}
+
+		@Override
+		public Iterator<E> iterator(boolean fromBeginning) {
+			return (Iterator<E>) IterableUtils.iterator(theValues, fromBeginning);
 		}
 	}
 

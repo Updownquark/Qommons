@@ -11,9 +11,8 @@ import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 import org.qommons.Identifiable.AbstractIdentifiable;
-import org.qommons.Lockable.CoreId;
+import org.qommons.Lockable;
 import org.qommons.ThreadConstraint;
-import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.tree.BetterTreeList;
@@ -259,7 +258,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 	 * @return Whether this table was rebuilt
 	 */
 	public boolean ensureCapacity(int expectedSize) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			int neededTableSize = (int) Math.ceil(expectedSize / theLoadFactor);
 			if (neededTableSize > theTable.length) {
 				// Do this so we don't rehash as often when growing
@@ -287,7 +286,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 	 * @return The efficiency of this table
 	 */
 	public double getEfficiency() {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			int sharing = 0;
 			for (HashTableEntry tableEntry : theTable) {
 				if (tableEntry == null || tableEntry.entries.size() <= 1)
@@ -318,22 +317,17 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 	}
 
 	@Override
-	public boolean isLockSupported() {
-		return theLocker.isLockSupported();
+	public Transaction lock(boolean tryOnly) {
+		if (theLocker == null) // Locker is only null for initial value addition
+			return Transaction.NONE;
+		return theLocker.lock(tryOnly);
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
 		if (theLocker == null) // Locker is only null for initial value addition
 			return Transaction.NONE;
-		return theLocker.lock(write, cause);
-	}
-
-	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		if (theLocker == null) // Locker is only null for initial value addition
-			return Transaction.NONE;
-		return theLocker.tryLock(write, cause);
+		return theLocker.lockWrite(tryOnly, cause);
 	}
 
 	@Override
@@ -407,7 +401,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 			return entry;
 
 		// Ordered insert is O(n), but we'll support it
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			if (preAdd != null)
 				preAdd.run();
 			ensureCapacity(theSize + 1);
@@ -518,7 +512,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 			throw new NoSuchElementException("Element has been removed");
 		else if (hashId.getSet() != this)
 			throw new NoSuchElementException("Element does not belong to this set");
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			HashEntry entry = hashId.entry;
 			if (first) {
 				if ((after == null && entry.previous == null)
@@ -643,7 +637,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 	 * @return Whether any values were added to the et
 	 */
 	public boolean addAll(Iterable<? extends E> c) {
-		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lockWrite(false, null); Transaction ct = Lockable.lockLockable(c, false)) {
 			boolean added = false;
 			for (E e : c) {
 				added |= add(e);
@@ -656,7 +650,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 	public void clear() {
 		if (isEmpty())
 			return;
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			for (int i = 0; i < theTable.length; i++)
 				theTable[i] = null;
 			theFirst = null;
@@ -672,7 +666,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 
 	@Override
 	public boolean checkConsistency() {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			HashEntry entry = theFirst;
 			while (entry != null) {
 				if (!entry.isValid())
@@ -685,14 +679,14 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 
 	@Override
 	public <X> boolean repair(ElementId element, RepairListener<E, X> listener) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			return ((HashId) element).entry.repair(listener);
 		}
 	}
 
 	@Override
 	public <X> boolean repair(RepairListener<E, X> listener) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			boolean repaired = false;
 			HashEntry entry = theFirst;
 			while (entry != null) {
@@ -824,7 +818,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 
 		@Override
 		public String isAcceptable(E value) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				if (theEquals.test(theValue, value))
@@ -837,7 +831,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 
 		@Override
 		public void set(E value) throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				int newHash = theHasher.applyAsInt(value);
@@ -859,7 +853,7 @@ public class BetterHashSet<E> extends AbstractIdentifiable implements BetterSet<
 
 		@Override
 		public void remove() throws UnsupportedOperationException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				checkIntegrity();

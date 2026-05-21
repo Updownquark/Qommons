@@ -6,7 +6,6 @@ import java.util.function.Function;
 import org.qommons.CausalLock;
 import org.qommons.Identifiable;
 import org.qommons.Identifiable.AbstractIdentifiable;
-import org.qommons.Lockable.CoreId;
 import org.qommons.Stamped;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
@@ -361,13 +360,13 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return theLocking.lock(write, cause);
+	public Transaction lock(boolean tryOnly) {
+		return theLocking.lock(tryOnly);
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return theLocking.tryLock(write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		return theLocking.lockWrite(tryOnly, cause);
 	}
 
 	@Override
@@ -393,7 +392,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 	@Override
 	public boolean clear() {
 		boolean removedAny = false;
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			CollectionElement<K> keyEl = theEntries.keySet().getTerminalElement(true);
 			while (keyEl != null) {
 				MutableMapEntryHandle<K, BetterCollection<V>> entry = theEntries.mutableEntry(keyEl.getElementId());
@@ -434,7 +433,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 	@Override
 	public MultiEntryValueHandle<K, V> putEntry(K key, V value, ElementId afterKey, ElementId beforeKey, boolean first) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			MapEntryHandle<K, BetterCollection<V>> entry = theEntries.getOrPutEntry(key,
 				k -> theValues.createValuesFor(k, theLocking, null), afterKey, beforeKey, first, null, null);
 			if (entry == null)
@@ -590,18 +589,13 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return AbstractBetterMultiMap.this.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return AbstractBetterMultiMap.this.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return AbstractBetterMultiMap.this.lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return AbstractBetterMultiMap.this.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return AbstractBetterMultiMap.this.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -638,7 +632,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		public BetterList<CollectionElement<K>> getElementsBySource(ElementId sourceEl, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
 				return BetterList.of(getElement(sourceEl));
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return getBacking().getElementsBySource(sourceEl, sourceCollection);
 			}
 		}
@@ -648,7 +642,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 			if (sourceCollection == this)
 				return BetterList.of(localElement);
 			else {
-				try (Transaction t = lock(false, null)) {
+				try (Transaction t = lock(false)) {
 					return getBacking().getSourceElements(localElement, sourceCollection);
 				}
 			}
@@ -656,7 +650,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 		@Override
 		public ElementId getEquivalentElement(ElementId equivalentEl) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return getBacking().getEquivalentElement(equivalentEl);
 			}
 		}
@@ -674,7 +668,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 		@Override
 		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theBacking.canMove(valueEl, after, before);
 			}
 		}
@@ -682,7 +676,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		@Override
 		public CollectionElement<K> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				// TODO should probably put code here to modify the value size if the move goes awry
 				CollectionElement<K> moved = getBacking().move(valueEl, after, before, first, afterRemove);
 				if (!valueEl.isPresent())
@@ -693,7 +687,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 		@Override
 		public void clear() {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (isEmpty())
 					return;
 				AbstractBetterMultiMap.this.clear();
@@ -702,28 +696,28 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 		@Override
 		public CollectionElement<K> getOrAdd(K value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				return getBacking().getElement(value, first);
 			}
 		}
 
 		@Override
 		public boolean isConsistent(ElementId element) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return getBacking().isConsistent(element);
 			}
 		}
 
 		@Override
 		public boolean checkConsistency() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return getBacking().checkConsistency();
 			}
 		}
 
 		@Override
 		public <X> boolean repair(ElementId element, RepairListener<K, X> listener) {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				boolean repaired = getBacking().repair(element, listener);
 				if (repaired)
 					theStamp++;
@@ -733,7 +727,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 		@Override
 		public <X> boolean repair(RepairListener<K, X> listener) {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				boolean repaired = getBacking().repair(listener);
 				if (repaired)
 					theStamp++;
@@ -743,7 +737,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 		@Override
 		public <T> T[] toArray(T[] a) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return BetterSet.super.toArray(a);
 			}
 		}
@@ -803,14 +797,14 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 			@Override
 			public String canRemove() {
-				try (Transaction t = lock(false, null)) {
+				try (Transaction t = lock(false)) {
 					return theKeyElement.canRemove();
 				}
 			}
 
 			@Override
 			public void remove() throws UnsupportedOperationException {
-				try (Transaction t = lock(true, null)) {
+				try (Transaction t = lockWrite(false, null)) {
 					BetterCollection<V> values = theEntries.getEntryById(theKeyElement.getElementId()).get();
 					theKeyElement.remove();
 					theValueSize -= values.size();
@@ -837,7 +831,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 		@Override
 		public BetterCollection<V> getBacking(boolean addIfNotPresent) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				MapEntryHandle<K, BetterCollection<V>> entry;
 				if (theId != null && theId.isPresent())
 					entry = theEntries.getEntryById(theId);
@@ -851,7 +845,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 				else if (!addIfNotPresent)
 					return null;
 			}
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				MapEntryHandle<K, BetterCollection<V>> entry = theEntries.getOrPutEntry(theKey,
 					k -> theValues.createValuesFor(k, theLocking, null), //
 					null, null, false, null, null);
@@ -867,18 +861,13 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return AbstractBetterMultiMap.this.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return AbstractBetterMultiMap.this.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return AbstractBetterMultiMap.this.lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return AbstractBetterMultiMap.this.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return AbstractBetterMultiMap.this.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -906,7 +895,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 		@Override
 		public void remove() {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (theId != null && theId.isPresent())
 					theEntries.mutableEntry(theId).remove();
 				else {
@@ -1057,18 +1046,13 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theWrapped.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theWrapped.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theWrapped.lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theWrapped.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theWrapped.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -1088,7 +1072,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 		@Override
 		public void clear() {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				BetterCollection<E> wrapped = getWrapped().getBacking(false);
 				if (wrapped == null)
 					return;
@@ -1169,7 +1153,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 			@Override
 			public void remove() throws UnsupportedOperationException {
-				try (Transaction t = lock(true, null)) {
+				try (Transaction t = lockWrite(false, null)) {
 					BetterCollection<E> wrapped2 = theWrapped.getBacking(false);
 					if (wrapped2 != theWrappedCollection)
 						throw new IllegalStateException(StdMsg.ELEMENT_REMOVED);

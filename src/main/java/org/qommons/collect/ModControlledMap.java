@@ -238,7 +238,7 @@ public class ModControlledMap<K, V, M extends BetterMap<K, V>> implements Better
 		boolean first, Runnable preAdd, Runnable postAdd) {
 		if (theControl == null && theListener == null)
 			return theBacking.getOrPutEntry(key, value, after, before, first, preAdd, postAdd);
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			MapEntryHandle<K, V> found = getEntry(key);
 			if (found != null)
 				return found;

@@ -5,7 +5,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.qommons.CausalLock;
 import org.qommons.DefaultCausalLock;
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
@@ -18,20 +17,18 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 	/**
 	 * Creates the locking strategy
 	 * 
-	 * @param owner The owner of the lock, for debugging
 	 * @param threadConstraint The thread constraint for the lock to obey
 	 */
-	public RRWLockingStrategy(Object owner, ThreadConstraint threadConstraint) {
-		this(new ReentrantReadWriteLock(), owner, threadConstraint);
+	public RRWLockingStrategy(ThreadConstraint threadConstraint) {
+		this(new ReentrantReadWriteLock(), threadConstraint);
 	}
 
 	/**
 	 * @param lock The lock to use
-	 * @param owner The owner of the lock, for debugging
 	 * @param threadConstraint The thread constraint for the lock to obey
 	 */
-	public RRWLockingStrategy(ReentrantReadWriteLock lock, Object owner, ThreadConstraint threadConstraint) {
-		this(Transactable.transactable(lock, owner, threadConstraint));
+	public RRWLockingStrategy(ReentrantReadWriteLock lock, ThreadConstraint threadConstraint) {
+		this(Transactable.transactable(lock, threadConstraint));
 	}
 
 	/** @param lock The lock to use */
@@ -48,19 +45,14 @@ public class RRWLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
-	public boolean isLockSupported() {
-		return theLock.isLockSupported();
-	}
-
-	@Override
-	public Transaction lock(boolean write, Object cause) {
-		Transaction lock = theLock.lock(write, cause);
+	public Transaction lock(boolean tryOnly) {
+		Transaction lock = theLock.lock(tryOnly);
 		return lock;
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		Transaction lock = theLock.tryLock(write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		Transaction lock = theLock.lockWrite(tryOnly, cause);
 		return lock;
 	}
 

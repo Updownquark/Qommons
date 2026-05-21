@@ -9,7 +9,6 @@ import java.util.function.Function;
 
 import org.qommons.Identifiable;
 import org.qommons.Identifiable.AbstractIdentifiable;
-import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
@@ -59,18 +58,13 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 	}
 
 	@Override
-	public boolean isLockSupported() {
-		return theLock.isLockSupported();
+	public Transaction lock(boolean tryOnly) {
+		return theLock.lock(tryOnly);
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return theLock.lock(write, cause);
-	}
-
-	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return theLock.tryLock(write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		return theLock.lockWrite(tryOnly, cause);
 	}
 
 	@Override
@@ -90,7 +84,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 	@Override
 	public String toString() {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			List<String> rows = QommonsUtils.map(theRowMap.keySet(), String::valueOf, false);
 			List<String> columns = QommonsUtils.map(theColumnMap.keySet(), String::valueOf, false);
 			List<List<String>> values = QommonsUtils.map(theRows, r -> QommonsUtils.map(r, String::valueOf, false), false);
@@ -152,18 +146,18 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return DefaultTable.this.lock(write, cause);
+		public Transaction lock(boolean tryOnly) {
+			return DefaultTable.this.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return DefaultTable.this.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return DefaultTable.this.lockWrite(tryOnly, cause);
 		}
 
 		@Override
 		public TableEntry<R, C, V> getOrAdd(R value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				return new RowEntry(theRowMap.getOrPutEntry(value, __ -> {
 					List<V> newRowValues = new CircularArrayList<>();
 					for (ElementId column : theColumns)
@@ -218,7 +212,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableEntry<R, C, V> getElement(R value, boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getEntry(value);
 				if (row == null)
 					return null;
@@ -228,7 +222,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableEntry<R, C, V> getElement(ElementId id) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getEntryById(id);
 				return new RowEntry(row);
 			}
@@ -236,7 +230,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableEntry<R, C, V> getTerminalElement(boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getTerminalEntry(first);
 				if (row == null)
 					return null;
@@ -246,7 +240,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public MutableTableEntry<R, C, V> mutableElement(ElementId id) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getEntryById(id);
 				return new MutableRowEntry(row);
 			}
@@ -255,7 +249,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public TableEntry<R, C, V> addElement(R value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (theRowMap.containsKey(value))
 					return null;
 				List<V> newRowValues = new CircularArrayList<>();
@@ -269,7 +263,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theRowMap.keySet().canMove(valueEl, after, before);
 			}
 		}
@@ -277,14 +271,14 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public CollectionElement<R> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				return getElement(theRowMap.keySet().move(valueEl, after, before, first, afterRemove).getElementId());
 			}
 		}
 
 		@Override
 		public void clear() {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				theRowMap.clear();
 				theRows.clear();
 			}
@@ -292,7 +286,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public <T> T[] toArray(T[] a) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theRowMap.keySet().toArray(a);
 			}
 		}
@@ -335,18 +329,18 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return DefaultTable.this.lock(write, cause);
+		public Transaction lock(boolean tryOnly) {
+			return DefaultTable.this.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return DefaultTable.this.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return DefaultTable.this.lockWrite(tryOnly, cause);
 		}
 
 		@Override
 		public TableEntry<C, R, V> getOrAdd(C value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntry(value);
 				if (column != null)
 					return new ColumnEntry(column);
@@ -404,7 +398,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableEntry<C, R, V> getElement(C value, boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntry(value);
 				if (column == null)
 					return null;
@@ -414,7 +408,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableEntry<C, R, V> getElement(ElementId id) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntryById(id);
 				return new ColumnEntry(column);
 			}
@@ -422,7 +416,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableEntry<C, R, V> getTerminalElement(boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getTerminalEntry(first);
 				if (column == null)
 					return null;
@@ -432,7 +426,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public MutableTableEntry<C, R, V> mutableElement(ElementId id) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.getEntryById(id);
 				return new MutableColumnEntry(column);
 			}
@@ -441,7 +435,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public TableEntry<C, R, V> addElement(C value, ElementId after, ElementId before, boolean first)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (theColumnMap.containsKey(value))
 					return null;
 				MapEntryHandle<C, MutableListElement<ElementId>> column = theColumnMap.putEntry(value, null, after, before, first);
@@ -458,7 +452,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theRowMap.keySet().canMove(valueEl, after, before);
 			}
 		}
@@ -466,14 +460,14 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public CollectionElement<C> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				return getElement(theColumnMap.keySet().move(valueEl, after, before, first, afterRemove).getElementId());
 			}
 		}
 
 		@Override
 		public void clear() {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				theColumnMap.clear();
 				for (List<V> row : theRows)
 					row.clear();
@@ -482,7 +476,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public <T> T[] toArray(T[] a) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theColumnMap.keySet().toArray(a);
 			}
 		}
@@ -525,13 +519,13 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return DefaultTable.this.lock(write, cause);
+		public Transaction lock(boolean tryOnly) {
+			return DefaultTable.this.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return DefaultTable.this.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return DefaultTable.this.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -581,7 +575,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableValueEntry<R, C, V> getEntry(C key) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
@@ -593,7 +587,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public TableValueEntry<R, C, V> getOrPutEntry(C key, Function<? super C, ? extends V> value, ElementId after, ElementId before,
 			boolean first, Runnable preAdd, Runnable postAdd) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
@@ -606,7 +600,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableValueEntry<R, C, V> getEntryById(ElementId entryId) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
@@ -617,7 +611,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableValueEntry<R, C, V> getTerminalEntry(boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
@@ -628,7 +622,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public MutableTableValueEntry<R, C, V> mutableEntry(ElementId entryId) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
@@ -656,35 +650,35 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public String isEnabled() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theRowMap.keySet().mutableElement(getRowEntry().getElementId()).isEnabled();
 			}
 		}
 
 		@Override
 		public String isAcceptable(R value) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theRowMap.keySet().mutableElement(getRowEntry().getElementId()).isAcceptable(value);
 			}
 		}
 
 		@Override
 		public void set(R value) throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				theRowMap.keySet().mutableElement(getRowEntry().getElementId()).set(value);
 			}
 		}
 
 		@Override
 		public String canRemove() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theRowMap.keySet().mutableElement(getRowEntry().getElementId()).canRemove();
 			}
 		}
 
 		@Override
 		public void remove(BiConsumer<C, V> eachEntry) {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (!getRowEntry().getElementId().isPresent())
 					throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
 				MutableCollectionElement<List<V>> values = getRowEntry().get();
@@ -713,13 +707,13 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return DefaultTable.this.lock(write, cause);
+		public Transaction lock(boolean tryOnly) {
+			return DefaultTable.this.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return DefaultTable.this.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return DefaultTable.this.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -769,7 +763,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableValueEntry<C, R, V> getEntry(R key) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theColumnEntry.getElementId().isPresent())
 					return null;
 				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getEntry(key);
@@ -780,7 +774,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public TableValueEntry<C, R, V> getOrPutEntry(R key, Function<? super R, ? extends V> value, ElementId after, ElementId before,
 			boolean first, Runnable preAdd, Runnable postAdd) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theColumnEntry.getElementId().isPresent())
 					return null;
 				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getEntry(key);
@@ -792,7 +786,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableValueEntry<C, R, V> getEntryById(ElementId entryId) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theColumnEntry.getElementId().isPresent())
 					return null;
 				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getEntryById(entryId);
@@ -802,7 +796,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public TableValueEntry<C, R, V> getTerminalEntry(boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theColumnEntry.getElementId().isPresent())
 					return null;
 				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getTerminalEntry(first);
@@ -812,7 +806,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public MutableTableValueEntry<C, R, V> mutableEntry(ElementId entryId) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theColumnEntry.getElementId().isPresent())
 					return null;
 				MapEntryHandle<R, MutableBinaryTreeNode<List<V>>> row = theRowMap.getEntryById(entryId);
@@ -839,35 +833,35 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public String isEnabled() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theColumnMap.keySet().mutableElement(getColumnEntry().getElementId()).isEnabled();
 			}
 		}
 
 		@Override
 		public String isAcceptable(C value) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theColumnMap.keySet().mutableElement(getColumnEntry().getElementId()).isAcceptable(value);
 			}
 		}
 
 		@Override
 		public void set(C value) throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				theColumnMap.keySet().mutableElement(getColumnEntry().getElementId()).set(value);
 			}
 		}
 
 		@Override
 		public String canRemove() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return theColumnMap.keySet().mutableElement(getColumnEntry().getElementId()).canRemove();
 			}
 		}
 
 		@Override
 		public void remove(BiConsumer<R, V> eachEntry) {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (!getColumnEntry().getElementId().isPresent())
 					throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
 				int columnIndex = getColumnEntry().get().getElementsBefore();
@@ -897,13 +891,13 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return DefaultTable.this.lock(write, cause);
+		public Transaction lock(boolean tryOnly) {
+			return DefaultTable.this.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return DefaultTable.this.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return DefaultTable.this.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -918,7 +912,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public CollectionElement<V> getElement(V value, boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> columnValues = theRowEntry.getValue().get();
@@ -934,7 +928,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public CollectionElement<V> getElement(ElementId id) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> columnValues = theRowEntry.getValue().get();
@@ -945,7 +939,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public CollectionElement<V> getTerminalElement(boolean first) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> columnValues = theRowEntry.getValue().get();
@@ -956,7 +950,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public MutableCollectionElement<V> mutableElement(ElementId id) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
@@ -1002,7 +996,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 		@Override
 		public CollectionElement<V> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove)
 			throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theRowEntry.getElementId().isPresent())
 					return null;
 				List<V> rowValues = theRowEntry.getValue().get();
@@ -1090,7 +1084,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public V get() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theColumn.getElementId().isPresent())
 					return null;
 				int index = theColumn.getValue().getElementsBefore();
@@ -1114,7 +1108,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public String isEnabled() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!getColumnHandle().getElementId().isPresent())
 					return StdMsg.ELEMENT_REMOVED;
 				return null;
@@ -1123,7 +1117,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public String isAcceptable(V value) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!getColumnHandle().getElementId().isPresent())
 					return StdMsg.ELEMENT_REMOVED;
 				return null;
@@ -1132,7 +1126,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!getColumnHandle().getElementId().isPresent())
 					throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
 				int index = getColumnHandle().getValue().getElementsBefore();
@@ -1184,7 +1178,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public V get() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!theColumn.getElementId().isPresent())
 					return null;
 				int index = theColumn.getValue().getElementsBefore();
@@ -1228,7 +1222,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public String isEnabled() {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!getColumnHandle().getElementId().isPresent())
 					return StdMsg.ELEMENT_REMOVED;
 				return null;
@@ -1237,7 +1231,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public String isAcceptable(V value) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!getColumnHandle().getElementId().isPresent())
 					return StdMsg.ELEMENT_REMOVED;
 				return null;
@@ -1246,7 +1240,7 @@ public class DefaultTable<R, C, V> extends AbstractIdentifiable implements Bette
 
 		@Override
 		public void set(V value) throws UnsupportedOperationException, IllegalArgumentException {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				if (!getColumnHandle().getElementId().isPresent())
 					throw new IllegalArgumentException(StdMsg.ELEMENT_REMOVED);
 				int index = getColumnHandle().getValue().getElementsBefore();

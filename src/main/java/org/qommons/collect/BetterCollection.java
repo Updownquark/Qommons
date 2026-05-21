@@ -7,7 +7,6 @@ import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 import org.qommons.*;
-import org.qommons.Lockable.CoreId;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 import org.qommons.fn.FunctionUtils;
 
@@ -34,19 +33,16 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		+ "This view is now invalid";
 	@Override
 	default <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
-		if (isLockSupported()) {
-			StampedContext ctx = new StampedContext(this);
-			for (int i = 0; i < 3; i++) {
-				T result = operation.apply(init, ctx);
-				if (ctx.isValidOrReset())
-					return result;
-			}
-			// Failed to do it optimisitically. Force it.
-			try (Transaction t = lock(false, null)) {
-				return operation.apply(init, OptimisticContext.TRUE);
-			}
-		} else
-			return CausalLock.super.doOptimistically(init, operation);
+		StampedContext ctx = new StampedContext(this);
+		for (int i = 0; i < 3; i++) {
+			T result = operation.apply(init, ctx);
+			if (ctx.isValidOrReset())
+				return result;
+		}
+		// Failed to do it optimisitically. Force it.
+		try (Transaction t = lock(false)) {
+			return operation.apply(init, OptimisticContext.TRUE);
+		}
 	}
 
 	@Override
@@ -58,7 +54,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 				return result;
 		}
 		// Failed to do it optimisitically. Force it.
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			return operation.apply(init, OptimisticContext.TRUE);
 		}
 	}
@@ -234,7 +230,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	default boolean addAll(Collection<? extends E> c) {
 		if (c.isEmpty())
 			return false;
-		try (Transaction t = lock(true, null); Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lockWrite(false, null); Transaction ct = Lockable.lockLockable(c, false)) {
 			boolean changed = false;
 			for (E e : c) {
 				if (canAdd(e) == null)
@@ -251,7 +247,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * @return This collection
 	 */
 	default BetterCollection<E> with(E... values) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			for (E e : values) {
 				if (canAdd(e) == null)
 					add(e);
@@ -267,7 +263,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * @return This collection
 	 */
 	default BetterCollection<E> withAll(Collection<? extends E> values) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			for (E e : values) {
 				if (canAdd(e) == null)
 					add(e);
@@ -306,7 +302,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 *         </ul>
 	 */
 	default String update(Object value, boolean first) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			CollectionElement<E> found = getElement((E) value, first);
 			if (found == null)
 				return StdMsg.NOT_FOUND;
@@ -340,7 +336,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 *         </ul>
 	 */
 	default String replace(Object value, boolean first) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			CollectionElement<E> found = getElement((E) value, first);
 			if (found == null)
 				return StdMsg.NOT_FOUND;
@@ -385,7 +381,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 */
 	@Override
 	default boolean containsAny(Collection<?> c) {
-		try (Transaction t = lock(false, null); Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lock(false); Transaction ct = Lockable.lockLockable(c, false)) {
 			if (c.isEmpty())
 				return true;
 			if (c.size() < size()) {
@@ -410,7 +406,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 
 	@Override
 	default boolean containsAll(Collection<?> c) {
-		try (Transaction t = lock(false, null); Transaction ct = Transactable.lock(c, false, null)) {
+		try (Transaction t = lock(false); Transaction ct = Lockable.lockLockable(c, false)) {
 			if (c.isEmpty())
 				return true;
 			if (c.size() < size()) {
@@ -428,7 +424,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 
 	@Override
 	default Object[] toArray() {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			Object[] array = new Object[size()];
 			CollectionElement<E> el = getTerminalElement(true);
 			int index = 0;
@@ -442,7 +438,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 
 	@Override
 	default <T> T[] toArray(T[] a) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			int size = size();
 			if (a.length < size)
 				a = (T[]) java.lang.reflect.Array.newInstance(a.getClass().getComponentType(), size);
@@ -459,7 +455,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 
 	@Override
 	default boolean remove(Object o) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			CollectionElement<E> found = getElement((E) o, true);
 			if (found == null)
 				return false;
@@ -475,7 +471,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * @return Whether the value was found and removed
 	 */
 	default boolean removeLast(Object o) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			CollectionElement<E> found = getElement((E) o, false);
 			if (found == null)
 				return false;
@@ -523,7 +519,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		if (isEmpty())
 			return false;
 		if (c.isEmpty()) {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				int preSize = size();
 				clear();
 				return size() < preSize;
@@ -538,7 +534,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		if (isEmpty())
 			return false;
 		boolean removed = false;
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			for (CollectionElement<E> el : elements()) {
 				if (filter.test(el.get())) {
 					MutableCollectionElement<E> mutableEl = mutableElement(el.getElementId());
@@ -564,7 +560,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * @throws IllegalArgumentException If a mapped value is not acceptable as a replacement
 	 */
 	default boolean replaceAll(Function<? super E, ? extends E> map, boolean soft) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			boolean replaced = false;
 			for (CollectionElement<E> el : elements()) {
 				E newValue = map.apply(el.get());
@@ -598,7 +594,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * @return The element of the matching result
 	 */
 	default CollectionElement<E> find(Predicate<? super E> search, boolean first) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			CollectionElement<E> el = getTerminalElement(first);
 			while (el != null) {
 				if (search.test(el.get()))
@@ -667,7 +663,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 
 	@Override
 	default E removeFirst() {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			CollectionElement<E> el = getTerminalElement(true);
 			if (el == null)
 				throw new NoSuchElementException("Empty collection");
@@ -679,7 +675,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 
 	@Override
 	default E removeLast() {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			CollectionElement<E> el = getTerminalElement(false);
 			if (el == null)
 				throw new NoSuchElementException("Empty collection");
@@ -691,7 +687,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 
 	@Override
 	default E pollFirst() {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			CollectionElement<E> el = getTerminalElement(true);
 			if (el == null)
 				return null;
@@ -703,7 +699,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 
 	@Override
 	default E pollLast() {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			CollectionElement<E> el = getTerminalElement(false);
 			if (el == null)
 				return null;
@@ -835,7 +831,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * @return The hash code of the collection's contents
 	 */
 	static int hashCode(BetterCollection<?> coll) {
-		try (Transaction t = coll.lock(false, null)) {
+		try (Transaction t = coll.lock(false)) {
 			int hashCode = 1;
 			for (Object e : coll)
 				hashCode = 31 * hashCode + (e == null ? 0 : e.hashCode());
@@ -855,8 +851,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 			return false;
 		Collection<?> c = (Collection<?>) o;
 
-		try (Transaction t = Lockable.lockAll(Lockable.lockable(coll, false, false), //
-			c instanceof Transactable ? Lockable.lockable((Transactable) c, false, false) : null)) {
+		try (Transaction t = Lockable.lockAll(false, coll, c instanceof Lockable ? (Lockable) c : null)) {
 			Iterator<?> e1 = coll.iterator();
 			Iterator<?> e2 = c.iterator();
 			while (e1.hasNext() && e2.hasNext()) {
@@ -878,7 +873,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	static String toString(BetterCollection<?> coll) {
 		StringBuilder ret = new StringBuilder("[");
 		boolean first = true;
-		try (Transaction t = coll.lock(false, null)) {
+		try (Transaction t = coll.lock(false)) {
 			for (Object value : coll) {
 				if (!first) {
 					ret.append(", ");
@@ -898,7 +893,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * @return The hash code for the collection's content
 	 */
 	public static int hashCode(Collection<?> c) {
-		try (Transaction t = Transactable.lock(c, false, null)) {
+		try (Transaction t = Lockable.lockLockable(c, false)) {
 			int hash = 0;
 			for (Object v : c)
 				hash = hash * 13 + (v == null ? 0 : v.hashCode());
@@ -916,9 +911,9 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	public static boolean equals(Collection<?> c, Object o) {
 		if (o == null)
 			return false;
-		try (Transaction t = Lockable.lockAll(//
-			c instanceof Transactable ? Lockable.lockable((Transactable) c, false, null) : null, //
-			o instanceof Transactable ? Lockable.lockable((Transactable) o, false, null) : null)) {
+		try (Transaction t = Lockable.lockAll(false, //
+			c instanceof Lockable ? (Lockable) c : null, //
+			o instanceof Lockable ? (Lockable) o : null)) {
 			Collection<?> c2 = (Collection<?>) o;
 			if (c.size() != c2.size())
 				return false;
@@ -940,10 +935,10 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 * A static utility method to be used by {@link BetterCollection#toString()} implementations
 	 * 
 	 * @param c The collection
-	 * @return A string represenation of the collection's content
+	 * @return A string representation of the collection's content
 	 */
 	public static String toString(Collection<?> c) {
-		try (Transaction t = Transactable.lock(c, false, null)) {
+		try (Transaction t = Lockable.lockLockable(c, false)) {
 			StringBuilder str = new StringBuilder();
 			str.append('[');
 			boolean first = true;
@@ -1206,18 +1201,13 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theWrapped.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theWrapped.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theWrapped.lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theWrapped.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theWrapped.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -1467,17 +1457,12 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return true;
-		}
-
-		@Override
-		public Transaction lock(boolean write, Object cause) {
+		public Transaction lock(boolean tryOnly) {
 			return Transaction.NONE;
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
 			return Transaction.NONE;
 		}
 
@@ -1681,12 +1666,12 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
+		public Transaction lock(boolean tryOnly) {
 			return Transaction.NONE;
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
 			return Transaction.NONE;
 		}
 
@@ -1703,6 +1688,11 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		@Override
 		public int size() {
 			return 1;
+		}
+
+		@Override
+		public Iterator<E> iterator() {
+			return IterableUtils.singleIterator(theElement.get());
 		}
 
 		@Override
@@ -1974,18 +1964,13 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theCollection.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theCollection.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theCollection.lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theCollection.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theCollection.lockWrite(tryOnly, cause);
 		}
 
 		@Override

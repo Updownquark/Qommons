@@ -5,7 +5,6 @@ import java.util.*;
 import java.util.function.IntUnaryOperator;
 
 import org.qommons.Identifiable;
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -157,12 +156,12 @@ public interface HighPerformanceArraySet<E> extends BetterSortedSet<E> {
 	default void clear() {}
 
 	@Override
-	default Transaction lock(boolean write, Object cause) {
+	default Transaction lock(boolean tryOnly) {
 		return Transaction.NONE;
 	}
 
 	@Override
-	default Transaction tryLock(boolean write, Object cause) {
+	default Transaction lockWrite(boolean tryOnly, Object cause) {
 		return Transaction.NONE;
 	}
 

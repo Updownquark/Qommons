@@ -8,9 +8,8 @@ import java.util.function.Function;
 
 import org.qommons.Identifiable;
 import org.qommons.Identifiable.AbstractIdentifiable;
-import org.qommons.Lockable.CoreId;
+import org.qommons.Lockable;
 import org.qommons.ThreadConstraint;
-import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.*;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -97,7 +96,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	protected <E2 extends E> boolean initialize(Iterable<E2> values, Function<? super E2, ? extends E> map, boolean lock) {
 		if (theTree.getRoot() != null)
 			throw new IllegalStateException("Cannot initialize a non-empty list");
-		try (Transaction t = lock ? Transactable.lock(values, false, null) : Transaction.NONE) {
+		try (Transaction t = lock ? Lockable.lockLockable(values, false) : Transaction.NONE) {
 			if (values instanceof RedBlackNodeList) {
 				RedBlackNodeList<E2> rbnl = (RedBlackNodeList<E2>) values;
 				if (rbnl.theTree.getRoot() == null)
@@ -148,18 +147,13 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	}
 
 	@Override
-	public boolean isLockSupported() {
-		return theLocker.isLockSupported();
+	public Transaction lock(boolean tryOnly) {
+		return theLocker.lock(tryOnly);
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return theLocker.lock(write, cause);
-	}
-
-	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return theLocker.tryLock(write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		return theLocker.lockWrite(tryOnly, cause);
 	}
 
 	@Override
@@ -314,7 +308,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	private RedBlackNode<E> addNode(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
 		RedBlackNode<E> newNode = new RedBlackNode<>(theTree, value);
-		try (Transaction t = theLocker.lock(true, null)) {
+		try (Transaction t = theLocker.lockWrite(false, null)) {
 			if (first && after != null) {
 				if (!((NodeId) after).theNode.isPresent())
 					throw new IllegalArgumentException("Unrecognized element");
@@ -414,7 +408,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 
 	@Override
 	public boolean addAll(Collection<? extends E> c) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			if (theTree.getRoot() == null && !isContentControlled()) {
 				return initialize(c, e -> e, true); // Already locked, but apply the stamp
 			} else
@@ -430,7 +424,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 
 	@Override
 	public void clear() {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			if (theTree.getRoot() != null)
 				theLocker.modified();
 			theTree.setRoot(null);
@@ -476,7 +470,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	 */
 	protected <X> boolean repair(ElementId element, Comparator<? super E> compare, boolean distinct,
 		ValueStoredCollection.RepairListener<E, X> listener) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			boolean repaired = theTree.repair(//
 				checkNode(element, true).theNode, compare, distinct, new TreeRepairListener<>(listener));
 			if (repaired)
@@ -494,7 +488,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	 * @see ValueStoredCollection#checkConsistency()
 	 */
 	protected boolean checkConsistency(Comparator<? super E> compare, boolean distinct) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			E previous = null;
 			boolean hasPrevious = false;
 			for (E value : this) {
@@ -519,7 +513,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 	 * @see ValueStoredCollection#repair(org.qommons.collect.ValueStoredCollection.RepairListener)
 	 */
 	protected <X> boolean repair(Comparator<? super E> compare, boolean distinct, ValueStoredCollection.RepairListener<E, X> listener) {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			boolean repaired = theTree.repair(compare, distinct, new TreeRepairListener<>(listener));
 			if (repaired)
 				theLocker.modified();
@@ -775,7 +769,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 
 		@Override
 		public void set(E value) {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				theNode.setValue(value);
@@ -790,7 +784,7 @@ public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implement
 
 		@Override
 		public void remove() {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (!isPresent())
 					throw new IllegalStateException("This element has been removed");
 				theNode.delete();

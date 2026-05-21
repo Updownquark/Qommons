@@ -25,9 +25,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 
 	@Override
 	default Spliterator<E> spliterator() {
-		int characteristics = Spliterator.ORDERED | Spliterator.SIZED | Spliterator.SUBSIZED;
-		if (isLockSupported())
-			characteristics |= Spliterator.CONCURRENT;
+		int characteristics = Spliterator.ORDERED | Spliterator.SIZED | Spliterator.SUBSIZED | Spliterator.CONCURRENT;
 		boolean sorted = this instanceof BetterSortedList;
 		if (sorted)
 			characteristics |= Spliterator.SORTED;
@@ -100,7 +98,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 
 		@Override
 		public long estimateSize() {
-			try (Transaction t = theCollection.lock(false, null)) {
+			try (Transaction t = theCollection.lock(false)) {
 				int size;
 				if (theRightBound != null)
 					size = theRightBound.getElementsBefore();

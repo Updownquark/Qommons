@@ -101,7 +101,7 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 
 	@Override
 	public BinaryTreeNode<E> getElement(E value, boolean first) {
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			BinaryTreeNode<E> el = getTerminalElement(first);
 			while (el != null) {
 				if (Objects.equals(el.get(), value))

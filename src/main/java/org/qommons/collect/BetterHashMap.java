@@ -11,7 +11,6 @@ import java.util.stream.Collectors;
 
 import org.qommons.Identifiable;
 import org.qommons.Identifiable.AbstractIdentifiable;
-import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
@@ -217,7 +216,7 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 
 	@Override
 	public MapEntryHandle<K, V> putEntry(K key, V value, boolean first) {
-		try (Transaction t = theEntries.lock(true, null)) {
+		try (Transaction t = theEntries.lockWrite(false, null)) {
 			Entry newEntry = newEntry(key, value);
 			CollectionElement<Entry> entryEl = theEntries.getElement(newEntry, true);
 			if (entryEl != null) {
@@ -232,7 +231,7 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 
 	@Override
 	public MapEntryHandle<K, V> putEntry(K key, V value, ElementId after, ElementId before, boolean first) {
-		try (Transaction t = theEntries.lock(true, null)) {
+		try (Transaction t = theEntries.lockWrite(false, null)) {
 			Entry newEntry = newEntry(key, value);
 			CollectionElement<Entry> entryEl = theEntries.getElement(newEntry, true);
 			if (entryEl != null) {
@@ -355,18 +354,13 @@ public class BetterHashMap<K, V> extends AbstractIdentifiable implements BetterM
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theEntries.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theEntries.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theEntries.lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theEntries.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theEntries.lockWrite(tryOnly, cause);
 		}
 
 		@Override

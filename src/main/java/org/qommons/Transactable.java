@@ -1,24 +1,30 @@
 package org.qommons;
 
-import java.util.ArrayList;
+import static org.qommons.Transactable.asWriteLockable;
+
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.qommons.Lockable.CoreId;
 import org.qommons.collect.OptimisticContext;
 import org.qommons.fn.FunctionUtils;
 
 /**
+ * <p>
  * Represents a mutable object whose modifications may possibly be batched for increased efficiency.
+ * </p>
+ * <p>
+ * For a {@link Transactable}, the {@link Lockable#lock(boolean)} methods represent the ability to obtain a non-exclusive transaction during
+ * which exclusive locks cannot be obtained, allowing safe, stateful inspections.
+ * </p>
  * 
- * Some interfaces may extend this interface, but support implementations that do not support locking. Hence the {@link #isLockSupported()}.
- * Such implementations should return a {@link Transaction#NONE none} transaction or some such non-null transaction.
+ * As with {@link Lockable} Some implementations of this interface may not actually support locking. Such implementations should return a
+ * {@link Transaction#NONE none} transaction or some such non-null transaction.
  */
-public interface Transactable extends ThreadConstrained {
+public interface Transactable extends Lockable {
 	/**
 	 * A do-nothing transactable that always returns {@link Transaction#NONE} and has no thread constraint ({@link ThreadConstraint#ANY
 	 * ANY})
@@ -33,8 +39,11 @@ public interface Transactable extends ThreadConstrained {
 
 	/**
 	 * <p>
-	 * Begins a transaction. Either an exclusive transaction in which modifications to this object may be batched and combined for increased
-	 * efficiency, or a non-exclusive transaction during which exclusive locks cannot be obtained, allowing safe, stateful inspections.
+	 * Obtains an exclusive lock in which modifications to this object may be batched and combined for increased efficiency. If any lock
+	 * (exclusive or not) is held by another thread this method will either return null (if<code>tryOnly</code> is true) or block until it
+	 * is able to obtain a lock (if <code>tryOnly</code> is false).Either an exclusive transaction in which modifications to this object may
+	 * be batched and combined for increased efficiency, or a non-exclusive transaction during which exclusive locks cannot be obtained,
+	 * allowing safe, stateful inspections.
 	 * </p>
 	 * <p>
 	 * If a conflicting lock (either an exclusive lock or, when attempting to obtain an exclusive lock, any lock) is held by another thread,
@@ -47,40 +56,12 @@ public interface Transactable extends ThreadConstrained {
 	 * @param cause An object that may have caused the set of modifications to come. May be null, typically unused for read.
 	 * @return The transaction to close when calling code is finished accessing or modifying this object
 	 */
-	Transaction lock(boolean write, Object cause);
+	Transaction lockWrite(boolean tryOnly, Object cause);
 
-	/**
-	 * <p>
-	 * Attempts to begin a transaction. See {@link #lock(boolean, Object)}.
-	 * </p>
-	 * <p>
-	 * If a conflicting lock (either an exclusive lock or, when attempting to obtain an exclusive lock, any lock) is held by this or another
-	 * thread, this method will fail by returning <code>null</code>.
-	 * </p>
-	 *
-	 * @param write Whether to lock this object for writing (prevents all access to controlled properties of the object outside of this
-	 *        thread) or just for reading (prevents all modification to this object, this thread included).
-	 * @param cause An object that may have caused the set of modifications to come. May be null, typically unused for read.
-	 * @return The transaction to close when calling code is finished accessing or modifying this object, or null if obtaining the lock
-	 *         fails
-	 */
-	Transaction tryLock(boolean write, Object cause);
-
-	/** @return A {@link CoreId} object containing all true locking cores used by this Transactable */
-	Lockable.CoreId getCoreId();
-
-	/** @return Whether this object actually support locking */
-	default boolean isLockSupported() {
-		return true;
-	}
-
-	/**
-	 * @param write Whether to lock this transactable for write or read
-	 * @param cause The cause for the transaction
-	 * @return A Lockable that locks this transactable
-	 */
-	default Lockable asLockable(boolean write, Object cause) {
-		return Lockable.lockable(this, write, cause);
+	static Lockable asWriteLockable(Transactable transactable, Object cause) {
+		if (transactable == null)
+			return Lockable.NONE;
+		return new WriteLockable(transactable, cause);
 	}
 
 	/**
@@ -121,7 +102,7 @@ public interface Transactable extends ThreadConstrained {
 	 */
 	default <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
 		// Optimism is not supported by default
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			return operation.apply(init, OptimisticContext.TRUE);
 		}
 	}
@@ -136,7 +117,7 @@ public interface Transactable extends ThreadConstrained {
 	 */
 	default int doOptimistically(int init, OptimisticIntOperation operation) {
 		// Optimism is not supported by default
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			return operation.apply(init, OptimisticContext.TRUE);
 		}
 	}
@@ -145,28 +126,12 @@ public interface Transactable extends ThreadConstrained {
 	 * Locks the transactable if it is one
 	 * 
 	 * @param lockable The (possibly) transactable object to lock
-	 * @param write Whether to lock the object for write or read
 	 * @param cause The cause of the lock
 	 * @return The transaction to use to unlock the object
 	 */
-	static Transaction lock(Object lockable, boolean write, Object cause) {
+	static Transaction lockWrite(Object lockable, boolean tryOnly, Object cause) {
 		if (lockable instanceof Transactable)
-			return ((Transactable) lockable).lock(write, cause);
-		else
-			return Transaction.NONE;
-	}
-
-	/**
-	 * Attempts to lock the transactable if it is one
-	 * 
-	 * @param lockable The (possibly) transactable object to lock
-	 * @param write Whether to lock the object for write or read
-	 * @param cause The cause of the lock
-	 * @return The transaction to use to unlock the object, or null if the lock could not be obtained
-	 */
-	static Transaction tryLock(Object lockable, boolean write, Object cause) {
-		if (lockable instanceof Transactable)
-			return ((Transactable) lockable).tryLock(write, cause);
+			return ((Transactable) lockable).lockWrite(tryOnly, cause);
 		else
 			return Transaction.NONE;
 	}
@@ -182,7 +147,7 @@ public interface Transactable extends ThreadConstrained {
 	 * </p>
 	 * <p>
 	 * This method attempts to detect the relation between the two locks (via {@link Transactable#getCoreId()
-	 * CoreId}.{@link CoreId#intersects(CoreId) intersects(CoreId)} , and if so attempts the obvious first, but only with a
+	 * CoreId}.{@link Lockable.CoreId#intersects(CoreId) intersects(CoreId)} , and if so attempts the obvious first, but only with a
 	 * {@link Transactable#tryLock(boolean, Object) tryLock} operation on the inner transactable. If this fails, the outer read-only lock is
 	 * released, and a write lock is obtained on both transactables.
 	 * </p>
@@ -192,64 +157,8 @@ public interface Transactable extends ThreadConstrained {
 	 * @param cause The cause of the write lock
 	 * @return A transaction to release the locks
 	 */
-	static Transaction writeLockWithOwner(Transactable owner, Supplier<Transactable> lock, Object cause) {
-		Transaction ownerT = owner.lock(false, cause);
-		boolean success = false, ownerTLocked = true;
-		try {
-			Transactable realLock = lock.get();
-			if (realLock == null) {
-				success = true;
-				return ownerT;
-			} else {
-				Transaction innerT;
-				if (!realLock.getCoreId().intersects(owner.getCoreId()))
-					innerT = realLock.lock(true, cause);
-				else
-					innerT = realLock.tryLock(true, cause);
-				if (innerT != null) {
-					success = true;
-					return () -> {
-						innerT.close();
-						ownerT.close();
-					};
-				}
-				ownerTLocked = false;
-				ownerT.close();
-				Transaction ownerT2 = owner.lock(true, cause);
-				realLock = lock.get();
-				if (realLock == null) {
-					success = true;
-					return ownerT2;
-				}
-				Transaction innerT2;
-				try {
-					innerT2 = realLock.lock(true, cause);
-					success = true;
-				} finally {
-					if (!success)
-						ownerT2.close();
-				}
-				return () -> {
-					innerT2.close();
-					ownerT2.close();
-				};
-			}
-		} finally {
-			if (!success && ownerTLocked)
-				ownerT.close();
-		}
-	}
-
-	/**
-	 * Like {@link #writeLockWithOwner(Transactable, Supplier, Object)}, but for the try-only case.
-	 * 
-	 * @param owner The owner of the target transactable to lock for write
-	 * @param lock Supplies the target transactable after the owner is locked
-	 * @param cause The cause of the write lock
-	 * @return A transaction to release the locks, or null if the lock cannot be obtained
-	 */
-	static Transaction tryWriteLockWithOwner(Transactable owner, Supplier<Transactable> lock, Object cause) {
-		Transaction ownerT = owner.tryLock(false, cause);
+	static Transaction writeLockWithOwner(Transactable owner, Supplier<Transactable> lock, boolean tryOnly, Object cause) {
+		Transaction ownerT = owner.lock(tryOnly);
 		if (ownerT == null)
 			return null;
 		boolean success = false, ownerTLocked = true;
@@ -259,18 +168,28 @@ public interface Transactable extends ThreadConstrained {
 				success = true;
 				return ownerT;
 			} else {
-				Transaction innerT = realLock.tryLock(true, cause);
+				Transaction innerT;
+				if (!realLock.getCoreId().intersects(owner.getCoreId())) {
+					innerT = realLock.lockWrite(tryOnly, cause);
+					if (innerT == null) {
+						ownerT.close();
+						return null;
+					}
+				} else
+					innerT = realLock.lockWrite(true, cause);
 				if (innerT != null) {
 					success = true;
 					return () -> {
 						innerT.close();
 						ownerT.close();
 					};
-				} else if (!realLock.getCoreId().intersects(owner.getCoreId()))
-					return null; // Let the finally block unlock ownerT
+				}
 				ownerTLocked = false;
 				ownerT.close();
-				Transaction ownerT2 = owner.tryLock(true, cause);
+				// That didn't work, but it may be because the inner and outer locks share a core
+				// that can't be write-locked (with the inner lock) after being read-locked (by the outer lock).
+				// See if we can successfully obtain the lock by locking the outer lock for write instead.
+				Transaction ownerT2 = owner.lockWrite(tryOnly, cause);
 				if (ownerT2 == null)
 					return null;
 				realLock = lock.get();
@@ -280,13 +199,13 @@ public interface Transactable extends ThreadConstrained {
 				}
 				Transaction innerT2;
 				try {
-					innerT2 = realLock.tryLock(true, cause);
-					if (innerT2 == null)
-						return null; // Let the finally block unlock ownerT2
-					success = true;
+					innerT2 = realLock.lockWrite(false, cause);
+					success = innerT2 != null;
 				} finally {
-					if (!success)
+					if (!success) {
 						ownerT2.close();
+						return null;
+					}
 				}
 				return () -> {
 					innerT2.close();
@@ -300,59 +219,7 @@ public interface Transactable extends ThreadConstrained {
 	}
 
 	/**
-	 * Like {@link #writeLockWithOwner(Transactable, Supplier, Object)}, but for the case where the owner cannot be locked for write
-	 * directly.
-	 * 
-	 * @param owner The owner of the target transactable to lock for write
-	 * @param lock Supplies the target transactable after the owner is locked
-	 * @param cause The cause of the write lock
-	 * @return A transaction to release the locks, or null if the lock cannot be obtained
-	 */
-	static Transaction writeLockWithOwner(Lockable owner, Supplier<Transactable> lock, Object cause) {
-		Transaction ownerT = owner.lock();
-		boolean success = false, ownerTLocked = true;
-		try {
-			Transactable realLock = lock.get();
-			if (realLock == null) {
-				success = true;
-				return ownerT;
-			} else {
-				Transaction innerT;
-				if (!realLock.getCoreId().intersects(owner.getCoreId()))
-					innerT = realLock.lock(true, cause);
-				else
-					innerT = realLock.tryLock(true, cause);
-				if (innerT != null) {
-					success = true;
-					return () -> {
-						innerT.close();
-						ownerT.close();
-					};
-				}
-				ownerTLocked = false;
-				ownerT.close();
-				Transaction innerT2 = realLock.lock(true, cause);
-				Transaction ownerT2;
-				try {
-					ownerT2 = owner.lock();
-					success = true;
-				} finally {
-					if (!success)
-						innerT2.close();
-				}
-				return () -> {
-					ownerT2.close();
-					innerT2.close();
-				};
-			}
-		} finally {
-			if (!success && ownerTLocked)
-				ownerT.close();
-		}
-	}
-
-	/**
-	 * Like {@link #writeLockWithOwner(Transactable, Supplier, Object)}, but for the try-only case where the owner cannot be locked for
+	 * Like {@link #writeLockWithOwner(Transactable, Supplier, boolean, Object)}, but for the case where the owner cannot be locked for
 	 * write directly.
 	 * 
 	 * @param owner The owner of the target transactable to lock for write
@@ -360,8 +227,8 @@ public interface Transactable extends ThreadConstrained {
 	 * @param cause The cause of the write lock
 	 * @return A transaction to release the locks, or null if the lock cannot be obtained
 	 */
-	static Transaction tryWriteLockWithOwner(Lockable owner, Supplier<Transactable> lock, Object cause) {
-		Transaction ownerT = owner.tryLock();
+	static Transaction writeLockWithOwner(Lockable owner, Supplier<Transactable> lock, boolean tryOnly, Object cause) {
+		Transaction ownerT = owner.lock(tryOnly);
 		if (ownerT == null)
 			return null;
 		boolean success = false, ownerTLocked = true;
@@ -371,26 +238,31 @@ public interface Transactable extends ThreadConstrained {
 				success = true;
 				return ownerT;
 			} else {
-				Transaction innerT = realLock.tryLock(true, cause);
+				Transaction innerT;
+				if (!realLock.getCoreId().intersects(owner.getCoreId())) {
+					innerT = realLock.lockWrite(tryOnly, cause);
+					if (innerT == null) {
+						ownerT.close();
+						return null;
+					}
+				} else
+					innerT = realLock.lockWrite(true, cause);
 				if (innerT != null) {
 					success = true;
 					return () -> {
 						innerT.close();
 						ownerT.close();
 					};
-				} else if (!realLock.getCoreId().intersects(owner.getCoreId()))
-					return null; // Let the finally block unlock ownerT
+				}
 				ownerTLocked = false;
 				ownerT.close();
-				Transaction innerT2 = realLock.tryLock(true, cause);
+				Transaction innerT2 = realLock.lockWrite(tryOnly, cause);
 				if (innerT2 == null)
 					return null;
 				Transaction ownerT2;
 				try {
-					ownerT2 = owner.tryLock();
-					if (ownerT2 == null)
-						return null; // Let the finally block unlock innerT2
-					success = true;
+					ownerT2 = owner.lock(tryOnly);
+					success = ownerT2 != null;
 				} finally {
 					if (!success)
 						innerT2.close();
@@ -403,90 +275,6 @@ public interface Transactable extends ThreadConstrained {
 		} finally {
 			if (!success && ownerTLocked)
 				ownerT.close();
-		}
-	}
-
-	/**
-	 * Gets the core ID for a set of transactables
-	 * 
-	 * @param lockables The transactables
-	 * @return A CoreId containing core information about all transactables
-	 */
-	static CoreId getCoreId(Transactable... lockables) {
-		return getCoreId(Arrays.asList(lockables));
-	}
-
-	/**
-	 * Gets the core ID for a set of transactables
-	 * 
-	 * @param lockables The transactables
-	 * @return A CoreId containing core information about all transactables
-	 */
-	static CoreId getCoreId(Collection<? extends Transactable> lockables) {
-		CoreId first = null;
-		List<CoreId> others = null;
-		for (Transactable lockable : lockables) {
-			if (lockable == null)
-				continue;
-			if (first == null)
-				first = lockable.getCoreId();
-			else {
-				if (others == null)
-					others = new ArrayList<>(lockables.size() - 1);
-				others.add(lockable.getCoreId());
-			}
-		}
-		if (first == null)
-			return CoreId.EMPTY;
-		else if (others == null)
-			return first;
-		else
-			return first.and(others);
-	}
-
-	/**
-	 * Gets the core ID for a couple of transactables
-	 * 
-	 * @param outer The first transactable
-	 * @param lockables Potentially produces another transactable after the first transactable is locked
-	 * @return A CoreId containing core information about both transactables
-	 */
-	static CoreId getCoreId(Transactable outer, Collection<? extends Transactable> lockables) {
-		return getCoreId(outer, () -> lockables, l -> l);
-	}
-
-	/**
-	 * Gets the core ID for a set of transactables
-	 * 
-	 * @param <X> The type of transactable structures
-	 * @param outer The first transactable
-	 * @param lockables The additional transactable structures
-	 * @param map The map to produce transactables from each item in the list
-	 * @return A CoreId containing core information about all given transactables
-	 */
-	static <X> CoreId getCoreId(Transactable outer, Supplier<? extends Collection<? extends X>> lockables,
-		Function<? super X, ? extends Transactable> map) {
-		Transaction outerLock;
-		if (outer != null) {
-			outerLock = outer.tryLock(false, null);
-		} else
-			outerLock = null;
-		try {
-			CoreId core = outer == null ? CoreId.EMPTY : outer.getCoreId();
-			Collection<? extends X> others = lockables.get();
-			if (others == null)
-				return core;
-			CoreId[] otherCores = new CoreId[others.size()];
-			int i = 0;
-			for (X other : others) {
-				Transactable lock = map.apply(other);
-				if (lock != null)
-					otherCores[i++] = lock.getCoreId();
-			}
-			return core.and(otherCores);
-		} finally {
-			if (outerLock != null)
-				outerLock.close();
 		}
 	}
 
@@ -509,8 +297,8 @@ public interface Transactable extends ThreadConstrained {
 	 * @param constraint The thread constraint for the transactable to obey
 	 * @return A {@link Transactable} backed by the lock
 	 */
-	static Transactable transactable(ReentrantReadWriteLock lock, Object debugInfo, ThreadConstraint constraint) {
-		return new RRWLTransactable(lock, debugInfo, constraint);
+	static Transactable transactable(ReentrantReadWriteLock lock, ThreadConstraint constraint) {
+		return new RRWLTransactable(lock, constraint);
 	}
 
 	/**
@@ -580,6 +368,48 @@ public interface Transactable extends ThreadConstrained {
 		return new NullTransactable(threadConstraint);
 	}
 
+	/** Implements {@link Lockable#lockable(Transactable)} */
+	static class WriteLockable implements Lockable {
+		private final Transactable theTransactable;
+		private final Object cause;
+
+		public WriteLockable(Transactable transactable, Object cause) {
+			theTransactable = transactable;
+			this.cause = cause;
+		}
+
+		@Override
+		public ThreadConstraint getThreadConstraint() {
+			return theTransactable.getThreadConstraint();
+		}
+
+		@Override
+		public Transaction lock(boolean tryOnly) {
+			return theTransactable.lockWrite(tryOnly, cause);
+		}
+
+		@Override
+		public CoreId getCoreId() {
+			return theTransactable.getCoreId();
+		}
+
+		@Override
+		public int hashCode() {
+			return theTransactable.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof WriteLockable && theTransactable.equals(((WriteLockable) obj).theTransactable)//
+				&& Objects.equals(cause, ((WriteLockable) obj).cause);
+		}
+
+		@Override
+		public String toString() {
+			return theTransactable.toString() + ".lockWrite()";
+		}
+	}
+
 	/** Implements {@link Transactable#noLock(ThreadConstraint)} */
 	static class NullTransactable implements Transactable {
 		private final ThreadConstraint theThreadConstraint;
@@ -594,16 +424,17 @@ public interface Transactable extends ThreadConstrained {
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			if (write && !theThreadConstraint.isEventThread())
-				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
+		public Transaction lock(boolean tryOnly) {
 			return Transaction.NONE;
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			if (write && !theThreadConstraint.isEventThread())
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			if (!theThreadConstraint.isEventThread()) {
+				if (tryOnly)
+					return null;
 				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
+			}
 			return Transaction.NONE;
 		}
 
@@ -636,12 +467,12 @@ public interface Transactable extends ThreadConstrained {
 	/** Implements {@link Transactable#transactable(ReentrantReadWriteLock, Object, ThreadConstraint)} */
 	static class RRWLTransactable implements Transactable {
 		private final ReentrantReadWriteLock theLock;
-		private final Object theDebugInfo;
 		private final ThreadConstraint theThreadConstraint;
 
-		RRWLTransactable(ReentrantReadWriteLock lock, Object debugInfo, ThreadConstraint threadConstraint) {
+		RRWLTransactable(ReentrantReadWriteLock lock, ThreadConstraint threadConstraint) {
+			if (lock == null || threadConstraint == null)
+				throw new NullPointerException();
 			theLock = lock;
-			theDebugInfo = debugInfo;
 			theThreadConstraint = threadConstraint;
 		}
 
@@ -651,17 +482,18 @@ public interface Transactable extends ThreadConstrained {
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			if (write && !theThreadConstraint.isEventThread())
-				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
-			return Lockable.lock(theLock, theDebugInfo, write);
+		public Transaction lock(boolean tryOnly) {
+			return Lockable.lock(theLock.readLock(), tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			if (write && !theThreadConstraint.isEventThread())
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			if (!theThreadConstraint.isEventThread()) {
+				if (tryOnly)
+					return null;
 				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
-			return Lockable.tryLock(theLock, theDebugInfo, write);
+			}
+			return Lockable.lock(theLock.writeLock(), tryOnly);
 		}
 
 		@Override
@@ -697,45 +529,19 @@ public interface Transactable extends ThreadConstrained {
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			if (theFirst != null && !theFirst.isLockSupported())
-				return false;
-			for (X lockable : theOthers.get())
-				if (lockable != null && !theMap.apply(lockable).isLockSupported())
-					return false;
-			return true;
+		public Transaction lock(boolean tryOnly) {
+			return Lockable.lockAll(theFirst, theOthers, theMap, tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return Lockable.lockAll(//
-				Lockable.lockable(theFirst, write, cause), theOthers, x -> Lockable.lockable(theMap.apply(x), write, cause));
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return Lockable.tryLockAll(//
-				Lockable.lockable(theFirst, write, cause), theOthers, x -> Lockable.lockable(theMap.apply(x), write, cause));
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return Lockable.lockAll(asWriteLockable(theFirst, cause), //
+				theOthers, x -> asWriteLockable(theMap.apply(x), cause), tryOnly);
 		}
 
 		@Override
 		public Lockable.CoreId getCoreId() {
-			// Best we can do here is capture a snapshot
-			Lockable.CoreId cores = theFirst.getCoreId();
-			try (Transaction t = theFirst.lock(false, null)) {
-				Collection<? extends X> others = theOthers.get();
-				if (others != null) {
-					Lockable.CoreId[] otherCores = new Lockable.CoreId[others.size()];
-					int i = 0;
-					for (X other : others) {
-						Transactable otherT = theMap.apply(other);
-						if (otherT != null)
-							otherCores[i++] = otherT.getCoreId();
-					}
-					cores = cores.and(otherCores);
-				}
-			}
-			return cores;
+			return Lockable.getCoreId(theFirst, theOthers, theMap);
 		}
 
 		@Override
@@ -758,18 +564,13 @@ public interface Transactable extends ThreadConstrained {
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theLockable.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theLockable.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theLockable.lock();
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theLockable.tryLock();
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theLockable.lock(tryOnly);
 		}
 
 		@Override

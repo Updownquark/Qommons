@@ -228,7 +228,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	@Override
 	public BinaryTreeNode<E> addElement(E value, ElementId after, ElementId before, boolean first)
 		throws UnsupportedOperationException, IllegalArgumentException {
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			boolean useAfter = false, useBefore = false;
 			if (after != null) {
 				int compare = theCompare.compare(getElement(after).get(), value);

@@ -125,7 +125,7 @@ public class RunningStatistic implements Cloneable {
 				float diff = datum - theOverallMean;
 				if(diff < 0)
 					diff = -diff;
-				if(isOutlierEnabled && diff * diff > 9 * theVariance) // 3sigma
+				if (isOutlierEnabled && diff * diff > 9 * theVariance) // 3sigma
 					theOutliers.add(datum); // An outlier
 				else { // A normal value
 					theVariance = addToVariance(theVariance, theNormalCount, theOverallMean, datum);
@@ -219,7 +219,7 @@ public class RunningStatistic implements Cloneable {
 			float diff = value - theOverallMean;
 			if(diff < 0)
 				diff = -diff;
-			if(!isOutlierEnabled || diff * diff < 9 * theVariance) // 3 sigma
+			if (!isOutlierEnabled || diff * diff < 9 * theVariance) // 3 sigma
 			{
 				theVariance = addToVariance(theVariance, theNormalCount, theOverallMean, value);
 				theNormalCount++;
@@ -606,7 +606,8 @@ public class RunningStatistic implements Cloneable {
 	 * @return The new variance
 	 */
 	public static float addToVariance(float q, int oldCount, float oldMean, float value) {
-		return q + (oldCount * (oldMean - value) * (oldMean - value)) / (oldCount + 1);
+		float valueDiff = value - oldMean;
+		return q + (oldCount * valueDiff * valueDiff) / (oldCount + 1);
 	}
 
 	/**

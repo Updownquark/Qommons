@@ -90,6 +90,27 @@ public class IterableUtils {
 		return new ToStringIterable<>(SingleIterator::new);
 	}
 
+	public static <T> Iterator<T> singleIterator(T value) {
+		class SingleIterator implements Iterator<T> {
+			private boolean used;
+
+			@Override
+			public boolean hasNext() {
+				return !used;
+			}
+
+			@Override
+			public T next() {
+				if (!used) {
+					used = true;
+					return value;
+				}
+				throw new NoSuchElementException();
+			}
+		}
+		return new SingleIterator();
+	}
+
 	/**
 	 * @param <T> The type of the values to iterate over
 	 * @param array The array to iterate over

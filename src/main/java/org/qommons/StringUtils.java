@@ -1196,6 +1196,8 @@ public class StringUtils {
 	 * @return The HTML-ified text
 	 */
 	public static String htmlIfy(String plainText) {
+		if (plainText == null)
+			return null;
 		StringBuilder htmlStr = null;
 		boolean wasSpace = false, wasMultiSpace = true;
 		for (int c = 0; c < plainText.length(); c++) {
@@ -1224,14 +1226,17 @@ public class StringUtils {
 						htmlStr = new StringBuilder("<html>");
 						htmlStr.append(plainText, 0, c);
 					}
-					htmlStr.append("&nbsp;");
+					htmlStr.append("&nbsp;&nbsp;");
 					wasMultiSpace = true;
 				} else
 					wasSpace = true;
 				break;
 			default:
-				if (htmlStr != null)
+				if (htmlStr != null) {
+					if (wasSpace && !wasMultiSpace)
+						htmlStr.append(' ');
 					htmlStr.append(ch);
+				}
 				break;
 			}
 			if (ch != ' ')

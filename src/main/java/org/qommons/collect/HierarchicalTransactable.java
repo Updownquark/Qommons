@@ -8,7 +8,6 @@ import java.util.function.Function;
 
 import org.qommons.Causable;
 import org.qommons.CausalLock;
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
@@ -148,13 +147,13 @@ public class HierarchicalTransactable implements CausalLock {
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return lock(false, write, cause);
+	public Transaction lock(boolean tryOnly) {
+		return lock(tryOnly, false, null);
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return lock(true, write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		return lock(tryOnly, true, cause);
 	}
 
 	@Override
@@ -211,12 +210,17 @@ public class HierarchicalTransactable implements CausalLock {
 
 	private Transaction lockSelf(boolean justTry, boolean write, Object cause) {
 		Transaction lock;
-		if (justTry) {
-			lock = myLock.tryLock(write, cause);
-		} else {
-			do {
-				lock = myLock.tryLock(write, cause);
-			} while (lock == null);
+		if (write)
+			lock = myLock.lockWrite(justTry, cause);
+		else
+			lock = myLock.lock(justTry);
+		if (!justTry) {
+			while (lock == null) {
+				if (write)
+					lock = myLock.lockWrite(false, cause);
+				else
+					lock = myLock.lock(false);
+			}
 		}
 		return lock;
 	}

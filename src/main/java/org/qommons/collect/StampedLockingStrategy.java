@@ -5,7 +5,6 @@ import java.util.concurrent.locks.StampedLock;
 import java.util.function.Supplier;
 
 import org.qommons.*;
-import org.qommons.Lockable.CoreId;
 
 /** A collection-locking strategy using {@link StampedLock} */
 public class StampedLockingStrategy implements CollectionLockingStrategy {
@@ -64,18 +63,13 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
-	public boolean isLockSupported() {
-		return true;
+	public Transaction lock(boolean tryOnly) {
+		return theCausalLock.lock(tryOnly);
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return theCausalLock.lock(write, cause);
-	}
-
-	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return theCausalLock.tryLock(write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		return theCausalLock.lockWrite(tryOnly, cause);
 	}
 
 	@Override
@@ -101,7 +95,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	@Override
 	public <T> T doOptimistically(T init, OptimisticOperation<T> operation) {
 		if (optimisticTries == 0) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return operation.apply(init, OptimisticContext.TRUE);
 			}
 		}
@@ -132,7 +126,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 				});
 		}
 		if (keepTrying[0]) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				res = operation.apply(init, OptimisticContext.TRUE);
 			}
 		}
@@ -142,7 +136,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 	@Override
 	public int doOptimistically(int init, OptimisticIntOperation operation) {
 		if (optimisticTries == 0) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return operation.apply(init, OptimisticContext.TRUE);
 			}
 		}
@@ -173,7 +167,7 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 				});
 		}
 		if (keepTrying[0]) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				res = operation.apply(init, OptimisticContext.TRUE);
 			}
 		}
@@ -192,22 +186,18 @@ public class StampedLockingStrategy implements CollectionLockingStrategy {
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return true;
+		public Transaction lock(boolean tryOnly) {
+			return theStampCollection.get().obtain(false, tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			if (write && !theThreadConstraint.isEventThread())
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			if (!theThreadConstraint.isEventThread()) {
+				if (tryOnly)
+					return null;
 				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
-			return theStampCollection.get().obtain(write, false);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			if (write && !theThreadConstraint.isEventThread())
-				throw new IllegalStateException(WRONG_THREAD_MESSAGE);
-			return theStampCollection.get().obtain(write, true);
+			}
+			return theStampCollection.get().obtain(true, tryOnly);
 		}
 
 		@Override

@@ -770,6 +770,18 @@ public class ListenerList<E> implements ListenerQueue<E> {
 		}
 	}
 
+	@Override
+	public void visitEach(Consumer<? super E> action) {
+		Node node = theTerminal.next;
+		while (node != theTerminal) {
+			action.accept(node.get());
+
+			while (!node.isPresent() && node != theTerminal)
+				node = node.previous;
+			node = node.next;
+		}
+	}
+
 	/**
 	 * Iterates over each element stored in this list. This method does not obey the {@link #addLast(Object, boolean)} or skipNext
 	 * contracts.

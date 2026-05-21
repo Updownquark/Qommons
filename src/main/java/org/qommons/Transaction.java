@@ -39,13 +39,7 @@ public interface Transaction extends AutoCloseable {
 	 * @return A transaction whose {@link #close()} method closes all non-null transactions in the given list
 	 */
 	static Transaction and(Transaction... ts) {
-		return () -> {
-			for (int i = ts.length - 1; i >= 0; i--) {
-				Transaction t = ts[i];
-				if (t != null)
-					t.close();
-			}
-		};
+		return new CombinedTransaction(ts);
 	}
 
 	/** A Transaction that will only execute its close action the first time it is {@link #close() closed} */
@@ -88,6 +82,36 @@ public interface Transaction extends AutoCloseable {
 		@Override
 		public String toString() {
 			return theCloseAction.toString();
+		}
+	}
+
+	public static class CombinedTransaction implements Transaction {
+		private final Transaction[] theComponents;
+
+		public CombinedTransaction(Transaction[] components) {
+			theComponents = components;
+		}
+
+		@Override
+		public Transaction combine(Transaction... ts) {
+			Transaction[] combined = new Transaction[theComponents.length + ts.length];
+			int i = 0;
+			for (Transaction t : ts)
+				combined[i++] = t;
+			for (Transaction t : theComponents)
+				combined[i++] = t;
+			return new CombinedTransaction(combined);
+		}
+
+		@Override
+		public void close() {
+			for (int i = theComponents.length - 1; i >= 0; i--) {
+				Transaction t = theComponents[i];
+				if (t != null) {
+					t.close();
+					theComponents[i] = null;
+				}
+			}
 		}
 	}
 }

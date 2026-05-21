@@ -4,7 +4,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.Set;
 
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 
@@ -191,13 +190,13 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return theBacking.lock(write, cause);
+	public Transaction lock(boolean tryOnly) {
+		return theBacking.lock(tryOnly);
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return theBacking.tryLock(write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		return theBacking.lockWrite(tryOnly, cause);
 	}
 
 	@Override
@@ -398,7 +397,7 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 				theBackingElement.set(value);
 				return;
 			}
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				String msg = theControl == null ? null : theControl.isAcceptable(theBackingElement, value);
 				if (msg != null)
 					throw new UnsupportedOperationException(msg);
@@ -423,7 +422,7 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 				theBackingElement.remove();
 				return;
 			}
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				String msg = theControl == null ? null : theControl.canRemove(theBackingElement);
 				if (msg == null)
 					theBackingElement.canRemove();
@@ -559,7 +558,7 @@ public class ModControlledCollection<E, C extends BetterCollection<E>> implement
 			CollectionModificationListener<E> listener = getListener();
 			if (control == null && listener == null)
 				return getBacking().getOrAdd(value, after, before, first, preAdd, postAdd);
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				CollectionElement<E> found = getElement(value, first);
 				if (found != null)
 					return found;

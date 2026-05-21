@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.function.Function;
 
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -249,13 +248,13 @@ public class ModControlledMultiMap<K, V, M extends BetterMultiMap<K, V>> impleme
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return theBacking.lock(write, cause);
+	public Transaction lock(boolean tryOnly) {
+		return theBacking.lock(tryOnly);
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return theBacking.tryLock(write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		return theBacking.lockWrite(tryOnly, cause);
 	}
 
 	@Override
@@ -328,7 +327,7 @@ public class ModControlledMultiMap<K, V, M extends BetterMultiMap<K, V>> impleme
 			MultiEntryHandle<K, V> entry = theBacking.getOrPutEntry(key, value, afterKey, beforeKey, first, preAdd, postAdd);
 			return entry == null ? null : wrapEntry(entry);
 		}
-		try (Transaction t = lock(true, null)) {
+		try (Transaction t = lockWrite(false, null)) {
 			MultiEntryHandle<K, V> found = getEntry(key);
 			if (found != null)
 				return found;

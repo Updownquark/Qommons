@@ -4,7 +4,6 @@ import java.util.Collection;
 
 import org.qommons.CausalLock;
 import org.qommons.DefaultCausalLock;
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transactable;
 import org.qommons.Transaction;
@@ -25,18 +24,13 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 	}
 
 	@Override
-	public boolean isLockSupported() {
-		return false; // We use the lock method a little, but let's don't advertise that we're thread-safe
+	public Transaction lock(boolean tryOnly) {
+		return theCausalLock.lock(tryOnly);
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return theCausalLock.lock(write, cause);
-	}
-
-	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return theCausalLock.tryLock(write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		return theCausalLock.lockWrite(tryOnly, cause);
 	}
 
 	@Override
@@ -90,18 +84,13 @@ public class FastFailLockingStrategy implements CollectionLockingStrategy {
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return false; // We use the lock method a little, but let's don't advertise that we're thread-safe
-		}
-
-		@Override
-		public Transaction lock(boolean write, Object cause) {
+		public Transaction lock(boolean tryOnly) {
 			return Transaction.NONE;
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return lock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return Transaction.NONE;
 		}
 
 		@Override

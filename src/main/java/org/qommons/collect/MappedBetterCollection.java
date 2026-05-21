@@ -6,7 +6,6 @@ import java.util.Set;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -105,13 +104,13 @@ public class MappedBetterCollection<S, T> extends MappedCollection<S, T> impleme
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return getSource().lock(write, cause);
+	public Transaction lock(boolean tryOnly) {
+		return getSource().lock(tryOnly);
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return getSource().tryLock(write, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		return getSource().lockWrite(tryOnly, cause);
 	}
 
 	@Override

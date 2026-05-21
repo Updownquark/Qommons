@@ -6,7 +6,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.qommons.*;
-import org.qommons.Lockable.CoreId;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -140,7 +139,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	default ListElement<E> getOrAdd(E value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd) {
 		if (after != null || before != null) {
 			// If the given elements constrain the search space, we can probably be faster than the general method below
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				ElementId best = first ? after : before;
 				ElementId worst = first ? before : after;
 				if (best != null) {
@@ -223,7 +222,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 			int compare = comparator().compare(value, found.get());
 			if (compare == 0)
 				return found;
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				if (!found.getElementId().isPresent())
 					continue; // Possible it may have been removed already
 				if (preAdd != null)
@@ -569,7 +568,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	default BetterList<E> subList(int fromIndex, int toIndex) {
 		if (!BetterCollections.simplifyDuplicateOperations())
 			return BetterList.super.subList(fromIndex, toIndex);
-		try (Transaction t = lock(false, null)) {
+		try (Transaction t = lock(false)) {
 			// Be inclusive so that adds succeed as often as possible
 			Comparable<? super E> from = fromIndex == 0 ? null : searchFor(get(fromIndex - 1), 1);
 			Comparable<? super E> to = toIndex == size() ? null : searchFor(get(toIndex), -1);
@@ -919,18 +918,13 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theWrapped.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theWrapped.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theWrapped.lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theWrapped.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theWrapped.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -1107,7 +1101,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		public E set(int index, E element) {
 			if (isInRange(element) != 0)
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				return theWrapped.set(checkIndex(index, false), element);
 			}
 		}
@@ -1143,7 +1137,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		public void add(int index, E element) {
 			if (isInRange(element) != 0)
 				throw new IllegalArgumentException(StdMsg.ILLEGAL_ELEMENT);
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				theWrapped.add(checkIndex(index, true), element);
 			}
 		}

@@ -7,7 +7,6 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.qommons.Lockable;
-import org.qommons.Transactable;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
@@ -92,7 +91,7 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 	 * @return The hash code for the collection's content
 	 */
 	public static int hashCode(Collection<?> c) {
-		try (Transaction t = Transactable.lock(c, false, null)) {
+		try (Transaction t = Lockable.lockLockable(c, false)) {
 			int hash = 0;
 			for (Object v : c)
 				hash += v == null ? 0 : v.hashCode();
@@ -110,9 +109,9 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 	public static boolean equals(Set<?> c, Object o) {
 		if (!(o instanceof Set))
 			return false;
-		try (Transaction t = Lockable.lockAll(//
-			c instanceof Transactable ? Lockable.lockable((Transactable) c, false, false) : null, //
-			o instanceof Transactable ? Lockable.lockable((Transactable) o, false, false) : null)) {
+		try (Transaction t = Lockable.lockAll(false, //
+			c instanceof Lockable ? (Lockable) c : null, //
+			o instanceof Lockable ? (Lockable) o : null)) {
 			Set<?> c2 = (Set<?>) o;
 			Iterator<?> iter = c.iterator();
 			while (iter.hasNext()) {
@@ -132,7 +131,7 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 	public static String toString(BetterSet<?> set) {
 		StringBuilder ret = new StringBuilder("{");
 		boolean first = true;
-		try (Transaction t = set.lock(false, null)) {
+		try (Transaction t = set.lock(false)) {
 			for (Object value : set) {
 				if (!first) {
 					ret.append(", ");

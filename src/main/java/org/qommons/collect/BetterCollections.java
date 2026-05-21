@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.function.Function;
 
 import org.qommons.Identifiable.AbstractIdentifiable;
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -243,18 +242,13 @@ public class BetterCollections {
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theWrapped.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theWrapped.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theWrapped.lock(false, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theWrapped.tryLock(false, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theWrapped.lock(tryOnly);
 		}
 
 		@Override
@@ -1024,18 +1018,13 @@ public class BetterCollections {
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theWrapped.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theWrapped.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theWrapped.lock(false, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theWrapped.tryLock(false, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theWrapped.lock(tryOnly);
 		}
 
 		@Override

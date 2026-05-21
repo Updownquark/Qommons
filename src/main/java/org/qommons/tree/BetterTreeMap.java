@@ -8,7 +8,6 @@ import java.util.function.Supplier;
 
 import org.qommons.Identifiable;
 import org.qommons.Identifiable.AbstractIdentifiable;
-import org.qommons.Lockable.CoreId;
 import org.qommons.QommonsUtils;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
@@ -644,18 +643,13 @@ public class BetterTreeMap<K, V> extends AbstractIdentifiable implements TreeBas
 		}
 
 		@Override
-		public boolean isLockSupported() {
-			return theEntries.isLockSupported();
+		public Transaction lock(boolean tryOnly) {
+			return theEntries.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theEntries.lock(write, cause);
-		}
-
-		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theEntries.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theEntries.lockWrite(tryOnly, cause);
 		}
 
 		@Override

@@ -41,25 +41,26 @@ public final class ArrayUtils {
 
 	/**
 	 * Inserts an element into the array--for primitive types
-	 *
+	 * 
+	 * @param <A> The type of the array
 	 * @param anArray The array to insert into
 	 * @param anElement The element to insert
 	 * @param anIndex The index for the new element
 	 * @return The new array with all elements of <code>anArray</code>, but with <code>anElement</code> inserted at index
 	 *         <code>anIndex</code>
 	 */
-	public static Object addP(Object anArray, Object anElement, int anIndex) {
-		Object ret;
+	public static <A> A addP(A anArray, Object anElement, int anIndex) {
+		A ret;
 		int length;
 		if(anArray == null) {
 			if(anIndex != 0)
 				throw new ArrayIndexOutOfBoundsException("Cannot set " + anIndex + " element in a null array");
-			ret = Array.newInstance(anElement.getClass(), 1);
+			ret = (A) Array.newInstance(anElement.getClass(), 1);
 			Array.set(ret, 0, anElement);
 			return ret;
 		} else {
 			length = Array.getLength(anArray);
-			ret = Array.newInstance(anArray.getClass().getComponentType(), length + 1);
+			ret = (A) Array.newInstance(anArray.getClass().getComponentType(), length + 1);
 		}
 		System.arraycopy(anArray, 0, ret, 0, anIndex);
 		put(ret, anElement, anIndex);

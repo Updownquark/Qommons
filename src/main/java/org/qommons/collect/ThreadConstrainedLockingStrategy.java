@@ -4,7 +4,6 @@ import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 
@@ -14,8 +13,8 @@ import org.qommons.Transaction;
  * "event thread".
  * </p>
  * <p>
- * This class supports obtaining a read lock from any thread, but ANY attempt to obtain a write lock on a thread other than the event thread
- * (even from {@link #tryLock(boolean, Object)}) will result in an {@link IllegalStateException}.
+ * This class supports obtaining a read lock from any thread, but a non-try-only attempt to obtain a write lock on a thread other than the
+ * event thread will result in an {@link IllegalStateException}.
  * </p>
  * <p>
  * Beyond this constraint, this lock behaves as expected:
@@ -81,18 +80,13 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 	}
 
 	@Override
-	public boolean isLockSupported() {
-		return true;
+	public Transaction lock(boolean tryOnly) {
+		return lock(false, tryOnly, null);
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
-		return lock(write, false, cause);
-	}
-
-	@Override
-	public Transaction tryLock(boolean write, Object cause) {
-		return lock(write, true, cause);
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
+		return lock(true, tryOnly, cause);
 	}
 
 	private Transaction lock(boolean write, boolean tryOnly, Object cause) {
@@ -184,7 +178,7 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 				theWriteLock = 1;
 			}
 		}
-		Transaction superLock = super.lock(true, cause);
+		Transaction superLock = super.lockWrite(false, cause);
 		if (TRACK_UNCLOSED_WRITES)
 			return new TrackingWriteLockRelease(superLock);
 		else
@@ -377,29 +371,15 @@ public class ThreadConstrainedLockingStrategy extends FastFailLockingStrategy {
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			Transaction lock = theBacking.lock(write, cause);
-			if (!write)
-				return lock;
-			if (write && 0 == theWriteLockCount++) {
-				try {
-					onInitialWriteLock.run();
-				} catch (RuntimeException | Error e) {
-					lock.close();
-					throw e;
-				}
-			}
-			return new Transaction.ReleaseOnceTransaction(() -> {
-				theWriteLockCount--;
-				lock.close();
-			});
+		public Transaction lock(boolean tryOnly) {
+			return theBacking.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			Transaction lock = theBacking.tryLock(write, cause);
-			if (lock == null || !write)
-				return lock;
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			Transaction lock = theBacking.lockWrite(tryOnly, cause);
+			if (lock == null)
+				return null;
 			if (0 == theWriteLockCount++) {
 				try {
 					onInitialWriteLock.run();

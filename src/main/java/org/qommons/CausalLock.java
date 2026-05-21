@@ -8,8 +8,8 @@ import org.qommons.collect.SimpleDeque;
 /** A lock that keeps track of the causes by which it is write-locked for eventing */
 public interface CausalLock extends Transactable {
 	/**
-	 * A tagging interface that instructs this class not to wrap a particular cause passed to {@link CausalLock#lock(boolean, Object)} in a
-	 * causable
+	 * A tagging interface that instructs this class not to wrap a particular cause passed to {@link CausalLock#lockWrite(boolean, Object)}
+	 * in a causable
 	 */
 	public interface Cause {
 	}

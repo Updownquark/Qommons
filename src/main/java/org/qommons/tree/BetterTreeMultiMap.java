@@ -155,7 +155,7 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 
 		@Override
 		public BinaryTreeNode<K> getElement(int index) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return getBacking().getElement(index);
 			}
 		}
@@ -167,14 +167,14 @@ public class BetterTreeMultiMap<K, V> extends AbstractBetterMultiMap<K, V> imple
 
 		@Override
 		public BinaryTreeNode<K> splitBetween(ElementId element1, ElementId element2) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return getBacking().splitBetween(element1, element2);
 			}
 		}
 
 		@Override
 		public BinaryTreeNode<K> search(Comparable<? super K> search, BetterSortedList.SortedSearchFilter filter) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				return getBacking().search(search, filter);
 			}
 		}

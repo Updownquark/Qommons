@@ -8,7 +8,6 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.qommons.Identifiable;
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterSortedList.SortedSearchFilter;
@@ -375,7 +374,7 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 
 		@Override
 		public OrderedMapEntry<K, V> searchEntries(Comparable<? super Map.Entry<K, V>> search, SortedSearchFilter filter) {
-			try (Transaction t = lock(false, null)) {
+			try (Transaction t = lock(false)) {
 				MultiEntryHandle<K, V> entry = getSource().searchEntries(e -> search.compareTo(entryFor(e)), filter);
 				return entryFor(entry);
 			}
@@ -718,13 +717,13 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 		}
 
 		@Override
-		public Transaction lock(boolean write, Object cause) {
-			return theWrapped.lock(write, cause);
+		public Transaction lock(boolean tryOnly) {
+			return theWrapped.lock(tryOnly);
 		}
 
 		@Override
-		public Transaction tryLock(boolean write, Object cause) {
-			return theWrapped.tryLock(write, cause);
+		public Transaction lockWrite(boolean tryOnly, Object cause) {
+			return theWrapped.lockWrite(tryOnly, cause);
 		}
 
 		@Override
@@ -788,7 +787,7 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 
 		@Override
 		public boolean clear() {
-			try (Transaction t = lock(true, null)) {
+			try (Transaction t = lockWrite(false, null)) {
 				MultiEntryHandle<K, V> entry = getWrapped().search(theLowerBound, BetterSortedList.SortedSearchFilter.Greater);
 				if (entry == null)
 					return false;

@@ -7,7 +7,6 @@ import java.util.Objects;
 
 import org.qommons.Identifiable;
 import org.qommons.Identifiable.AbstractIdentifiable;
-import org.qommons.Lockable.CoreId;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
@@ -142,12 +141,12 @@ public class FilteredList<T> extends AbstractIdentifiable implements BetterList<
 	}
 
 	@Override
-	public Transaction lock(boolean write, Object cause) {
+	public Transaction lock(boolean tryOnly) {
 		return Transaction.NONE;
 	}
 
 	@Override
-	public Transaction tryLock(boolean write, Object cause) {
+	public Transaction lockWrite(boolean tryOnly, Object cause) {
 		return Transaction.NONE;
 	}
 
