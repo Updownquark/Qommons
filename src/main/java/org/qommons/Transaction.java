@@ -42,7 +42,14 @@ public interface Transaction extends AutoCloseable {
 		return new CombinedTransaction(ts);
 	}
 
-	/** A Transaction that will only execute its close action the first time it is {@link #close() closed} */
+	/**
+	 * <p>
+	 * A Transaction that will only execute its close action the first time it is {@link #close() closed}.
+	 * </p>
+	 * <p>
+	 * This class offers threading protection.
+	 * </p>
+	 */
 	public static class ReleaseOnceTransaction implements Transaction {
 		private final Runnable theCloseAction;
 		private boolean isClosed;

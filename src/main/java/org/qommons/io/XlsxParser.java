@@ -387,11 +387,15 @@ public class XlsxParser implements TabularFileParser {
 		}
 
 		@Override
-		public String[] parseNextLine() throws IOException, TextParseException {
+		public String[] parseNextLineVC(String[] columns) throws IOException, TextParseException {
 			Row row = parseNextRow(true);
 			if (row == null)
 				return null;
-			return row.getColumnText(new String[theColumnCount]);
+			if (columns == null || columns.length < theColumnCount)
+				columns = new String[theColumnCount];
+			else if (theColumnCount < columns.length)
+				Arrays.fill(columns, theColumnCount, columns.length, null);
+			return row.getColumnText(columns);
 		}
 
 		@Override
@@ -824,11 +828,11 @@ public class XlsxParser implements TabularFileParser {
 	}
 
 	@Override
-	public String[] parseNextLine() throws IOException, TextParseException {
+	public String[] parseNextLineVC(String[] columns) throws IOException, TextParseException {
 		getSheets(); // Initialize sheets if we haven't yet
 		do {
 			if (theCurrentSheet != null) {
-				String[] line = theCurrentSheet.parseNextLine();
+				String[] line = theCurrentSheet.parseNextLineVC(columns);
 				if (line != null)
 					return line;
 				theOverallEntryNumber += theCurrentSheet.getEntryNumber();

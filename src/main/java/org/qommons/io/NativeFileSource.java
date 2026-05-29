@@ -262,8 +262,15 @@ public class NativeFileSource implements BetterFile.FileDataSource {
 			}
 			if (directory)
 				Files.createDirectories(file);
-			else
+			else {
+				Path parent = file.getParent();
+				if (Files.exists(parent)) {
+					if (!Files.isDirectory(parent))
+						throw new IOException(parent + " already exists as a " + (directory ? "file" : "directory"));
+				} else
+					Files.createDirectories(parent);
 				Files.createFile(file);
+			}
 			return new NativeFileBacking(this, file);
 		}
 

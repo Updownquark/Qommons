@@ -166,6 +166,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		private final BetterFile.FileBacking theBacking;
 		private final int theArchiveDepth;
 		private final long theLastModified;
+		private int theLastModifiedCheckTime;
 		private volatile boolean hasCheckedForArchive;
 		private volatile FileArchival theArchival;
 		private volatile ArchiveEntry theRootEntry;
@@ -235,9 +236,12 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 			if (!theBacking.check())
 				return false;
 			long now = System.currentTimeMillis();
-			if (now - theLastCheck > FILE_CHECK_INTERVAL) {
+			// For some kinds of files (e.g. synthetic files backed by cloud data), this check can be very expensive.
+			// Adapt to check less often when this is the case.
+			if (now - theLastCheck > Math.min(FILE_CHECK_INTERVAL, theLastModifiedCheckTime * 20)) {
 				if (theLastModified != theBacking.getLastModified())
 					return false;
+				theLastModifiedCheckTime = (int) (System.currentTimeMillis() - now);
 				theLastCheck = now;
 			}
 			return true;

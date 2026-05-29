@@ -123,11 +123,40 @@ public class CsvParser implements TabularFileParser {
 	}
 
 	@Override
-	public String[] parseNextLine() throws IOException, TextParseException {
-		List<String> columns = new LinkedList<>();
-		if (!parseNextLine(columns::add))
-			return null;
-		return columns.toArray(new String[columns.size()]);
+	public String[] parseNextLineVC(String[] columns) throws IOException, TextParseException {
+		class VCArrayColumnConsumer implements ColumnAccepter {
+			List<String> columnsList = columns == null ? new ArrayList<>() : null;
+			int index = 0;
+
+			@Override
+			public void accept(String column) throws TextParseException {
+				if (columnsList != null)
+					columnsList.add(column); // Don't care about index anymore
+				else if (index < columns.length)
+					columns[index++] = column;
+				else {
+					columnsList = new ArrayList<>(Math.max(10, columns.length * 2));
+					for (String c : columns)
+						columnsList.add(c);
+					columnsList.add(column);
+				}
+			}
+
+			String[] getColumns() {
+				if (columnsList != null) {
+					if (columnsList.isEmpty())
+						return null;
+					return columnsList.toArray(new String[columnsList.size()]);
+				} else if (index == 0)
+					return null;
+				else if (index < columns.length)
+					Arrays.fill(columns, index, columns.length, null);
+				return columns;
+			}
+		}
+		VCArrayColumnConsumer lineAction = new VCArrayColumnConsumer();
+		parseNextLine(lineAction);
+		return lineAction.getColumns();
 	}
 
 	@Override
@@ -185,10 +214,10 @@ public class CsvParser implements TabularFileParser {
 			}
 
 			onColumn.accept(value);
-			theLastLineColumnOffsets.add(theParseState.getValueOffset() - theLastLineOffset);
+			theLastLineColumnOffsets.add(theParseState.getValueOffset());
 			do {
 				onColumn.accept(theParseState.parseColumn());
-				theLastLineColumnOffsets.add(theParseState.getValueOffset() - theLastLineOffset);
+				theLastLineColumnOffsets.add(theParseState.getValueOffset());
 			} while (theParseState.getLastTerminal() == CsvValueTerminal.COLUMN_END);
 			theEntryNumber++;
 			return true;
@@ -402,8 +431,10 @@ public class CsvParser implements TabularFileParser {
 			if (c >= 0 && theCurrentLine != null)
 				theCurrentLine.append((char) c);
 			if (isQuoted == null) {
-				while (c == '\r') // Ignore stupid DOS CR characters except in quotes
+				while (c == '\r') {// Ignore stupid DOS CR characters except in quotes
 					c = theReader.read();
+					theOffset++;
+				}
 			}
 			return c;
 		}

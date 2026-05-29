@@ -140,7 +140,8 @@ public class TemporalBackupScheme {
 				lastBackupAge = backupAge;
 				lastBackupAdherence = thisBackupAdherence;
 			} else {
-				manager.delete(backup.getValue());
+				if (backup.getValue() != CURRENT_BACKUP)
+					manager.delete(backup.getValue());
 				backups.remove(backup.getKey());
 			}
 		}

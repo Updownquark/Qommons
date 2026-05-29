@@ -53,7 +53,9 @@ public interface TabularFileParser extends AutoCloseable {
 	 * @throws IOException If the reader throws an exception
 	 * @throws TextParseException If there is an error on the next line the file
 	 */
-	String[] parseNextLine() throws IOException, TextParseException;
+	default String[] parseNextLine() throws IOException, TextParseException {
+		return parseNextLineVC(null);
+	}
 
 	/**
 	 * Parses the next line in the file, asserting that the number of columns is equal to the length of the <code>columns</code> array
@@ -67,6 +69,23 @@ public interface TabularFileParser extends AutoCloseable {
 	boolean parseNextLine(String[] columns) throws IOException, TextParseException;
 
 	/**
+	 * <p>
+	 * Parses the next line in the file. If the given array is not null and the number of columns in the next line is less than or equal to
+	 * the length of the given array, the array will be populated with the columns from the line and the remaining elements will be set to
+	 * null. If the given array is null or too small for the line, a new array will be created and returned.
+	 * </p>
+	 * <p>
+	 * If there is no more content in the file, null will be returned.
+	 * </p>
+	 * 
+	 * @param columns The columns array to populate with the parsed column values from the next line of the file, if it can hold the line.
+	 * @return The parsed column values for the next line, or null if there is no more content in the file
+	 * @throws IOException If the reader throws an exception
+	 * @throws TextParseException If there is an error on the next line the file
+	 */
+	String[] parseNextLineVC(String[] columns) throws IOException, TextParseException;
+
+	/**
 	 * @return A builder for a structure ({@link TypedLineParser}) that facilitates the parsing of lines from a file with a header into
 	 *         typed structures
 	 * @throws IllegalStateException If this method is called after parsing has begun
@@ -77,10 +96,8 @@ public interface TabularFileParser extends AutoCloseable {
 		if (getLastLineNumber() != 0)
 			throw new IllegalStateException("This method may only be called at the beginning of a file");
 		String[] header = parseNextLine();
-		if (header == null || header.length == 0) {
-			throwParseException(0, 0, "No header line");
-			throw new IllegalStateException("Shouldn't happen");
-		}
+		if (header == null || header.length == 0)
+			throw new TextParseException("No header line", 0, 0, 0);
 		return new TypedLineParser0(this, header, new String[header.length], true, false);
 	}
 

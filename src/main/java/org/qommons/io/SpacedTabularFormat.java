@@ -3,6 +3,7 @@ package org.qommons.io;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.qommons.LongList;
@@ -32,10 +33,12 @@ public class SpacedTabularFormat implements TabularFileParser {
 		theColumnOffsets = new LongList();
 	}
 
+	@SuppressWarnings("null")
 	@Override
-	public String[] parseNextLine() throws IOException, TextParseException {
+	public String[] parseNextLineVC(String[] columns) throws IOException, TextParseException {
 		StringBuilder column = new StringBuilder();
-		List<String> columns = new ArrayList<>();
+		int index = 0;
+		List<String> columnsList = columns == null ? new ArrayList<>() : null;
 		int ch = read();
 		boolean moreContent = true;
 		while (moreContent) {
@@ -44,19 +47,28 @@ public class SpacedTabularFormat implements TabularFileParser {
 				moreContent = false;
 				break;
 			case '\n':
-				if (!columns.isEmpty())
+				if (index > 0)
 					moreContent = false;
 				break;
 			default:
 				if (ch <= ' ') {
 					if (column.length() > 0) {
-						columns.add(column.toString());
+						if (columnsList != null)
+							columnsList.add(column.toString());
+						else if (index < columns.length)
+							columns[index++] = column.toString();
+						else {
+							columnsList = new ArrayList<>(Math.max(10, columns.length * 2));
+							for (String c : columns)
+								columnsList.add(c);
+							columnsList.add(column.toString());
+						}
 						column.setLength(0);
 					}
 				} else if (column.length() > 0) {
 					column.append((char) ch);
 				} else {
-					if (columns.isEmpty()) { // First content
+					if (index == 0) { // First content
 						theLastLine = theCurrentLine;
 						theLastLineOffset = theCurrentOffset;
 						theRowCount++;
@@ -70,11 +82,25 @@ public class SpacedTabularFormat implements TabularFileParser {
 			if (moreContent)
 				ch = read();
 		}
-		if (column.length() > 0)
-			columns.add(column.toString());
-		if (!columns.isEmpty())
-			return columns.toArray(new String[columns.size()]);
-		else
+		if (column.length() > 0) {
+			if (columnsList != null)
+				columnsList.add(column.toString());
+			else if (index < columns.length)
+				columns[index++] = column.toString();
+			else {
+				columnsList = new ArrayList<>(Math.max(10, columns.length * 2));
+				for (String c : columns)
+					columnsList.add(c);
+				columnsList.add(column.toString());
+			}
+		}
+		if (columnsList != null)
+			return columnsList.toArray(new String[columnsList.size()]);
+		else if (index > 0) {
+			if (index < columns.length)
+				Arrays.fill(columns, index, columns.length, null);
+			return columns;
+		} else
 			return null;
 	}
 

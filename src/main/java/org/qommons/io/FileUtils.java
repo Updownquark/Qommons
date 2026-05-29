@@ -41,6 +41,12 @@ public class FileUtils extends MiniFileUtils {
 		}
 	};
 
+	/** Semi-standard format for file sizes and other data amounts */
+	public static final Format<Double> DATA_SIZE_FORMAT = Format.doubleFormat(3)//
+		.withUnit("B", true)//
+		.withMetricPrefixesPower2()//
+		.build();
+
 	/**
 	 * @param path The path for the resource
 	 * @param dataSource The resource
@@ -59,7 +65,7 @@ public class FileUtils extends MiniFileUtils {
 		if (file == null)
 			return null;
 		else
-			return new SyntheticFile(file);
+			return new File(file.getPath());
 	}
 
 	/**

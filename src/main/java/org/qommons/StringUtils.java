@@ -1188,9 +1188,24 @@ public class StringUtils {
 		return str;
 	}
 
+	private static final String[] HTML_REPLACEMENTS;
+	static {
+		List<String> htmlReplacements = new ArrayList<>();
+		replaceHtml(htmlReplacements, '\n', "<br>");
+		replaceHtml(htmlReplacements, '\t', "&nbsp;&nbsp;&nbsp;&nbsp;");
+		replaceHtml(htmlReplacements, '<', "&lt;");
+		replaceHtml(htmlReplacements, '&', "&amp;");
+		HTML_REPLACEMENTS = htmlReplacements.toArray(new String[htmlReplacements.size()]);
+	}
+	private static void replaceHtml(List<String> htmlReplacements, char toReplace, String replacement) {
+		if (toReplace >= htmlReplacements.size())
+			htmlReplacements.addAll(IterableUtils.map(IterableUtils.indexList(htmlReplacements.size(), toReplace + 1), __ -> null));
+		htmlReplacements.set(toReplace, replacement);
+	}
+
 	/**
-	 * Converts newlines, tabs, and multiple spaces into text that will render correctly in HTML. If none of these character sequences are
-	 * present in the string, the string itself will be returned.
+	 * Converts newlines, tabs, multiple spaces, and other characters that must be escaped into text that will render correctly in HTML. If
+	 * none of these character sequences are present in the string, the string itself will be returned.
 	 * 
 	 * @param plainText The text to convert to HTML
 	 * @return The HTML-ified text
@@ -1202,22 +1217,7 @@ public class StringUtils {
 		boolean wasSpace = false, wasMultiSpace = true;
 		for (int c = 0; c < plainText.length(); c++) {
 			char ch = plainText.charAt(c);
-			switch (ch) {
-			case '\n':
-				if (htmlStr == null) {
-					htmlStr = new StringBuilder("<html>");
-					htmlStr.append(plainText, 0, c);
-				}
-				htmlStr.append("<br>");
-				break;
-			case '\t':
-				if (htmlStr == null) {
-					htmlStr = new StringBuilder("<html>");
-					htmlStr.append(plainText, 0, c);
-				}
-				htmlStr.append("&nbsp;&nbsp;&nbsp;&nbsp;");
-				break;
-			case ' ':
+			if (ch == ' ') {
 				// htmlStr will always be non-null if wasMultiSpace is true; just suppressing a warning
 				if (wasMultiSpace && htmlStr != null)
 					htmlStr.append("&nbsp;");
@@ -1230,17 +1230,21 @@ public class StringUtils {
 					wasMultiSpace = true;
 				} else
 					wasSpace = true;
-				break;
-			default:
-				if (htmlStr != null) {
+			} else {
+				String replacement = ch < HTML_REPLACEMENTS.length ? HTML_REPLACEMENTS[ch] : null;
+				if (replacement != null) {
+					if (htmlStr == null) {
+						htmlStr = new StringBuilder("<html>");
+						htmlStr.append(plainText, 0, c);
+					}
+					htmlStr.append(replacement);
+				} else if (htmlStr != null) {
 					if (wasSpace && !wasMultiSpace)
 						htmlStr.append(' ');
 					htmlStr.append(ch);
 				}
-				break;
-			}
-			if (ch != ' ')
 				wasSpace = wasMultiSpace = false;
+			}
 		}
 		if (htmlStr == null)
 			return plainText;
