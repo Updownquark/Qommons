@@ -952,33 +952,33 @@ public interface Format<T> {
 	}
 
 	/** All standard metric prefixes that are powers of 1000 mapped to their corresponding powers of 10 */
-	public static final Map<String, Integer> METRIC_PREFIXES_3K = QommonsUtils.<String, Integer> buildMap(new LinkedHashMap<>())//
-		.with("y", -24) // yocto
-		.with("z", -21) // zepto
-		.with("a", -18) // atto
-		.with("f", -15) // femto
-		.with("p", -12) // pico
-		.with("n", -9) // nano
-		.with("\u03bc", -6) // Greek mu, micro
-		.with("u", -6) // micro
-		.with("m", -3) // milli
-		.with("k", 3) // kilo
-		.with("M", 6) // mega
-		.with("G", 9) // giga
-		.with("T", 12) // tera
-		.with("P", 15) // peta
-		.with("E", 18) // exa
-		.with("Z", 21) // zetta
-		.with("Y", 24) // yotta
+	public static final Map<String, Double> METRIC_PREFIXES_3K = QommonsUtils.<String, Double> buildMap(new LinkedHashMap<>())//
+		.with("y", 1E-24) // yocto
+		.with("z", 1E-21) // zepto
+		.with("a", 1E-18) // atto
+		.with("f", 1E-15) // femto
+		.with("p", 1E-12) // pico
+		.with("n", 1E-9) // nano
+		.with("\u03bc", 1E-6) // Greek mu, micro
+		.with("u", 1E-6) // micro
+		.with("m", 1E-3) // milli
+		.with("k", 1E3) // kilo
+		.with("M", 1E6) // mega
+		.with("G", 1E9) // giga
+		.with("T", 1E12) // tera
+		.with("P", 1E15) // peta
+		.with("E", 1E18) // exa
+		.with("Z", 1E21) // zetta
+		.with("Y", 1E24) // yotta
 		.getUnmodifiable();
 
 	/** All standard metric prefixes mapped to their corresponding powers of 10 */
-	public static final Map<String, Integer> METRIC_PREFIXES = QommonsUtils.<String, Integer> buildMap(new LinkedHashMap<>())//
+	public static final Map<String, Double> METRIC_PREFIXES = QommonsUtils.<String, Double> buildMap(new LinkedHashMap<>())//
 		.withAll(METRIC_PREFIXES_3K)//
-		.with("c", -2) // centi
-		.with("d", -1) // deci
-		.with("da", 1) // deka
-		.with("h", 2) // hecto
+		.with("c", 1E-2) // centi
+		.with("d", 1E-1) // deci
+		.with("da", 1E1) // deka
+		.with("h", 1E2) // hecto
 		.getUnmodifiable();
 	/**
 	 * All standard 10^3 metric prefixes mapped to their corresponding multipliers, except that instead of 1000 multipliers, 1024 is used
@@ -1131,7 +1131,7 @@ public interface Format<T> {
 		 * @param mult The multiple represented by the prefix
 		 * @return This builder
 		 */
-		public SuperDoubleFormatBuilder withPrefix(String prefix, double mult) {
+		public SuperDoubleFormatBuilder withPrefix(String prefix, Double mult) {
 			thePrefixesByMultiplier.putIfAbsent(mult, prefix);
 			theMultipliersByPrefix.put(prefix, mult);
 			return this;
@@ -1143,7 +1143,7 @@ public interface Format<T> {
 		 * @return This builder
 		 */
 		public SuperDoubleFormatBuilder withMetricPrefixes() {
-			for (Map.Entry<String, Integer> prefix : METRIC_PREFIXES.entrySet())
+			for (Map.Entry<String, Double> prefix : METRIC_PREFIXES.entrySet())
 				withPrefix(prefix.getKey(), prefix.getValue());
 			return this;
 		}
@@ -1166,7 +1166,7 @@ public interface Format<T> {
 		 * @return This builder
 		 */
 		public SuperDoubleFormatBuilder withMetricPrefixesPower3K() {
-			for (Map.Entry<String, Integer> prefix : METRIC_PREFIXES_3K.entrySet())
+			for (Map.Entry<String, Double> prefix : METRIC_PREFIXES_3K.entrySet())
 				withPrefix(prefix.getKey(), prefix.getValue());
 			return this;
 		}
