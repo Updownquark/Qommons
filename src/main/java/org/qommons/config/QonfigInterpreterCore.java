@@ -97,6 +97,15 @@ public class QonfigInterpreterCore {
 			return theInterpreter;
 		}
 
+		/**
+		 * @param reporting The error reporting for this session (and its source and derivations)
+		 * @return This session
+		 */
+		public CoreSession setReporting(ErrorReporting reporting) {
+			theReporting.setReporting(reporting);
+			return this;
+		}
+
 		@Override
 		public QonfigElementOrAddOn getFocusType() {
 			return theFocusType;
@@ -224,38 +233,41 @@ public class QonfigInterpreterCore {
 		public <T> T interpret(QonfigElementOrAddOn as, Class<T> asType,
 			ExBiConsumer<? super T, ? super CoreSession, QonfigInterpretationException> action) throws QonfigInterpretationException {
 			try (Transaction t = theReporting.interpreting()) {
-				MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(as);
 				QonfigCreatorHolder<T> creator = null;
-				CoreSession session = this;
-				if (creators != null) {
-					for (QonfigCreatorHolder<?> c : creators.getAll(asType, TypeMatch.SUB_TYPE)) {
-						if (c.filter == null || c.filter.test(this)) {
-							creator = (QonfigCreatorHolder<T>) c;
-							break;
-						}
-					}
-				}
-				if (creator == null) {
-					as = getElement().getType();
-					creators = theInterpreter.theCreators.get(as);
-					session = asElement(as);
+				CoreSession session = null;
+				QonfigElementOrAddOn[] typeOptions;
+				if (as == null)
+					typeOptions = new QonfigElementOrAddOn[] { getElement().getType() };
+				else if (!as.equals(getElement().getType()) && (as.isAssignableFrom(getElement().getType()) || theTypes.contains(as)))
+					typeOptions = new QonfigElementOrAddOn[] { getElement().getType(), as };
+				else
+					typeOptions = new QonfigElementOrAddOn[] { as };
+				for (QonfigElementOrAddOn type : typeOptions) {
+					MultiInheritanceView<Class<?>, QonfigCreatorHolder<?>> creators = theInterpreter.theCreators.get(type);
 					if (creators != null) {
+						if (type.equals(theFocusType))
+							session = this;
+						else
+							session = asElement(type);
 						for (QonfigCreatorHolder<?> c : creators.getAll(asType, TypeMatch.SUB_TYPE)) {
-							if (theElement.isInstance(c.element) && (c.filter == null || c.filter.test(session))) {
+							if (c.filter == null || c.filter.test(session)) {
 								creator = (QonfigCreatorHolder<T>) c;
 								break;
 							}
 						}
+						if (creator != null)
+							break;
 					}
 				}
-				if (creator == null) {
-					String msg = "No creator registered for element " + as.getDeclarer() + ":" + as + " and target type "
+				QonfigElementOrAddOn reportType=as==null ? getElement().getType() : as;
+				if (creator == null || session == null) {
+					String msg = "No creator registered for element " + reportType.getDeclarer() + ":" + reportType + " and target type "
 						+ asType.getName();
 					reporting().error(msg);
 					return null;
 				}
 				if (theFocusType != creator.element && !theElement.isInstance(creator.element)) {
-					String msg = "Element " + theElement + " is not an instance of " + as.getDeclarer() + ":" + as;
+					String msg = "Element " + theElement + " is not an instance of " + reportType.getDeclarer() + ":" + reportType;
 					reporting().error(msg);
 					throw new IllegalStateException(msg);
 				}
@@ -1106,7 +1118,7 @@ public class QonfigInterpreterCore {
 	 * finished
 	 */
 	protected static class ExceptionThrowingReporting implements ErrorReporting {
-		private final ErrorReporting theWrapped;
+		private ErrorReporting theWrapped;
 		private boolean isInterpreting;
 
 		/** @param parent The reporting instance to delegate to after interpretation is finished */
@@ -1120,6 +1132,10 @@ public class QonfigInterpreterCore {
 				return Transaction.NONE;
 			isInterpreting = true;
 			return () -> isInterpreting = false;
+		}
+
+		void setReporting(ErrorReporting reporting) {
+			theWrapped = reporting;
 		}
 
 		@Override
