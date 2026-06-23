@@ -204,6 +204,8 @@ public class StringUtils {
 	 * @return Whether the given prefix is at the beginning of the full sequence, regardless of case
 	 */
 	public static boolean startsWithIgnoreCase(CharSequence full, CharSequence prefix) {
+		if (prefix.length() > full.length())
+			return false;
 		return subSequenceMatches(full, 0, prefix, 0, -1, true) == prefix.length();
 	}
 

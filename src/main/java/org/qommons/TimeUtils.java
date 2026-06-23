@@ -2371,6 +2371,21 @@ public class TimeUtils {
 		}
 	}
 
+	/**
+	 * @param month The name of the month. This may be any initial sub-sequence of the name of a month at least 3 characters in length. Case
+	 *        is ignored.
+	 * @return The integer month. January=1, December=12.
+	 */
+	public static int parseMonth(CharSequence month) {
+		if (month == null || month.length() < 3)
+			return -1;
+		for (int m = 0; m < MONTHS.length; m++) {
+			if (StringUtils.startsWithIgnoreCase(MONTHS[m], month))
+				return m + 1;
+		}
+		return -1;
+	}
+
 	// public static final String FLEX_FORMAT_DESCRIP;
 
 	// private static final List<DateFormat> FLEX_FORMATS;
