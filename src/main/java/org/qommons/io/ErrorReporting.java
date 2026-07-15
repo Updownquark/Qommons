@@ -2,8 +2,13 @@ package org.qommons.io;
 
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
+
+import org.qommons.Named;
 
 /** An interface to allow errors and warnings to be reported in a traceable way without terminating execution with an exception */
 public interface ErrorReporting {
@@ -36,8 +41,13 @@ public interface ErrorReporting {
 		}
 
 		@Override
+		public boolean isOfInterest(IssueSeverity severity) {
+			return true;
+		}
+
+		@Override
 		public ErrorReporting report(Issue issue) {
-			issue.printStackTrace(issue.severity == IssueSeverity.INFO ? System.out : System.err);
+			issue.printStackTrace(issue.severity.compareTo(IssueSeverity.INFO) <= 0 ? System.out : System.err);
 			return this;
 		}
 
@@ -64,6 +74,8 @@ public interface ErrorReporting {
 
 	/** Severity of a reported issue in an {@link ErrorReporting} instance */
 	public enum IssueSeverity {
+		/** An information message which should not */
+		DEBUG,
 		/** An information message which should not have any adverse effect */
 		INFO,
 		/**
@@ -72,7 +84,30 @@ public interface ErrorReporting {
 		 */
 		WARN,
 		/** An error that is likely to cause the program to fail its objectives in significant ways */
-		ERROR
+		ERROR,
+		/**
+		 * An error that is likely to cause the program to fail its objectives not only for the operation that experienced the error, but
+		 * for a class of functionality for the rest of the lifetime of the program
+		 */
+		FATAL
+	}
+
+	public static class IssueProperty<T> implements Named {
+		private final String theName;
+
+		public IssueProperty(String name) {
+			theName = name;
+		}
+
+		@Override
+		public String getName() {
+			return theName;
+		}
+
+		@Override
+		public String toString() {
+			return theName;
+		}
 	}
 
 	/** A reported issue in an {@link ErrorReporting} */
@@ -87,6 +122,7 @@ public interface ErrorReporting {
 		public final StackTraceElement codeLocation;
 		/** The exception that caused this issue */
 		public final Throwable cause;
+		private Map<IssueProperty<?>, Object> theProperties;
 
 		/**
 		 * @param fileLocation The file location at which this issue was reported
@@ -102,6 +138,23 @@ public interface ErrorReporting {
 			this.message = message;
 			this.codeLocation = codeLocation;
 			this.cause = cause;
+		}
+
+		/**
+		 * Gets an immutable property of this log issue
+		 * 
+		 * @param <T> The type of the property
+		 * @param key The key of the property to get
+		 * @param defaultValue Creates the property value for this issue if it has not been populated. This may be null to get the current
+		 *        property value without potentially populating it.
+		 * @return The property value
+		 */
+		public <T> T getProperty(IssueProperty<T> key, Supplier<? extends T> defaultValue) {
+			if (defaultValue == null)
+				return theProperties == null ? null : (T) theProperties.get(key);
+			if (theProperties == null)
+				theProperties = new HashMap<>();
+			return (T) theProperties.computeIfAbsent(key, __ -> defaultValue.get());
 		}
 
 		@Override
@@ -181,6 +234,8 @@ public interface ErrorReporting {
 	 * @return This error reporting instance
 	 */
 	default ErrorReporting info(String message, Throwable cause) {
+		if (!isOfInterest(IssueSeverity.INFO))
+			return this;
 		return report(new Issue(getFileLocation() == null ? null : getFileLocation().getPosition(0), IssueSeverity.INFO, message,
 			getCodeLocation(), cause));
 	}
@@ -199,6 +254,8 @@ public interface ErrorReporting {
 	 * @return This error reporting instance
 	 */
 	default ErrorReporting warn(String message, Throwable cause) {
+		if (!isOfInterest(IssueSeverity.WARN))
+			return this;
 		return report(new Issue(getFileLocation() == null ? null : getFileLocation().getPosition(0), IssueSeverity.WARN, message,
 			getCodeLocation(), cause));
 	}
@@ -217,9 +274,13 @@ public interface ErrorReporting {
 	 * @return This error reporting instance
 	 */
 	default ErrorReporting error(String message, Throwable cause) {
+		if (!isOfInterest(IssueSeverity.ERROR))
+			return this;
 		return report(new Issue(getFileLocation() == null ? null : getFileLocation().getPosition(0), IssueSeverity.ERROR, message,
 			getCodeLocation(), cause));
 	}
+
+	boolean isOfInterest(IssueSeverity severity);
 
 	/**
 	 * @param issue The issue to report

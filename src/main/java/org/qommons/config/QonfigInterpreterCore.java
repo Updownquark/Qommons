@@ -1154,9 +1154,14 @@ public class QonfigInterpreterCore {
 		}
 
 		@Override
+		public boolean isOfInterest(IssueSeverity severity) {
+			return severity.compareTo(IssueSeverity.ERROR) >= 0 || theWrapped.isOfInterest(severity);
+		}
+
+		@Override
 		public ErrorReporting report(Issue issue) {
 			theWrapped.report(issue);
-			if (issue.severity == IssueSeverity.ERROR) {
+			if (issue.severity.compareTo(IssueSeverity.ERROR) >= 0) {
 				if (issue.cause == null)
 					throw new RuntimeInterpretationException(issue.message, issue.fileLocation);
 				else
