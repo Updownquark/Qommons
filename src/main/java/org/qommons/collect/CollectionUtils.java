@@ -1,6 +1,16 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.AbstractCollection;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -1833,7 +1843,7 @@ public class CollectionUtils {
 
 		@Override
 		public Iterator<T> iterator() {
-			return IterableUtils.flatten(theCollections).iterator();
+			return (Iterator<T>) IterableUtils.flatten(theCollections).iterator();
 		}
 
 		@Override

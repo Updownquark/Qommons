@@ -1933,6 +1933,17 @@ public class QommonsUtils {
 			return 0;
 	}
 
+	/**
+	 * Java's Random uses a 48-bit seed, so {@link Random#nextLong()} cannot return all possible long values. This method uses two
+	 * {@link Random#nextInt()} calls to accomplish this.
+	 * 
+	 * @param random The source of randomness
+	 * @return A uniformly-distributed random long value
+	 */
+	public static long randomLong(Random random) {
+		return (random.nextInt() << 32) | (random.nextInt() & 0x100000000L);
+	}
+
 	/** Just a magic number I found that makes the speed come out about right for {@link #getCoreSpeed()} */
 	private static final long CORE_SPEED_CONST = 498_500_000_000L;
 
