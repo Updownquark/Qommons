@@ -633,7 +633,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	}
 
 	/** @return A collection with the same content as this one, but whose order is reversed */
-	default BetterCollection<E> reverse() {
+	default BetterCollection<E> reversed() {
 		return new ReversedCollection<>(this);
 	}
 
@@ -1175,7 +1175,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	}
 
 	/**
-	 * Implements {@link #reverse()}
+	 * Implements {@link #reversed()}
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
@@ -1261,12 +1261,12 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 
 		@Override
 		public CollectionElement<E> getElement(ElementId id) {
-			return getWrapped().getElement(id.reverse()).reverse();
+			return getWrapped().getElement(id.reversed()).reverse();
 		}
 
 		@Override
 		public MutableCollectionElement<E> mutableElement(ElementId id) {
-			return getWrapped().mutableElement(id.reverse()).reverse();
+			return getWrapped().mutableElement(id.reversed()).reverse();
 		}
 
 		@Override
@@ -1279,13 +1279,13 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		@Override
 		public BetterList<ElementId> getSourceElements(ElementId localElement, BetterCollection<?> sourceCollection) {
 			if (sourceCollection == this)
-				return QommonsUtils.map2(theWrapped.getSourceElements(localElement.reverse(), theWrapped), el -> el.reverse());
-			return theWrapped.getSourceElements(localElement.reverse(), sourceCollection);
+				return QommonsUtils.map2(theWrapped.getSourceElements(localElement.reversed(), theWrapped), el -> el.reversed());
+			return theWrapped.getSourceElements(localElement.reversed(), sourceCollection);
 		}
 
 		@Override
 		public ElementId getEquivalentElement(ElementId equivalentEl) {
-			return ElementId.reverse(theWrapped.getEquivalentElement(equivalentEl.reverse()));
+			return ElementId.reverse(theWrapped.getEquivalentElement(equivalentEl.reversed()));
 		}
 
 		@Override
@@ -1303,23 +1303,23 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 		public String canMove(ElementId valueEl, ElementId after, ElementId before) {
 			return getWrapped()//
 				.canMove(//
-					valueEl.reverse(), ElementId.reverse(before), ElementId.reverse(after));
+					valueEl.reversed(), ElementId.reverse(before), ElementId.reverse(after));
 		}
 
 		@Override
 		public CollectionElement<E> move(ElementId valueEl, ElementId after, ElementId before, boolean first, Runnable afterRemove) {
 			return getWrapped()//
 				.move(//
-					valueEl.reverse(), ElementId.reverse(before), ElementId.reverse(after), !first, afterRemove)
+					valueEl.reversed(), ElementId.reverse(before), ElementId.reverse(after), !first, afterRemove)
 				.reverse();
 		}
 
 		@Override
-		public BetterCollection<E> reverse() {
+		public BetterCollection<E> reversed() {
 			if (BetterCollections.simplifyDuplicateOperations())
 				return getWrapped();
 			else
-				return BetterCollection.super.reverse();
+				return BetterCollection.super.reversed();
 		}
 
 		@Override

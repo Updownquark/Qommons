@@ -347,7 +347,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	}
 
 	@Override
-	public ReversedSortedTreeList<E> reverse() {
+	public ReversedSortedTreeList<E> reversed() {
 		return new ReversedSortedTreeList<>(this);
 	}
 
@@ -357,7 +357,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	}
 
 	/**
-	 * Implements {@link SortedTreeList#reverse()}
+	 * Implements {@link SortedTreeList#reversed()}
 	 * 
 	 * @param <E> The type of values in the list
 	 */
@@ -420,7 +420,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 
 		@Override
 		public MutableBinaryTreeNode<E> mutableElement(ElementId id) {
-			return getWrapped().mutableElement(id.reverse()).reverse();
+			return getWrapped().mutableElement(id.reversed()).reverse();
 		}
 
 		@Override
@@ -429,7 +429,7 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 		}
 
 		@Override
-		public SortedTreeList<E> reverse() {
+		public SortedTreeList<E> reversed() {
 			return getWrapped();
 		}
 

@@ -469,7 +469,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	}
 
 	@Override
-	default BetterList<E> reverse() {
+	default BetterList<E> reversed() {
 		return new ReversedList<>(this);
 	}
 
@@ -645,7 +645,7 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 	}
 
 	/**
-	 * Implements {@link BetterList#reverse()}
+	 * Implements {@link BetterList#reversed()}
 	 *
 	 * @param <E> The type of elements in the list
 	 */
@@ -725,11 +725,11 @@ public interface BetterList<E> extends BetterCollection<E>, TransactableList<E>,
 		}
 
 		@Override
-		public BetterList<E> reverse() {
+		public BetterList<E> reversed() {
 			if (BetterCollections.simplifyDuplicateOperations())
 				return getWrapped();
 			else
-				return BetterList.super.reverse();
+				return BetterList.super.reversed();
 		}
 
 		@Override

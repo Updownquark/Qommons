@@ -577,7 +577,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	}
 
 	@Override
-	default BetterSortedList<E> reverse() {
+	default BetterSortedList<E> reversed() {
 		return new ReversedSortedList<>(this);
 	}
 
@@ -1579,7 +1579,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	}
 
 	/**
-	 * Implements {@link BetterSortedList#reverse()}
+	 * Implements {@link BetterSortedList#reversed()}
 	 * 
 	 * @param <E> The type of the list
 	 */
@@ -1644,7 +1644,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 
 		@Override
 		public boolean isConsistent(ElementId element) {
-			return getWrapped().isConsistent(element.reverse());
+			return getWrapped().isConsistent(element.reversed());
 		}
 
 		@Override
@@ -1667,11 +1667,11 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		}
 
 		@Override
-		public BetterSortedList<E> reverse() {
+		public BetterSortedList<E> reversed() {
 			if (BetterCollections.simplifyDuplicateOperations())
 				return getWrapped();
 			else
-				return BetterSortedList.super.reverse();
+				return BetterSortedList.super.reversed();
 		}
 	}
 }

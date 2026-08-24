@@ -17,8 +17,13 @@ import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterSet;
 import org.qommons.config.QonfigElement.QonfigValue;
 import org.qommons.config.QonfigValueType.QonfigTypeReference;
-import org.qommons.io.*;
-import org.qommons.io.MinML.XmlParseException;
+import org.qommons.io.ErrorReporting;
+import org.qommons.io.FilePosition;
+import org.qommons.io.LocatedFilePosition;
+import org.qommons.io.LocatedPositionedContent;
+import org.qommons.io.MinML;
+import org.qommons.io.PositionedContent;
+import org.qommons.io.TextParseException;
 import org.w3c.dom.Comment;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -71,13 +76,13 @@ public class DefaultQonfigParser implements QonfigParser {
 
 	@Override
 	public QonfigToolkit parseToolkit(URL location, InputStream content, Map<String, QonfigPromiseFulfillment> promiseFulfillment,
-		CustomValueType... customValueTypes) throws IOException, XmlParseException, QonfigParseException {
+		CustomValueType... customValueTypes) throws IOException, TextParseException, QonfigParseException {
 		return _parseToolkitXml(location, content, new LinkedList<>(), promiseFulfillment, customValueTypes);
 	}
 
 	@Override
 	public QonfigDocument parseDocument(boolean partial, String location, InputStream content)
-		throws IOException, XmlParseException, QonfigParseException {
+		throws IOException, TextParseException, QonfigParseException {
 		Element root = new MinML().parseDocument(location, content).getDocumentElement();
 		content.close();
 		QonfigParseSession session;
@@ -511,7 +516,7 @@ public class DefaultQonfigParser implements QonfigParser {
 
 	private QonfigToolkit _parseToolkitXml(URL location, InputStream xml, LinkedList<String> path,
 		Map<String, QonfigPromiseFulfillment> promiseFulfillment, CustomValueType... customValueTypes)
-		throws IOException, XmlParseException, QonfigParseException {
+		throws IOException, TextParseException, QonfigParseException {
 		Element root = new MinML().parseDocument(location.toString(), xml).getDocumentElement();
 		xml.close();
 		QonfigToolkit.ToolkitDef def;

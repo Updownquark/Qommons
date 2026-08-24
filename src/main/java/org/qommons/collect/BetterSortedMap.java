@@ -343,7 +343,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 	@Override
 	default BetterSortedSet<K> descendingKeySet() {
-		return keySet().reverse();
+		return keySet().reversed();
 	}
 
 	@Override
@@ -475,7 +475,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 
 		@Override
 		public BetterSortedSet<K> keySet() {
-			return getWrapped().keySet().reverse();
+			return getWrapped().keySet().reversed();
 		}
 
 		@Override

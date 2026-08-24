@@ -93,7 +93,7 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	}
 
 	@Override
-	public ReversedTreeSet<E> reverse() {
+	public ReversedTreeSet<E> reversed() {
 		return new ReversedTreeSet<>(this);
 	}
 
@@ -103,7 +103,7 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	}
 
 	/**
-	 * Implements {@link BetterTreeSet#reverse()}
+	 * Implements {@link BetterTreeSet#reversed()}
 	 * 
 	 * @param <E> The type of values in the set
 	 */
@@ -125,7 +125,7 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 		}
 
 		@Override
-		public BetterTreeSet<E> reverse() {
+		public BetterTreeSet<E> reversed() {
 			return getWrapped();
 		}
 

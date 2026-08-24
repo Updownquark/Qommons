@@ -39,7 +39,7 @@ public class QonfigApp {
 			aTKIn.close();
 		} catch (IOException e) {
 			throw new IllegalStateException("Could not read app toolkit definition '" + qonfigAppTKUrl.getPath() + "'", e);
-		} catch (XmlParseException e) {
+		} catch (TextParseException e) {
 			throw new IllegalArgumentException("Could not parse toolkit definition XML '" + qonfigAppTKUrl.getPath() + "'", e);
 		} catch (QonfigParseException e) {
 			throw new IllegalStateException("Could not parse app toolkit definition '" + qonfigAppTKUrl.getPath() + "'", e);

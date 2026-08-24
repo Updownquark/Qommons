@@ -52,7 +52,7 @@ public interface MultiEntryHandle<K, V> extends MultiMap.MultiEntry<K, V>, Colle
 
 		@Override
 		public ElementId getElementId() {
-			return theWrapped.getElementId().reverse();
+			return theWrapped.getElementId().reversed();
 		}
 
 		@Override
@@ -62,7 +62,7 @@ public interface MultiEntryHandle<K, V> extends MultiMap.MultiEntry<K, V>, Colle
 
 		@Override
 		public BetterCollection<V> getValues() {
-			return theWrapped.getValues().reverse();
+			return theWrapped.getValues().reversed();
 		}
 
 		@Override

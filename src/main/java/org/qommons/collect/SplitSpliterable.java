@@ -36,7 +36,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 	}
 
 	@Override
-	default SplitSpliterable<E> reverse() {
+	default SplitSpliterable<E> reversed() {
 		return new ReversedSplitSpliterable<>(this);
 	}
 
@@ -195,7 +195,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 	}
 
 	/**
-	 * Implements {@link SplitSpliterable#reverse()}
+	 * Implements {@link SplitSpliterable#reversed()}
 	 * 
 	 * @param <E> The type of values in the list
 	 */
@@ -216,11 +216,11 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		}
 
 		@Override
-		public SplitSpliterable<E> reverse() {
+		public SplitSpliterable<E> reversed() {
 			if (BetterCollections.simplifyDuplicateOperations())
 				return getWrapped();
 			else
-				return SplitSpliterable.super.reverse();
+				return SplitSpliterable.super.reversed();
 		}
 	}
 
@@ -268,7 +268,7 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 
 		@Override
 		default SortedSetSplitSpliterable<E> descendingSet() {
-			return (SortedSetSplitSpliterable<E>) BetterSortedSet.super.reverse();
+			return (SortedSetSplitSpliterable<E>) BetterSortedSet.super.reversed();
 		}
 
 		@Override
@@ -307,12 +307,12 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 		}
 
 		@Override
-		default SortedSetSplitSpliterable<E> reverse() {
+		default SortedSetSplitSpliterable<E> reversed() {
 			return new ReversedSSSS<>(this);
 		}
 
 		/**
-		 * Implements {@link SplitSpliterable.SortedSetSplitSpliterable#reverse()}
+		 * Implements {@link SplitSpliterable.SortedSetSplitSpliterable#reversed()}
 		 * 
 		 * @param <E> The type of values in the set
 		 */
@@ -333,11 +333,11 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 			}
 
 			@Override
-			public SortedSetSplitSpliterable<E> reverse() {
+			public SortedSetSplitSpliterable<E> reversed() {
 				if (BetterCollections.simplifyDuplicateOperations())
 					return getWrapped();
 				else
-					return SortedSetSplitSpliterable.super.reverse();
+					return SortedSetSplitSpliterable.super.reversed();
 			}
 		}
 
@@ -367,8 +367,8 @@ public interface SplitSpliterable<E> extends BetterList<E> {
 			}
 
 			@Override
-			public SortedSetSplitSpliterable<E> reverse() {
-				return SortedSetSplitSpliterable.super.reverse();
+			public SortedSetSplitSpliterable<E> reversed() {
+				return SortedSetSplitSpliterable.super.reversed();
 			}
 
 			@Override

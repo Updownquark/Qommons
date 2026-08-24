@@ -80,7 +80,7 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 	}
 
 	@Override
-	default BetterSet<E> reverse() {
+	default BetterSet<E> reversed() {
 		return new ReversedBetterSet<>(this);
 	}
 
@@ -165,7 +165,7 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 	}
 
 	/**
-	 * Implements {@link BetterSet#reverse()}
+	 * Implements {@link BetterSet#reversed()}
 	 * 
 	 * @param <E> The type of the set
 	 */
@@ -187,7 +187,7 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 
 		@Override
 		public boolean isConsistent(ElementId element) {
-			return getWrapped().isConsistent(element.reverse());
+			return getWrapped().isConsistent(element.reversed());
 		}
 
 		@Override
@@ -208,11 +208,11 @@ public interface BetterSet<E> extends ValueStoredCollection<E>, TransactableSet<
 		}
 
 		@Override
-		public BetterSet<E> reverse() {
+		public BetterSet<E> reversed() {
 			if (BetterCollections.simplifyDuplicateOperations())
 				return getWrapped();
 			else
-				return BetterSet.super.reverse();
+				return BetterSet.super.reversed();
 		}
 
 		@Override

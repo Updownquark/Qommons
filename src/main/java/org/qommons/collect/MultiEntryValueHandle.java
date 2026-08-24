@@ -47,7 +47,7 @@ public interface MultiEntryValueHandle<K, V> extends MapEntryHandle<K, V> {
 
 		@Override
 		public ElementId getKeyId() {
-			return getWrapped().getKeyId().reverse();
+			return getWrapped().getKeyId().reversed();
 		}
 
 		@Override

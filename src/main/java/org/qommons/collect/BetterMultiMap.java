@@ -2540,17 +2540,17 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 
 		@Override
 		public BetterSet<K> keySet() {
-			return theSource.keySet().reverse();
+			return theSource.keySet().reversed();
 		}
 
 		@Override
 		public BetterSet<? extends MultiEntryHandle<K, V>> entrySet() {
-			return theSource.entrySet().reverse();
+			return theSource.entrySet().reversed();
 		}
 
 		@Override
 		public BetterCollection<V> get(K key) {
-			return theSource.get(key).reverse();
+			return theSource.get(key).reversed();
 		}
 
 		@Override
@@ -2560,12 +2560,12 @@ public interface BetterMultiMap<K, V> extends TransactableMultiMap<K, V>, Causal
 
 		@Override
 		public MultiEntryHandle<K, V> getEntryById(ElementId keyId) {
-			return MultiEntryHandle.reverse(theSource.getEntryById(keyId.reverse()));
+			return MultiEntryHandle.reverse(theSource.getEntryById(keyId.reversed()));
 		}
 
 		@Override
 		public MultiEntryValueHandle<K, V> getEntryById(ElementId keyId, ElementId valueId) {
-			return MultiEntryValueHandle.reverse(theSource.getEntryById(keyId.reverse(), valueId.reverse()));
+			return MultiEntryValueHandle.reverse(theSource.getEntryById(keyId.reversed(), valueId.reversed()));
 		}
 
 		@Override

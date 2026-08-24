@@ -218,7 +218,7 @@ public class QommonsTestUtils {
 		List<Collection<Integer>> derived = new ArrayList<>();
 		if (coll instanceof BetterCollection) {
 			BetterCollection<Integer> rc = (BetterCollection<Integer>) coll;
-			BetterCollection<Integer> rrc = rc.reverse();
+			BetterCollection<Integer> rrc = rc.reversed();
 			derived.add(rrc);
 			Consumer<? super T> fCheck = check;
 			ArrayList<Integer> copy = new ArrayList<>();

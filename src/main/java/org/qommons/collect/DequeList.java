@@ -111,8 +111,28 @@ public interface DequeList<E> extends SequencedDeque<E>, RRList<E> {
 	}
 
 	@Override
+	default E getFirst() {
+		return SequencedDeque.super.getFirst();
+	}
+
+	@Override
+	default E getLast() {
+		return SequencedDeque.super.getLast();
+	}
+
+	@Override
 	default boolean add(E e) {
 		return SequencedDeque.super.add(e);
+	}
+
+	@Override
+	default void addFirst(E e) {
+		SequencedDeque.super.addFirst(e);
+	}
+
+	@Override
+	default void addLast(E e) {
+		SequencedDeque.super.addLast(e);
 	}
 
 	@Override
@@ -146,6 +166,16 @@ public interface DequeList<E> extends SequencedDeque<E>, RRList<E> {
 	}
 
 	@Override
+	default E removeFirst() {
+		return SequencedDeque.super.removeFirst();
+	}
+
+	@Override
+	default E removeLast() {
+		return SequencedDeque.super.removeLast();
+	}
+
+	@Override
 	default boolean removeAll(Collection<?> c) {
 		if (c.isEmpty())
 			return false;
@@ -167,6 +197,185 @@ public interface DequeList<E> extends SequencedDeque<E>, RRList<E> {
 
 	@Override
 	DequeList<E> subList(int fromIndex, int toIndex);
+
+	default DequeList<E> reversed() {
+		return new ReversedDequeList<>(this);
+	}
+
+	public class ReversedDequeList<E> implements DequeList<E> {
+		private final DequeList<E> theWrapped;
+
+		public ReversedDequeList(DequeList<E> wrapped) {
+			theWrapped = wrapped;
+		}
+
+		@Override
+		public boolean containsAny(Collection<?> c) {
+			return theWrapped.containsAny(c);
+		}
+
+		@Override
+		public boolean offer(E e) {
+			return theWrapped.offerFirst(e);
+		}
+
+		@Override
+		public boolean addAll(int index, Collection<? extends E> c) {
+			// Would be better to do reversed() on the collection, but I want this to compile in Java 8 still
+			return theWrapped.addAll(size() - index, c);
+		}
+
+		@Override
+		public E get(int index) {
+			return theWrapped.get(size() - index - 1);
+		}
+
+		@Override
+		public E set(int index, E element) {
+			return theWrapped.set(size() - index - 1, element);
+		}
+
+		@Override
+		public void add(int index, E element) {
+			theWrapped.add(size() - index, element);
+		}
+
+		@Override
+		public E remove(int index) {
+			return theWrapped.remove(size() - index - 1);
+		}
+
+		@Override
+		public int indexOf(Object o) {
+			return theWrapped.lastIndexOf(o);
+		}
+
+		@Override
+		public int lastIndexOf(Object o) {
+			return theWrapped.indexOf(o);
+		}
+
+		@Override
+		public boolean offerFirst(E e) {
+			return theWrapped.offerLast(e);
+		}
+
+		@Override
+		public E pollFirst() {
+			return theWrapped.pollLast();
+		}
+
+		@Override
+		public E pollLast() {
+			return theWrapped.pollFirst();
+		}
+
+		@Override
+		public E peekFirst() {
+			return theWrapped.peekLast();
+		}
+
+		@Override
+		public E peekLast() {
+			return theWrapped.peekFirst();
+		}
+
+		@Override
+		public boolean removeLastOccurrence(Object o) {
+			return theWrapped.removeFirstOccurrence(o);
+		}
+
+		@Override
+		public int size() {
+			return theWrapped.size();
+		}
+
+		@Override
+		public <T> T[] toArray(T[] a) {
+			int size = size();
+			if (a.length < size)
+				a = Arrays.copyOf(a, size);
+			int i = 0;
+			for (Object o : this)
+				a[i++] = (T) o;
+			return a;
+		}
+
+		@Override
+		public boolean remove(Object o) {
+			return theWrapped.removeLastOccurrence(o);
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			return theWrapped.containsAll(c);
+		}
+
+		@Override
+		public long getStamp() {
+			return theWrapped.getStamp();
+		}
+
+		@Override
+		public ListSequence<E> sequence(int start, int end, int position, boolean forward) {
+			int size = size();
+			return theWrapped.sequence(size - end, size - start, size - position, !forward);
+		}
+
+		@Override
+		public void clear() {
+			theWrapped.clear();
+		}
+
+		@Override
+		public DequeList<E> subList(int fromIndex, int toIndex) {
+			int size = size();
+			return new ReversedDequeList<>(theWrapped.subList(size - toIndex, size - fromIndex));
+		}
+
+		@Override
+		public DequeList<E> reversed() {
+			return theWrapped;
+		}
+
+		@Override
+		public int hashCode() {
+			int hashCode = 1;
+			for (Object e : this)
+				hashCode = 31 * hashCode + (e == null ? 0 : e.hashCode());
+			return hashCode;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (!(obj instanceof Collection))
+				return false;
+			Iterator<?> e1 = iterator();
+			Iterator<?> e2 = ((Collection<?>) obj).iterator();
+			while (e1.hasNext() && e2.hasNext()) {
+				Object o1 = e1.next();
+				Object o2 = e2.next();
+				if (!Objects.equals(o1, o2))
+					return false;
+			}
+			return !(e1.hasNext() || e2.hasNext());
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder ret = new StringBuilder("[");
+			boolean first = true;
+			for (Object value : this) {
+				if (!first) {
+					ret.append(", ");
+				} else
+					first = false;
+				ret.append(value);
+			}
+			ret.append(']');
+			return ret.toString();
+		}
+	}
 
 	/**
 	 * A view of a subset of a {@link DequeList}

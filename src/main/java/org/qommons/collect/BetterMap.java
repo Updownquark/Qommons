@@ -707,7 +707,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 
 		@Override
 		public BetterSet<K> keySet() {
-			return theWrapped.keySet().reverse();
+			return theWrapped.keySet().reversed();
 		}
 
 		@Override
@@ -729,12 +729,12 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 
 		@Override
 		public MapEntryHandle<K, V> getEntryById(ElementId entryId) {
-			return theWrapped.getEntryById(entryId.reverse()).reverse();
+			return theWrapped.getEntryById(entryId.reversed()).reverse();
 		}
 
 		@Override
 		public MutableMapEntryHandle<K, V> mutableEntry(ElementId entryId) {
-			return theWrapped.mutableEntry(entryId.reverse()).reverse();
+			return theWrapped.mutableEntry(entryId.reversed()).reverse();
 		}
 
 		@Override

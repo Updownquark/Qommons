@@ -21,7 +21,7 @@ public class MinMLTest {
 	 * @throws XmlParseException If the file cannot be parsed as XML at all
 	 */
 	@Test
-	public void testSimpleXmlParser() throws IOException, XmlParseException {
+	public void testSimpleXmlParser() throws IOException, TextParseException {
 		try (InputStream in = MinMLTest.class.getResourceAsStream("SimpleXmlTest.xml")) {
 			SequenceTester tester = new SequenceTester(//
 				new ExpectedXmlDeclaration()//

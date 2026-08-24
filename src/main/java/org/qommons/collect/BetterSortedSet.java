@@ -59,6 +59,26 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	}
 
 	@Override
+	default E getFirst() {
+		return BetterSortedList.super.getFirst();
+	}
+
+	@Override
+	default E getLast() {
+		return BetterSortedList.super.getLast();
+	}
+
+	@Override
+	default void addFirst(E e) {
+		BetterSortedList.super.addFirst(e);
+	}
+
+	@Override
+	default void addLast(E e) {
+		BetterSortedList.super.addLast(e);
+	}
+
+	@Override
 	default BetterSortedSet<E> with(E... values) {
 		BetterSet.super.with(values);
 		return this;
@@ -68,6 +88,16 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	default BetterSortedSet<E> withAll(Collection<? extends E> values) {
 		BetterSet.super.withAll(values);
 		return this;
+	}
+
+	@Override
+	default E removeFirst() {
+		return BetterSortedList.super.removeFirst();
+	}
+
+	@Override
+	default E removeLast() {
+		return BetterSortedList.super.removeLast();
 	}
 
 	@Override
@@ -182,18 +212,18 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	}
 
 	@Override
-	default BetterSortedSet<E> reverse() {
+	default BetterSortedSet<E> reversed() {
 		return new ReversedSortedSet<>(this);
 	}
 
 	@Override
 	default BetterSortedSet<E> descendingSet() {
-		return reverse();
+		return reversed();
 	}
 
 	@Override
 	default Iterator<E> descendingIterator() {
-		return reverse().iterator();
+		return reversed().iterator();
 	}
 
 	@Override
@@ -403,7 +433,7 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 	}
 
 	/**
-	 * Implements {@link BetterSortedSet#reverse()}
+	 * Implements {@link BetterSortedSet#reversed()}
 	 *
 	 * @param <E> The type of elements in the collection
 	 */
@@ -419,11 +449,11 @@ public interface BetterSortedSet<E> extends BetterSortedList<E>, BetterSet<E>, N
 		}
 
 		@Override
-		public BetterSortedSet<E> reverse() {
+		public BetterSortedSet<E> reversed() {
 			if (BetterCollections.simplifyDuplicateOperations())
 				return getWrapped();
 			else
-				return BetterSortedSet.super.reverse();
+				return BetterSortedSet.super.reversed();
 		}
 
 		@Override

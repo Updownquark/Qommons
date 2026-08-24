@@ -3,16 +3,32 @@ package org.qommons.config;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
 import org.qommons.Named;
 import org.qommons.Transaction;
 import org.qommons.ex.ExSupplier;
-import org.qommons.io.*;
+import org.qommons.io.FilePosition;
+import org.qommons.io.LocatedFilePosition;
+import org.qommons.io.MinML;
 import org.qommons.io.MinML.XmlParseException;
-import org.w3c.dom.*;
+import org.qommons.io.PositionedContent;
+import org.qommons.io.TextParseException;
+import org.qommons.io.XmlSerialWriter;
+import org.w3c.dom.Attr;
+import org.w3c.dom.CDATASection;
+import org.w3c.dom.Comment;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.Text;
 
 /**
  * Wraps an XML element and allows easier access to its structure. This class also checks the structure as it is used as well as afterward
@@ -25,7 +41,7 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @throws IOException If the XML could not be read
 	 * @throws XmlParseException IF the XML could not be parsed
 	 */
-	public static StrictXmlReader ofRoot(InputStream in) throws IOException, XmlParseException {
+	public static StrictXmlReader ofRoot(InputStream in) throws IOException, TextParseException {
 		return ofRoot(null, in);
 	}
 
@@ -35,7 +51,7 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @throws IOException If the XML could not be read
 	 * @throws XmlParseException IF the XML could not be parsed
 	 */
-	public static StrictXmlReader ofRoot(Reader reader) throws IOException, XmlParseException {
+	public static StrictXmlReader ofRoot(Reader reader) throws IOException, TextParseException {
 		return ofRoot(null, reader);
 	}
 
@@ -48,7 +64,7 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @throws IOException If the XML could not be read
 	 * @throws XmlParseException IF the XML could not be parsed
 	 */
-	public static StrictXmlReader ofRoot(String fileLocation, InputStream in) throws IOException, XmlParseException {
+	public static StrictXmlReader ofRoot(String fileLocation, InputStream in) throws IOException, TextParseException {
 		MinML parser = new MinML();
 		return new StrictXmlReader(parser.parseDocument(fileLocation, in).getDocumentElement());
 	}
@@ -62,7 +78,7 @@ public class StrictXmlReader implements Named, Transaction {
 	 * @throws IOException If the XML could not be read
 	 * @throws XmlParseException IF the XML could not be parsed
 	 */
-	public static StrictXmlReader ofRoot(String fileLocation, Reader reader) throws IOException, XmlParseException {
+	public static StrictXmlReader ofRoot(String fileLocation, Reader reader) throws IOException, TextParseException {
 		MinML parser = new MinML();
 		return new StrictXmlReader(parser.parseDocument(fileLocation, reader).getDocumentElement());
 	}
@@ -602,11 +618,11 @@ public class StrictXmlReader implements Named, Transaction {
 			else if (node instanceof Text)
 				writer.addContent(((Text) node).getData());
 			else if (node instanceof Comment)
-				writer.writeComment(((Comment) node).getTextContent());
+				writer.writeComment(node.getTextContent());
 			else if (node instanceof CDATASection) {
 				// TODO Not supported by the writer yet
 			} else if (node instanceof Element)
-				writer.child(((Element) node).getNodeName(), child -> new StrictXmlReader(this, (Element) node));
+				writer.child(node.getNodeName(), child -> new StrictXmlReader(this, (Element) node));
 		}
 	}
 

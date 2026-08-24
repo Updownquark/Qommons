@@ -637,17 +637,17 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 
 		@Override
 		public BetterSortedSet<K> keySet() {
-			return getSource().keySet().reverse();
+			return getSource().keySet().reversed();
 		}
 
 		@Override
 		public BetterCollection<V> get(K key) {
-			return getSource().get(key).reverse();
+			return getSource().get(key).reversed();
 		}
 
 		@Override
 		public BetterSortedSet<? extends MultiEntryHandle<K, V>> entrySet() {
-			return getSource().entrySet().reverse();
+			return getSource().entrySet().reversed();
 		}
 
 		@Override

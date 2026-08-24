@@ -230,7 +230,7 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 		TableEntry<R, C, V> getOrAdd(R value, ElementId after, ElementId before, boolean first, Runnable preAdd, Runnable postAdd);
 
 		@Override
-		default TableView<R, C, V> reverse() {
+		default TableView<R, C, V> reversed() {
 			return new ReversedTableView<>(this);
 		}
 	}
@@ -307,7 +307,7 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 	}
 
 	/**
-	 * Default implementation of {@link BetterSet#reverse()} for a {@link TableView}
+	 * Default implementation of {@link BetterSet#reversed()} for a {@link TableView}
 	 * 
 	 * @param <R> The type of rows in the table (if this is a {@link BetterTable#rows() row} view) or columns (for a
 	 *        {@link BetterTable#columns() column} view).
@@ -362,7 +362,7 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 		}
 
 		@Override
-		public TableView<R, C, V> reverse() {
+		public TableView<R, C, V> reversed() {
 			return getWrapped();
 		}
 	}
@@ -388,12 +388,12 @@ public interface BetterTable<R, C, V> extends Identifiable, CausalLock {
 
 		@Override
 		public ElementId getElementId() {
-			return getWrapped().getElementId().reverse();
+			return getWrapped().getElementId().reversed();
 		}
 
 		@Override
 		public TableView<C, R, V> keySet() {
-			return getWrapped().keySet().reverse();
+			return getWrapped().keySet().reversed();
 		}
 
 		@Override

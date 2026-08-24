@@ -437,6 +437,18 @@ public interface BetterFile extends Named {
 			throw new IllegalArgumentException("Empty path");
 		boolean initSlash=path.charAt(0)=='/' || path.charAt(0)=='\\';
 		String [] splitPath=(initSlash ? path.substring(1) : path).split("[/\\\\]");
+		if (!initSlash && splitPath[0].equals("~")) {
+			String userDir = System.getProperty("user.home");
+			if (userDir != null) {
+				String[] userDirSplit = userDir.split("[/\\\\]");
+				boolean udsTerminalSlash = userDirSplit[userDirSplit.length - 1].isEmpty();
+				int udsLength = udsTerminalSlash ? (userDirSplit.length - 1) : userDirSplit.length;
+				String[] newSplitPath = new String[splitPath.length + udsLength - 1];
+				System.arraycopy(userDirSplit, 0, newSplitPath, 0, udsLength);
+				System.arraycopy(splitPath, 1, newSplitPath, udsLength, splitPath.length - 1);
+				splitPath = newSplitPath;
+			}
+		}
 		BetterFile parent = null;
 		int pathIdx = 0;
 		if (initSlash) { // Initial slash--a linux-style absolute path

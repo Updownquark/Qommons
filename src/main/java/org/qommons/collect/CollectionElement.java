@@ -31,7 +31,7 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>>, 
 		return getElementId().compareTo(other.getElementId());
 	}
 
-	/** @return An element identical to this, but whose {@link #getElementId() ID} is {@link ElementId#reverse() reversed} */
+	/** @return An element identical to this, but whose {@link #getElementId() ID} is {@link ElementId#reversed() reversed} */
 	default CollectionElement<E> reverse() {
 		return new ReversedCollectionElement<>(this);
 	}
@@ -54,7 +54,7 @@ public interface CollectionElement<E> extends Comparable<CollectionElement<E>>, 
 
 		@Override
 		public ElementId getElementId() {
-			return theWrapped.getElementId().reverse();
+			return theWrapped.getElementId().reversed();
 		}
 
 		@Override

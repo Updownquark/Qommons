@@ -116,6 +116,10 @@ public interface Causable extends CausalLock.Cause {
 		boolean hasPrimaryAction() {
 			return theAction != null;
 		}
+
+		boolean hasAfterAction() {
+			return theAfterAction != null;
+		}
 	}
 
 	/** The effect of a {@link CausableKey} in a {@link Causable} */
@@ -215,7 +219,7 @@ public interface Causable extends CausalLock.Cause {
 
 		@Override
 		public void clear() {
-			if (theData != null)
+			if (theData != null && !theKey.hasAfterAction())
 				theData.clear();
 		}
 
@@ -225,6 +229,14 @@ public interface Causable extends CausalLock.Cause {
 				isExecuted = false;
 			}
 			return this;
+		}
+
+		@Override
+		public String toString() {
+			if (isExecuted)
+				return "(executed)" + super.toString();
+			else
+				return super.toString();
 		}
 	}
 
@@ -400,21 +412,22 @@ public interface Causable extends CausalLock.Cause {
 				int i = 0;
 				int effectCount = effects.size();
 				for (Effect effect : effects) {
-					if (effect.isExecuted())
-						continue; // Done via a previous iteration
-					anyNewExecuted = keepExecuting = true;
-					Transaction postAction = effect.execute(cause);
-					if (i >= executedCount) { // Otherwise, this is an old effect that was reset
-						if (postAction != null) {
-							if (postActions == null)
-								postActions = new ArrayList<>(effects.size() - executedCount + 2);
-							postActions.add(postAction);
+					if (!effect.isExecuted()) { // else done via a previous iteration
+						anyNewExecuted = keepExecuting = true;
+						Transaction postAction = effect.execute(cause);
+						if (i >= executedCount) { // Otherwise, this is an old effect that was reset
+							if (postAction != null) {
+								if (postActions == null)
+									postActions = new ArrayList<>(effects.size() - executedCount + 2);
+								postActions.add(postAction);
+							}
+							executedCount++;
 						}
-						executedCount++;
+						if (effects.size() != effectCount) { // New effect
+							break;
+						}
 					}
-					if (effects.size() != effectCount) { // New effect
-						break;
-					}
+					i++;
 				}
 			}
 			// All effects have been executed

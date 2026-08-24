@@ -1,12 +1,25 @@
 package org.qommons.io;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.Writer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -897,7 +910,7 @@ public class MinML {
 	/** A handler to be notified for each item of content in an XML document */
 	public interface ParseHandler {
 		/** @param component The encountered component */
-		default void handleXmlComponent(XmlComponent component) {
+		default void handleXmlComponent(XmlComponent component) throws TextParseException {
 			switch (component.getComponentType()) {
 			case Declaration:
 				handleDeclaration((XmlDeclaration) component);
@@ -942,7 +955,7 @@ public class MinML {
 		 * 
 		 * @param declaration The XML declaration in the document
 		 */
-		default void handleDeclaration(XmlDeclaration declaration) {
+		default void handleDeclaration(XmlDeclaration declaration) throws TextParseException {
 		}
 
 		/**
@@ -950,7 +963,7 @@ public class MinML {
 		 * 
 		 * @param pi The processing instruction
 		 */
-		default void handleProcessingInstruction(XmlProcessingInstruction pi) {
+		default void handleProcessingInstruction(XmlProcessingInstruction pi) throws TextParseException {
 		}
 
 		/**
@@ -958,7 +971,7 @@ public class MinML {
 		 * 
 		 * @param comment The comment
 		 */
-		default void handleComment(XmlComment comment) {
+		default void handleComment(XmlComment comment) throws TextParseException {
 		}
 
 		/**
@@ -966,7 +979,7 @@ public class MinML {
 		 * 
 		 * @param element The element
 		 */
-		default void handleElementStart(XmlElementTerminal element) {
+		default void handleElementStart(XmlElementTerminal element) throws TextParseException {
 		}
 
 		/**
@@ -975,7 +988,7 @@ public class MinML {
 		 * @param elementName The name of the element
 		 * @param openEnd The content closing the open tag
 		 */
-		default void handleElementOpen(String elementName, XmlElementOpen openEnd) {
+		default void handleElementOpen(String elementName, XmlElementOpen openEnd) throws TextParseException {
 		}
 
 		/**
@@ -983,7 +996,7 @@ public class MinML {
 		 * 
 		 * @param attribute The attribute
 		 */
-		default void handleAttribute(XmlAttribute attribute) {
+		default void handleAttribute(XmlAttribute attribute) throws TextParseException {
 		}
 
 		/**
@@ -1018,7 +1031,7 @@ public class MinML {
 		 * @param elementName The name of the element under which the content is occurring
 		 * @param elementValue The positioned content text
 		 */
-		default void handleElementContent(String elementName, XmlElementContent elementValue) {
+		default void handleElementContent(String elementName, XmlElementContent elementValue) throws TextParseException {
 		}
 
 		/**
@@ -1027,7 +1040,7 @@ public class MinML {
 		 * @param elementName The name of the element under which the CDATA structure occurred
 		 * @param cdata The CDATA structure
 		 */
-		default void handleCDataContent(String elementName, XmlCdata cdata) {
+		default void handleCDataContent(String elementName, XmlCdata cdata) throws TextParseException {
 		}
 
 		/**
@@ -1036,7 +1049,7 @@ public class MinML {
 		 * @param element The element being closed
 		 * @param selfClosing Whether the element was self-closing, as opposed to opened and closed with separate tags
 		 */
-		default void handleElementEnd(XmlElementTerminal element, boolean selfClosing) {
+		default void handleElementEnd(XmlElementTerminal element, boolean selfClosing) throws TextParseException {
 		}
 
 		/**
@@ -1045,7 +1058,7 @@ public class MinML {
 		 * 
 		 * @param whitespace The positioned white space content
 		 */
-		default void handleIgnorableWhitespace(XmlIgnorableWhitespace whitespace) {
+		default void handleIgnorableWhitespace(XmlIgnorableWhitespace whitespace) throws TextParseException {
 		}
 
 		/**
@@ -1054,7 +1067,7 @@ public class MinML {
 		 * @param ioError The error that occurred
 		 * @param position The position of the last character that was successfully read
 		 */
-		default void handleIOError(IOException ioError, FilePosition position) {
+		default void handleIOError(IOException ioError, FilePosition position) throws TextParseException {
 		}
 
 		/**
@@ -1062,7 +1075,7 @@ public class MinML {
 		 * 
 		 * @param parseError The parse error that occurred
 		 */
-		default void handleParseError(XmlParseException parseError) {
+		default void handleParseError(XmlParseException parseError) throws TextParseException {
 		}
 	}
 
@@ -1087,6 +1100,10 @@ public class MinML {
 		private final Document theDocument;
 		private final Deque<Element> theStack;
 
+		public DomCreatorHandler() {
+			this(DOM_BUILDERS.get().createDocument());
+		}
+
 		/** @param document The document object to populate */
 		public DomCreatorHandler(Document document) {
 			theDocument = document;
@@ -1096,6 +1113,14 @@ public class MinML {
 		/** @return This handler's document */
 		public Document getDocument() {
 			return theDocument;
+		}
+
+		public int getDepth() {
+			return theStack.size();
+		}
+
+		public Element getCurrentElement() {
+			return theStack.peekLast();
 		}
 
 		@Override
@@ -1131,11 +1156,15 @@ public class MinML {
 		public void handleElementStart(XmlElementTerminal element) {
 			Element node = theDocument.createElement(element.getName());
 			node.setUserData(NAME_POSITION_KEY, element.getNamePosition(), null);
-			if (theStack.isEmpty())
-				theDocument.appendChild(node);
-			else
-				theStack.getLast().appendChild(node);
+			handleNewElement(node);
 			theStack.add(node);
+		}
+
+		protected void handleNewElement(Element newElement) {
+			if (theStack.isEmpty())
+				theDocument.appendChild(newElement);
+			else
+				theStack.getLast().appendChild(newElement);
 		}
 
 		@Override
@@ -1162,7 +1191,7 @@ public class MinML {
 		}
 
 		@Override
-		public void handleElementEnd(XmlElementTerminal element, boolean selfClosing) {
+		public void handleElementEnd(XmlElementTerminal element, boolean selfClosing) throws TextParseException {
 			theStack.removeLast();
 		}
 	}
@@ -1396,7 +1425,7 @@ public class MinML {
 	 * @throws IOException If an error occurs reading the stream
 	 * @throws XmlParseException If an error occurs parsing the XML
 	 */
-	public <H extends ParseHandler> H parseXml(String fileLocation, InputStream in, H handler) throws IOException, XmlParseException {
+	public <H extends ParseHandler> H parseXml(String fileLocation, InputStream in, H handler) throws IOException, TextParseException {
 		return parseByComponent(fileLocation, in)//
 			.parse(handler);
 	}
@@ -1415,7 +1444,7 @@ public class MinML {
 	 * @throws IOException If an error occurs reading the stream
 	 * @throws XmlParseException If an error occurs parsing the XML
 	 */
-	public <H extends ParseHandler> H parseXml(String fileLocation, Reader in, H handler) throws IOException, XmlParseException {
+	public <H extends ParseHandler> H parseXml(String fileLocation, Reader in, H handler) throws IOException, TextParseException {
 		return parseByComponent(fileLocation, in)//
 			.parse(handler);
 	}
@@ -1434,7 +1463,7 @@ public class MinML {
 	 * @see #getNamePosition(Node)
 	 * @see #getPositionContent(Node)
 	 */
-	public Document parseDocument(String fileLocation, InputStream in) throws IOException, XmlParseException {
+	public Document parseDocument(String fileLocation, InputStream in) throws IOException, TextParseException {
 		return parseByComponent(fileLocation, in)//
 			.parse(new DomCreatorHandler(DOM_BUILDERS.get().createDocument()))//
 			.getDocument();
@@ -1454,7 +1483,7 @@ public class MinML {
 	 * @see #getNamePosition(Node)
 	 * @see #getPositionContent(Node)
 	 */
-	public Document parseDocument(String fileLocation, Reader in) throws IOException, XmlParseException {
+	public Document parseDocument(String fileLocation, Reader in) throws IOException, TextParseException {
 		return parseByComponent(fileLocation, in)//
 			.parse(new DomCreatorHandler(DOM_BUILDERS.get().createDocument()))//
 			.getDocument();
@@ -1536,7 +1565,7 @@ public class MinML {
 				buffer.append(first.getContent()).append(session.currentChar());
 				charSet[0] = ((XmlDeclaration) first).getEncoding();
 			}
-		} catch (XmlParseException e) {
+		} catch (TextParseException e) {
 			// Bad XML, but we don't throw exceptions here, we just assume UTF-8
 		}
 		if (charSet[0] == null)
@@ -1749,7 +1778,7 @@ public class MinML {
 		 * @throws IOException If the document data could not be read
 		 * @throws XmlParseException If the document could not be parsed
 		 */
-		public <H extends ParseHandler> H parse(H handler) throws IOException, XmlParseException {
+		public <H extends ParseHandler> H parse(H handler) throws IOException, TextParseException {
 			if (handler == null)
 				throw new NullPointerException("Handler cannot be null");
 			try {
@@ -1964,7 +1993,7 @@ public class MinML {
 		 * @throws IOException If the document data could not be read
 		 * @throws XmlParseException If the document could not be parsed
 		 */
-		public XmlComponent getNextComponent() throws IOException, XmlParseException{
+		public XmlComponent getNextComponent() throws IOException, TextParseException {
 			if (isAtBeginning)
 				nextChar();
 			// If we're parsing element content, whitespace is part of the element's content text, not ignorable whitespace
@@ -2030,7 +2059,7 @@ public class MinML {
 			throw new IllegalStateException("Unrecognized XML parse state '" + theState + "'");
 		}
 
-		private XmlDeclaration parseXmlDeclaration() throws IOException, XmlParseException {
+		private XmlDeclaration parseXmlDeclaration() throws IOException, TextParseException {
 			int decPos = getPosition();
 			if (decPos != 1)
 				throwException(false, "XML declaration must be at the first position of the first line of the XML document");
@@ -2127,7 +2156,7 @@ public class MinML {
 				standaloneValueOffset);
 		}
 
-		private XmlComponent parsePostLT() throws IOException, XmlParseException {
+		private XmlComponent parsePostLT() throws IOException, TextParseException {
 			switch (theChar) {
 			case '?': // Processing instruction
 				return parseProcessingInstruction();
@@ -2155,7 +2184,7 @@ public class MinML {
 			}
 		}
 
-		private XmlComment parseComment() throws IOException, XmlParseException {
+		private XmlComment parseComment() throws IOException, TextParseException {
 			if (!expect("-"))
 				throwException(false, "'<!-' here should be followed by another '-' for a comment");
 			nextChar();
@@ -2166,7 +2195,7 @@ public class MinML {
 			return new XmlComment(dumpSequence());
 		}
 
-		private XmlProcessingInstruction parseProcessingInstruction() throws IOException, XmlParseException {
+		private XmlProcessingInstruction parseProcessingInstruction() throws IOException, TextParseException {
 			nextChar();
 			mark();
 			String target = parseXmlName();
@@ -2186,7 +2215,7 @@ public class MinML {
 			}
 		}
 
-		private XmlElementTerminal parseElementStart() throws IOException, XmlParseException {
+		private XmlElementTerminal parseElementStart() throws IOException, TextParseException {
 			if (isContentComplete)
 				throwException(false, "Multiple root elements are not allowed");
 			theState = XmlParseState.ElementDeclaration;
@@ -2199,7 +2228,7 @@ public class MinML {
 			return new XmlElementTerminal(elementName, true, theElement.getDepth(), startPos, dumpSequence(), false);
 		}
 
-		private XmlCdata parseCData() throws IOException, XmlParseException {
+		private XmlCdata parseCData() throws IOException, TextParseException {
 			if (!expect("CDATA["))
 				throwException(true, "Bad CDATA initializer");
 			else if (theElement == null)
@@ -2209,7 +2238,7 @@ public class MinML {
 			return new XmlCdata(theElement.getName(), dumpSequence());
 		}
 
-		private XmlAttribute parseAttribute() throws IOException, XmlParseException {
+		private XmlAttribute parseAttribute() throws IOException, TextParseException {
 			mark();
 			String attributeName = parseXmlName();
 			if (!theAttributes.add(attributeName))
@@ -2220,7 +2249,7 @@ public class MinML {
 			return new XmlAttribute(attributeName, attrValuePos, dumpSequence());
 		}
 
-		private XmlElementTerminal parseElementClose() throws IOException, XmlParseException {
+		private XmlElementTerminal parseElementClose() throws IOException, TextParseException {
 			skipWS(null); // White space is part of the closing tag
 			mark();
 			int closePos = getPosition() - getSequenceStartPosition();
@@ -2339,7 +2368,7 @@ public class MinML {
 			return ch;
 		}
 
-		private PositionedContent dumpSequence() throws IOException, XmlParseException {
+		private PositionedContent dumpSequence() throws IOException, TextParseException {
 			if (theSequenceBuffer.length() > 0)
 				newLine();
 			LineContent[] dumped = lines.toArray(new LineContent[lines.size()]);
@@ -2354,7 +2383,7 @@ public class MinML {
 			return new PositionedContentImpl(content, seqPos, dumped);
 		}
 
-		private char skipWS(ParseHandler handler) throws IOException, XmlParseException {
+		private char skipWS(ParseHandler handler) throws IOException, TextParseException {
 			while (Character.isWhitespace(nextChar())) { //
 			}
 			if (theSequenceBuffer.length() > 0 && handler != null)
@@ -2427,7 +2456,7 @@ public class MinML {
 		}
 
 		/** Parses an XML element or attribute name from the stream, including the current character */
-		private String parseXmlName() throws IOException, XmlParseException {
+		private String parseXmlName() throws IOException, TextParseException {
 			// When we get here, the current character is the first character of the element's name
 			if (theChar != '_' && !Character.isLetter(theChar))
 				throwException(false, "Names must start with a letter or underscore, not '" + theChar + "'");
@@ -2441,7 +2470,7 @@ public class MinML {
 		}
 
 		/** Moves past the '="' sequence between an attribute's name and its value */
-		private void startAttribute(String attributeName) throws IOException, XmlParseException {
+		private void startAttribute(String attributeName) throws IOException, TextParseException {
 			// White space here is part of the attribute--don't report it as ignorable white space
 			if (Character.isWhitespace(theChar))
 				skipWS(null);
@@ -2905,7 +2934,7 @@ public class MinML {
 	 * @throws IOException If an error occurs reading the file
 	 * @throws XmlParseException If an error occurs parsing the file as XML
 	 */
-	public static void main(String... args) throws IOException, XmlParseException {
+	public static void main(String... args) throws IOException, TextParseException {
 		try (InputStream in = new BufferedInputStream(new FileInputStream(args[0]))) {
 			new MinML().setTabLength(3).parseXml(null, in, new ParseHandler() {
 				int indent = 0;

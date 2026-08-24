@@ -30,11 +30,11 @@ public interface ElementId extends Comparable<ElementId> {
 	boolean isPresent();
 
 	/** @return An element ID that behaves like this one, but orders in reverse */
-	default ElementId reverse() {
+	default ElementId reversed() {
 		return new ReversedElementId(this);
 	}
 
-	/** Implements {@link ElementId#reverse()} */
+	/** Implements {@link ElementId#reversed()} */
 	class ReversedElementId implements ElementId {
 		private final ElementId theWrapped;
 
@@ -53,7 +53,7 @@ public interface ElementId extends Comparable<ElementId> {
 		}
 
 		@Override
-		public ElementId reverse() {
+		public ElementId reversed() {
 			return theWrapped;
 		}
 
@@ -75,9 +75,9 @@ public interface ElementId extends Comparable<ElementId> {
 
 	/**
 	 * @param id The element ID to reverse
-	 * @return The {@link #reverse() reversed} element ID, or null if the given ID was null
+	 * @return The {@link #reversed() reversed} element ID, or null if the given ID was null
 	 */
 	static ElementId reverse(ElementId id) {
-		return id == null ? null : id.reverse();
+		return id == null ? null : id.reversed();
 	}
 }
