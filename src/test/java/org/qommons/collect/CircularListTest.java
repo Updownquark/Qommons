@@ -325,4 +325,25 @@ public class CircularListTest {
 		TestHelper.createTester(MaxCapTester.class).withDebug(false).withFailurePersistence(false).withRandomCases(1).execute()
 			.throwErrorIfFailed();
 	}
+
+	@Test
+	public void maxCapTest2() {
+		CircularArrayList<Integer> list = CircularArrayList.build()//
+			.withMaxCapacity(100)//
+			.build();
+		int[] j = new int[1];
+		for (int i = 0; i < 10_000; i++) {
+			list.add(i);
+			int expectedSize = Math.min(i + 1, 100);
+			Assert.assertEquals(expectedSize, list.size());
+			j[0] = 0;
+			int expectedStart = Math.max(0, i - 99);
+			list.forEach(value -> {
+				Assert.assertNotNull(value);
+				Assert.assertEquals(expectedStart + j[0], value.intValue());
+				j[0]++;
+			});
+			Assert.assertEquals(expectedSize, j[0]);
+		}
+	}
 }

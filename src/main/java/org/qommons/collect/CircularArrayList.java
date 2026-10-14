@@ -288,6 +288,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 	public CircularArrayList<E> setMaxCapacity(int maxCap) {
 		if (isFeatureLocked)
 			throw new IllegalStateException("This list's feature set is locked--its feature set cannot be changed directly");
+
 		int cap = capConstraintsAdjusted(theArray.length, theMinCapacity, maxCap);
 		theMaxCapacity = maxCap;
 		if (cap < theSize)
@@ -568,26 +569,29 @@ public class CircularArrayList<E> implements DequeList<E> {
 				theAdvanced = theSize;
 				theSize = theMaxCapacity;
 				Iterator<? extends E> iter = c.iterator();
-				for (int i = cSize; i > theMaxCapacity; i++)
+				for (int i = cSize; i > theMaxCapacity; i--)
 					iter.next(); // Bleed off items that would be dropped due to capacity
 				for (int i = 0; i < theMaxCapacity; i++)
 					theArray[i] = iter.next();
 			} else {
 				theAdvanced = cSize + theSize - theMaxCapacity;
-				int start = translateToInternalIndex(theSize % theArray.length);
+				int start = translateToInternalInsertionIndex(theSize);
 				theOffset += theAdvanced;
 				if (theOffset >= theArray.length)
 					theOffset -= theArray.length;
 				theSize = theMaxCapacity;
-				for (E e : c)
+				for (E e : c) {
 					theArray[start++] = e;
+					if (start == theArray.length)
+						start = 0;
+				}
 			}
 		} else {
 			theAdvanced = 0;
 			ensureCapacity(theSize + cSize);
 			int preSize = theSize;
 			theSize += cSize;
-			int idx = translateToInternalIndex(preSize);
+			int idx = translateToInternalInsertionIndex(preSize);
 			for (E e : c) {
 				theArray[idx] = e;
 				idx++;
@@ -616,7 +620,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 			return false;
 		int cSize = c.size();
 		int spaces = makeRoom(index, cSize);
-		int ti = translateToInternalIndex(index);
+		int ti = translateToInternalInsertionIndex(index);
 		Iterator<? extends E> iter = c.iterator();
 		int i;
 		for (i = 0; i < cSize - spaces; i++)
@@ -667,12 +671,12 @@ public class CircularArrayList<E> implements DequeList<E> {
 			theAdvanced = count;
 		} else if (theSize == 0) {
 			if (count > theArray.length)
-				theArray = new Object[growCapacity(theArray.length, count, theGrowthFactor)];
+				theArray = new Object[growCapacity(theArray.length, count, theMaxCapacity, theGrowthFactor)];
 			System.arraycopy(values, start, theArray, 0, count);
 			theOffset = 0;
 			theSize = count;
 			theAdvanced = count;
-		} else if (count + theSize - theMaxCapacity < 0) { // Some existing content will be discarded
+		} else if (count + theSize > theMaxCapacity) { // Some existing content will be discarded
 			Object[] newArray;
 			if (theArray.length < theMaxCapacity)
 				newArray = new Object[theMaxCapacity];
@@ -693,7 +697,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 			theSize = theMaxCapacity;
 			theAdvanced = theMaxCapacity;
 		} else if (theSize + count - theArray.length < 0) {// Need a new array
-			Object[] newArray = new Object[growCapacity(theArray.length, count, theGrowthFactor)];
+			Object[] newArray = new Object[growCapacity(theArray.length, count, theMaxCapacity, theGrowthFactor)];
 			int myEnd = theOffset + theSize;
 			if (myEnd < theArray.length)
 				System.arraycopy(theArray, theOffset, newArray, 0, theSize);
@@ -777,19 +781,19 @@ public class CircularArrayList<E> implements DequeList<E> {
 			throw new IndexOutOfBoundsException("" + fromIndex);
 		if (toIndex > theSize)
 			throw new IndexOutOfBoundsException(toIndex + " of " + theSize);
-		if (fromIndex < theSize - toIndex) {
+		if (fromIndex < theSize - toIndex) { // Cheaper to move the front end forward
 			moveContents(theOffset, fromIndex, count);
 			clearEntries(theOffset, count);
 			theOffset = (theOffset + count) % theArray.length;
-		} else {
-			moveContents(theOffset + toIndex, theSize - toIndex, -count);
-			clearEntries(translateToInternalIndex(theSize - count), count);
+		} else { // Cheaper to move the back end backward
+			int sourceStart = translateToInternalInsertionIndex(toIndex);
+			moveContents(sourceStart, theSize - toIndex, -count);
+			int clearStart = translateToInternalInsertionIndex(theSize - count);
+			clearEntries(clearStart, count);
 		}
 		theSize -= count;
-		if (count > 0) {
-			trimIfNeeded();
-			theStamp++;
-		}
+		trimIfNeeded();
+		theStamp++;
 	}
 
 	@Override
@@ -800,7 +804,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 		int cap = theArray.length;
 		int inspect = theOffset;
 		int copyTo = inspect;
-		int dest = (theOffset + theSize + cap) % cap;
+		int dest = (theOffset + theSize) % cap;
 		do {
 			E value = (E) theArray[inspect];
 			if (filter.test(value)) {
@@ -876,8 +880,49 @@ public class CircularArrayList<E> implements DequeList<E> {
 	}
 
 	@Override
-	public SubList subList(int fromIndex, int toIndex) {
-		return new SubList(null, fromIndex, toIndex);
+	public DequeList<E> subList(int fromIndex, int toIndex) {
+		class SubCAL extends AbstractSubDequeList<E> {
+			SubCAL(SubCAL subView, int from, int to) {
+				super(CircularArrayList.this, subView, from, to);
+			}
+
+			@Override
+			public DequeList<E> subList(int fromIndex, int toIndex) {
+				if (fromIndex < 0 || fromIndex > toIndex || toIndex >= size())
+					throw new ArrayIndexOutOfBoundsException(fromIndex + " to " + toIndex + " of " + size());
+				return new SubCAL(this, getStart() + fromIndex, getStart() + toIndex);
+			}
+
+			@Override
+			public boolean offer(E e) {
+				CircularArrayList.this.add(getEnd(), e);
+				if (getStart() > 0)
+					setStart(getStart() - 1);
+				changed(0);
+				return true;
+			}
+
+			@Override
+			public boolean offerFirst(E e) {
+				CircularArrayList.this.add(getStart(), e);
+				if (getEnd() < CircularArrayList.this.size())
+					changed(1);
+				else
+					changed(0);
+				return true;
+			}
+
+			@Override
+			public <T> T[] toArray(T[] array) {
+				int size = size();
+				if (array.length < size)
+					array = Arrays.copyOf(array, size);
+				internalArrayCopy(theArray, translateToInternalInsertionIndex(getStart()), size, array);
+				return array;
+			}
+		}
+		;
+		return new SubCAL(null, fromIndex, toIndex);
 	}
 
 	@Override
@@ -960,9 +1005,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 			capacity = theMaxCapacity;
 		if (capacity - theArray.length > 0) {
 			int oldCapacity = theArray.length;
-			if (capacity - MAX_ARRAY_SIZE > 0)
-				throw new OutOfMemoryError("Cannot allocate an array of size " + capacity);
-			int newCapacity = growCapacity(oldCapacity, capacity, theGrowthFactor);
+			int newCapacity = growCapacity(oldCapacity, capacity, theMaxCapacity, theGrowthFactor);
 			Object[] newArray = new Object[newCapacity];
 			if (theSize > 0)
 				internalArrayCopy(newArray);
@@ -973,10 +1016,10 @@ public class CircularArrayList<E> implements DequeList<E> {
 			return false;
 	}
 
-	private static int growCapacity(int oldCapacity, int minCapacity, double growthFactor) {
+	private static int growCapacity(int oldCapacity, int minCapacity, int maxCapacity, double growthFactor) {
 		int growCapacity = oldCapacity == 0 ? 10 : oldCapacity + (int) Math.round(growthFactor * oldCapacity);
-		if (growCapacity - MAX_ARRAY_SIZE > 0)
-			growCapacity = MAX_ARRAY_SIZE;
+		if (growCapacity - maxCapacity > 0)
+			growCapacity = maxCapacity;
 		int newCapacity = growCapacity;
 		if (newCapacity - minCapacity < 0)
 			newCapacity = minCapacity;
@@ -1017,6 +1060,19 @@ public class CircularArrayList<E> implements DequeList<E> {
 
 	private static final int translateToInternalIndex(Object[] array, int offset, int size, int index) {
 		if (index >= size)
+			throw new ArrayIndexOutOfBoundsException(index + " of " + size);
+		int t = index + offset;
+		if (t >= array.length)
+			t -= array.length;
+		return t;
+	}
+
+	private final int translateToInternalInsertionIndex(int index) {
+		return translateToInternalInsertionIndex(theArray, theOffset, theSize, index);
+	}
+
+	private static final int translateToInternalInsertionIndex(Object[] array, int offset, int size, int index) {
+		if (index > size)
 			throw new ArrayIndexOutOfBoundsException(index + " of " + size);
 		int t = index + offset;
 		if (t >= array.length)
@@ -1143,7 +1199,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 
 	private final void internalAdd(int index, E element) {
 		makeRoom(index, 1);
-		theArray[translateToInternalIndex(index)] = element;
+		theArray[translateToInternalInsertionIndex(index)] = element;
 		theOffset += theAdvanced;
 		if (theOffset >= theArray.length)
 			theOffset -= theArray.length;
@@ -1171,116 +1227,5 @@ public class CircularArrayList<E> implements DequeList<E> {
 		trimIfNeeded();
 		theStamp++;
 		return removed;
-	}
-
-	/**
-	 * The type of list returned from {@link CircularArrayList#subList(int, int)}. This list's {@link #subList(int, int)} also returns a
-	 * list of this type.
-	 */
-	public class SubList extends AbstractSubDequeList<E> {
-		SubList(SubList parent, int start, int end) {
-			super(CircularArrayList.this, parent, start, end);
-		}
-
-		@Override
-		protected void changed(int added) {
-			super.changed(added);
-			if (added > 0 && theAdvanced > 0)
-				setStart(Math.max(0, getStart() - theAdvanced));
-		}
-
-		@Override
-		public boolean offerFirst(E e) {
-			if (theSize == theMaxCapacity)
-				return false;
-			add(0, e);
-			return true;
-		}
-
-		@Override
-		public boolean offer(E e) {
-			if (theSize == theMaxCapacity)
-				return false;
-			add(size(), e);
-			return true;
-		}
-
-		@Override
-		public boolean add(E e) {
-			add(size(), e);
-			return true;
-		}
-
-		@Override
-		public void add(int index, E element) {
-			check(-1);
-			if (index < 0 || index > size())
-				throw new IndexOutOfBoundsException(index + " of " + size());
-			getRoot().add(getStart() + index, element);
-			changed(1);
-		}
-
-		@Override
-		public <T> T[] toArray(final T[] a) {
-			Object[] array = theArray;
-			int offset = theOffset;
-			int size = theSize;
-			int start = getStart();
-			int end = getEnd();
-			T[] arr = a;
-			check(-1);
-			if (arr.length < end - start)
-				arr = (T[]) Array.newInstance(a.getClass().getComponentType(), end - start);
-			internalArrayCopy(array, translateToInternalIndex(array, offset, size, start), end - start, arr);
-			return arr;
-		}
-
-		@Override
-		public boolean removeIf(Predicate<? super E> filter) {
-			if (theSize == 0)
-				return false;
-			int removed = 0;
-			Object[] array = theArray;
-			int cap = array.length;
-			int inspect = translateToInternalIndex(getStart());
-			int copyTo = inspect;
-			int dest = translateToInternalIndex(getEnd());
-			int size = theSize;
-			long stamp = check(-1);
-			do {
-				check(stamp);
-				E value = (E) array[inspect];
-				if (filter.test(value)) {
-					removed++;
-				} else {
-					if (removed > 0)
-						array[copyTo] = value;
-					copyTo++;
-					if (copyTo == cap)
-						copyTo = 0;
-				}
-				inspect++;
-				if (inspect == cap)
-					inspect = 0;
-			} while (inspect != dest);
-			check(stamp);
-			moveContents(dest, size - getEnd(), -removed);
-			copyTo += size - getEnd();
-			if (copyTo > cap)
-				copyTo -= cap;
-			clearEntries(copyTo, removed);
-			theSize -= removed;
-			changed(-removed);
-			trimIfNeeded();
-			return removed > 0;
-		}
-
-		@Override
-		public SubList subList(int fromIndex, int toIndex) {
-			check(-1);
-			if (fromIndex < 0 || toIndex > size() || fromIndex > toIndex)
-				throw new IndexOutOfBoundsException(fromIndex + " to " + toIndex + " of " + size());
-			return new SubList(this, getStart() + fromIndex, getStart() + toIndex);
-		}
 	}
 }
