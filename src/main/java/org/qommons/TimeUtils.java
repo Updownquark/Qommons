@@ -196,6 +196,13 @@ public class TimeUtils {
 		Instant evaluate(Supplier<Instant> reference);
 
 		/**
+		 * @param reference The reference time that the parsed time may be relative to
+		 * @param relativeEval Whether this time should be interpreted before, after, or closest to now
+		 * @return The instant represented by this time relative to the given reference time
+		 */
+		Instant evaluate(Supplier<Instant> reference, RelativeInstantEvaluation relativeEval);
+
+		/**
 		 * @param time The time to compare this to
 		 * @return Whether this time may represent the given time relative to any reference
 		 */
@@ -209,6 +216,20 @@ public class TimeUtils {
 		 * @return Whether the result of {@link #compareTo(ParsedInstant)} will have meaning for the given time
 		 */
 		boolean isComparable(ParsedInstant other);
+
+		/**
+		 * @param now Supplies the current instant relative to which to evaluate this time
+		 * @param relativeEval Whether this time should be interpreted before, after, or closest to now
+		 * @return The minimum instant (inclusive), in the same range as the current time, which may match this instant
+		 */
+		Instant getMin(Supplier<Instant> now, RelativeInstantEvaluation relativeEval);
+
+		/**
+		 * @param now Supplies the current instant relative to which to evaluate this time
+		 * @param relativeEval Whether this time should be interpreted before, after, or closest to now
+		 * @return The maximum instant (exclusive), in the same range as the current time, which may match this instant
+		 */
+		Instant getMax(Supplier<Instant> now, RelativeInstantEvaluation relativeEval);
 	}
 
 	/** A component of a {@link ParsedDuration} */
@@ -1367,6 +1388,21 @@ public class TimeUtils {
 		}
 
 		@Override
+		public Instant evaluate(Supplier<Instant> reference, RelativeInstantEvaluation relativeEval) {
+			return time;
+		}
+
+		@Override
+		public Instant getMin(Supplier<Instant> now, RelativeInstantEvaluation relativeEval) {
+			return time;
+		}
+
+		@Override
+		public Instant getMax(Supplier<Instant> now, RelativeInstantEvaluation relativeEval) {
+			return maxTime;
+		}
+
+		@Override
 		public boolean mayMatch(Instant t) {
 			return t.compareTo(time) >= 0 && t.compareTo(maxTime) < 0;
 		}
@@ -1586,6 +1622,11 @@ public class TimeUtils {
 
 		@Override
 		public Instant evaluate(Supplier<Instant> reference) {
+			return evaluate(reference, theEvaluationType);
+		}
+
+		@Override
+		public Instant evaluate(Supplier<Instant> reference, RelativeInstantEvaluation relativeEval) {
 			Calendar cal = CALENDAR.get().get(0);
 			Instant ref = reference.get();
 			cal.setTimeInMillis(ref.getEpochSecond() * 1000);
@@ -1680,7 +1721,7 @@ public class TimeUtils {
 				}
 			}
 			boolean evaluationMatches = true;
-			switch (theEvaluationType) {
+			switch (relativeEval) {
 			case Past:
 				evaluationMatches = cal.getTimeInMillis() <= ref.toEpochMilli();
 				break;
@@ -1694,7 +1735,7 @@ public class TimeUtils {
 			if (!evaluationMatches) { // Fix to match the evaluation type
 				if (elements.containsKey(DateElementType.Year)) {
 					// Again, if the year was absolute, it wouldn't be a relative time; so this must have a 2-digit year
-					switch (theEvaluationType) {
+					switch (relativeEval) {
 					case Past:
 						cal.add(Calendar.YEAR, -100);
 						break;
@@ -1705,7 +1746,7 @@ public class TimeUtils {
 						break; // We have logic in the loop above to make this so
 					}
 				} else if (elements.containsKey(DateElementType.Month)) {
-					switch (theEvaluationType) {
+					switch (relativeEval) {
 					case Past:
 						cal.add(Calendar.YEAR, -1);
 						break;
@@ -1719,7 +1760,7 @@ public class TimeUtils {
 						break;
 					}
 				} else if (elements.containsKey(DateElementType.Day)) {
-					switch (theEvaluationType) {
+					switch (relativeEval) {
 					case Past:
 						cal.add(Calendar.MONTH, -1);
 						break;
@@ -1735,7 +1776,7 @@ public class TimeUtils {
 						break;
 					}
 				} else if (elements.containsKey(DateElementType.Weekday)) {
-					switch (theEvaluationType) {
+					switch (relativeEval) {
 					case Past:
 						cal.add(Calendar.DAY_OF_MONTH, -7);
 						break;
@@ -1755,7 +1796,7 @@ public class TimeUtils {
 					} else {
 						threshHours = 12;
 					}
-					switch (theEvaluationType) {
+					switch (relativeEval) {
 					case Past:
 						cal.add(Calendar.HOUR_OF_DAY, -threshHours);
 						break;
@@ -1771,6 +1812,52 @@ public class TimeUtils {
 				}
 			}
 			return Instant.ofEpochSecond(cal.getTimeInMillis() / 1000, nanos);
+		}
+
+		@Override
+		public Instant getMin(Supplier<Instant> now, RelativeInstantEvaluation relativeEval) {
+			return evaluate(now);
+		}
+
+		@Override
+		public Instant getMax(Supplier<Instant> now, RelativeInstantEvaluation relativeEval) {
+			Instant min = getMin(now, relativeEval);
+			int field = -1;
+			for (ParsedElement<DateElementType, Integer> last : sequence.descendingSet()) {
+				switch (last.getField()) {
+				case Year:
+					field = Calendar.YEAR;
+					break;
+				case Month:
+					field = Calendar.MONTH;
+					break;
+				case Day:
+				case Weekday:
+					field = Calendar.DAY_OF_MONTH;
+					break;
+				case Hour:
+					field = Calendar.HOUR_OF_DAY;
+					break;
+				case Minute:
+					field = Calendar.MINUTE;
+					break;
+				case Second:
+					field = Calendar.SECOND;
+					break;
+				case SubSecond:
+					return min.plus(Duration.ofNanos(nanoResolution));
+				case AmPm:
+				case TimeZone:
+					continue;
+				}
+				if (field != -1)
+					break;
+			}
+			Calendar cal = CALENDAR.get().get();
+			cal.setTimeZone(getTimeZone());
+			cal.setTime(Date.from(min));
+			cal.add(field, 1);
+			return cal.toInstant();
 		}
 
 		@Override

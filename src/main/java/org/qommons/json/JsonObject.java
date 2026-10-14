@@ -87,9 +87,23 @@ public class JsonObject {
 		} else if (value instanceof String) {//
 		} else if (value instanceof JsonObject) {//
 		} else if (value instanceof List) {//
+		} else if (value instanceof Map) {
+			value = new JsonObject().withAll((Map<String, ?>) value);
 		} else
 			throw new IllegalArgumentException("Unrecognized JSON value type: " + value.getClass().getName());
 		theValues.put(key, value);
+		return this;
+	}
+
+	/**
+	 * @param values Key/value pairs to add to this JSON object
+	 * @return This JSON object
+	 */
+	public JsonObject withAll(Map<String, ?> values) {
+		if (values == null)
+			return this;
+		for (Map.Entry<String, ?> entry : values.entrySet())
+			with(entry.getKey(), entry.getValue());
 		return this;
 	}
 
@@ -99,6 +113,16 @@ public class JsonObject {
 	 */
 	public JsonObject remove(String key) {
 		theValues.remove(key);
+		return this;
+	}
+
+	/**
+	 * Removes all entries from this JSON object
+	 * 
+	 * @return This JSON object
+	 */
+	public JsonObject clear() {
+		theValues.clear();
 		return this;
 	}
 
@@ -152,11 +176,31 @@ public class JsonObject {
 			str.append('"').append(entry.getKey()).append("\":");
 			if (entry.getValue() instanceof String)
 				str.append('"').append(entry.getValue()).append('"');
+			else if (entry.getValue() instanceof List)
+				serializeList(str, (List<?>) entry.getValue());
 			else
 				str.append(entry.getValue());
 		}
 		str.append('}');
 		return str.toString();
+	}
+
+	static void serializeList(StringBuilder str, List<?> list) {
+		str.append('[');
+		boolean first = true;
+		for (Object value : list) {
+			if (first)
+				first = false;
+			else
+				str.append(',');
+			if (value instanceof String)
+				str.append('"').append(value).append('"');
+			else if (value instanceof List)
+				serializeList(str, (List<?>) value);
+			else
+				str.append(value);
+		}
+		str.append(']');
 	}
 
 	static class EntrySet extends AbstractCollection<Map.Entry<String, Object>> {
