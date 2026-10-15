@@ -31,14 +31,14 @@ public interface QonfigPromiseFulfillment {
 
 	/** Represents the optional element type and set of add-on types that a promised type extends/inherits */
 	public static class PromisedType {
-		/** The &lt;element-def> that the promised type promises to extend, or null if no such promise is made */
+		/** The &lt;element-def&gt; that the promised type promises to extend, or null if no such promise is made */
 		public final QonfigElementDef type;
-		/** The &lt;add-on>s that the promised type promises to inherit */
+		/** The &lt;add-on&gt;s that the promised type promises to inherit */
 		public final MultiInheritanceSet<QonfigAddOn> inheritance;
 
 		/**
-		 * @param type The &lt;element-def> that the promised type promises to extend, or null if no such promise is made
-		 * @param inheritance The &lt;add-on>s that the promised type promises to inherit
+		 * @param type The &lt;element-def&gt; that the promised type promises to extend, or null if no such promise is made
+		 * @param inheritance The &lt;add-on&gt;s that the promised type promises to inherit
 		 */
 		public PromisedType(QonfigElementDef type, MultiInheritanceSet<QonfigAddOn> inheritance) {
 			this.type = type;

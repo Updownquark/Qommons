@@ -1,8 +1,19 @@
 package org.qommons;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.Reader;
+import java.io.Writer;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
@@ -25,7 +36,7 @@ public class StringUtils {
 	 *        equivalent with number tolerance and case-ignorance (if <code>ignoreCase==true</code>). If true, this method will only return
 	 *        zero if <code>s1.equals(s2)</code>.
 	 * @return A comparator that returns the result of {@link #compareNumberTolerant(CharSequence, CharSequence, boolean, boolean)
-	 *         compareNumberTolerant}<code>(s1, s2, <code>ignoreCase</code>, <code>onlyZeroIfEqual</code>)</code>
+	 *         compareNumberTolerant}<code>(s1, s2, ignoreCase, onlyZeroIfEqual)</code>
 	 */
 	public static Comparator<CharSequence> distinctNumberTolerant(boolean ignoreCase, boolean onlyZeroIfEqual) {
 		int index = (ignoreCase ? 2 : 0) | (onlyZeroIfEqual ? 1 : 0);

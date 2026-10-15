@@ -1,11 +1,22 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.NavigableSet;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.qommons.*;
+import org.qommons.ArrayUtils;
+import org.qommons.Identifiable;
+import org.qommons.QommonsUtils;
+import org.qommons.ReversedComparator;
+import org.qommons.Ternian;
+import org.qommons.ThreadConstraint;
+import org.qommons.Transaction;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
 
 /**
@@ -420,7 +431,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	 *        <li>The last value in this list is less than the search</li>
 	 *        </ul>
 	 * @param interpolate Provides the result in the case that there are two adjacent values in this list, <code>v1</code> and
-	 *        <code>v2</code>, such that <code>v1&lt;search && v2&gt;search</code>
+	 *        <code>v2</code>, such that <code>v1&lt;search &amp;&amp; v2&gt;search</code>
 	 * @param onEmpty Provides the result in the case that this list is empty
 	 * @return The value supplied by the appropriate function
 	 */
@@ -443,7 +454,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	 *        <li>The last element in this list is less than the search</li>
 	 *        </ul>
 	 * @param interpolate Provides the result in the case that there are two adjacent elements in this list whose values, <code>v1</code>
-	 *        and <code>v2</code> are such that <code>v1&lt;search && v2&gt;search</code>
+	 *        and <code>v2</code> are such that <code>v1&lt;search &amp;&amp; v2&gt;search</code>
 	 * @param onEmpty Provides the result in the case that this list is empty
 	 * @return The value supplied by the appropriate function
 	 */

@@ -6,7 +6,13 @@ import java.util.Objects;
 import java.util.function.*;
 
 import org.qommons.BiTuple;
-import org.qommons.ex.*;
+import org.qommons.ex.ExBiConsumer;
+import org.qommons.ex.ExBiFunction;
+import org.qommons.ex.ExConsumer;
+import org.qommons.ex.ExFunction;
+import org.qommons.ex.ExSupplier;
+import org.qommons.ex.ExTriFunction;
+import org.qommons.ex.ExTriPredicate;
 
 /** A bunch of utilities to easily make functions that are prettier and more useful than ordinary lambdas */
 public class FunctionUtils {
@@ -26,7 +32,7 @@ public class FunctionUtils {
 		}
 	};
 
-	/** A {@link Comparator} for any type C that extends Comparable<C> */
+	/** A {@link Comparator} for any type C that extends Comparable&lt;C&gt; */
 	public static final Comparator<Comparable<?>> COMPARABLE_COMPARE = FunctionUtils.<Comparable<?>> printableComparator(//
 		(v1, v2) -> ((Comparable<Object>) v1).compareTo(v2), //
 		() -> "Comparable::compareTo", "Comparable::compareTo");

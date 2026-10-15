@@ -20,10 +20,10 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * as this call does not advance the sequence.
  * </p>
  * <p>
- * Typical usage is:<code><br /><br />
- * for(Sequence&lt;E> seq=collection.sequence();sequence.advance(true);){<br />
- * 		&nbsp;&nbsp;&nbsp;&nbsp;E value=seq.get();<br />
- *		&nbsp;&nbsp;&nbsp;&nbsp;//Do something<br />
+ * Typical usage is:<code><br><br>
+ * for(Sequence&lt;E&gt; seq=collection.sequence();sequence.advance(true);){<br>
+ * 		&nbsp;&nbsp;&nbsp;&nbsp;E value=seq.get();<br>
+ *		&nbsp;&nbsp;&nbsp;&nbsp;//Do something<br>
  * }</code>
  * <p>
  * Sequences can be navigated, similarly to {@link ListIterator}, via the argument to {@link #advance(boolean)}.

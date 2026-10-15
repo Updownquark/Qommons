@@ -32,8 +32,8 @@ public interface PentaFunction<A1, A2, A3, A4, A5, R> {
 	 * @param <A5> The type of the fifth argument to the 5-argument function
 	 * @param <R> The return type of the function
 	 * @param function The implementation
-	 * @param print The string for the wrapped function's {@link #toString()}
-	 * @param identity The identity for the function's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped function's {@link Object#toString()}
+	 * @param identity The identity for the function's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable 5-argument function
 	 */
 	public static <A1, A2, A3, A4, A5, R> PentaFunction<A1, A2, A3, A4, A5, R> printable(
@@ -49,8 +49,8 @@ public interface PentaFunction<A1, A2, A3, A4, A5, R> {
 	 * @param <A5> The type of the fifth argument to the 5-argument function
 	 * @param <R> The return type of the function
 	 * @param function The implementation
-	 * @param print Supplies the string for the wrapped function's {@link #toString()}
-	 * @param identity The identity for the function's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped function's {@link Object#toString()}
+	 * @param identity The identity for the function's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable 5-argument function
 	 */
 	public static <A1, A2, A3, A4, A5, R> PentaFunction<A1, A2, A3, A4, A5, R> printable(

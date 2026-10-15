@@ -12,14 +12,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -47,8 +40,8 @@ import org.w3c.dom.Node;
  * This class facilitates full tracking of every element, attribute, and value to an exact position with the XML file.
  * </p>
  * <p>
- * <b><font color="red">This class is NOT a full-featured XML parser.</font></b> Several features of XML are not supported or are not
- * handled traditionally:
+ * <b><span style="color: red;">This class is NOT a full-featured XML parser.</span></b> Several features of XML are not supported or are
+ * not handled traditionally:
  * <ul>
  * <li>Namespaces are not handled specially, but rather are treated as part of the element/attribute name. Referenced XML schemas are not
  * loaded.</li>
@@ -179,21 +172,21 @@ public class MinML {
 
 	/** A type of XML component */
 	public enum XmlComponentType {
-		/** The XML declaration at the head of the document, e.g. '&lt;?xml version="1.0" encoding="UTF-8"?>' */
+		/** The XML declaration at the head of the document, e.g. '&lt;?xml version="1.0" encoding="UTF-8"?&gt;' */
 		Declaration,
-		/** A processing instruction, e.g. '&lt;?NAME Content?>' */
+		/** A processing instruction, e.g. '&lt;?NAME Content?&gt;' */
 		ProcessingInstruction,
-		/** An XML comment, e.g. '&lt;!-- Content -->' */
+		/** An XML comment, e.g. '&lt;!-- Content &gt;' */
 		Comment,
-		/** Either the beginning (e.g. '&lt;name') or close (e.g. '&lt;/name>' or '/>' */
+		/** Either the beginning (e.g. '&lt;name') or close (e.g. '&lt;/name&gt;' or '/&gt;' */
 		ElementTerminal,
-		/** Signifies the beginning of an element's content ('>') */
+		/** Signifies the beginning of an element's content ('&gt;') */
 		ElementOpen,
 		/** An attribute of an XML element (e.g. 'name="value"') */
 		Attribute,
 		/** Simple text content within an element */
 		ElementContent,
-		/** CDATA content within an element (e.g. '&lt;![CDATA[ Content ]]>') */
+		/** CDATA content within an element (e.g. '&lt;![CDATA[ Content ]]&gt;') */
 		CData,
 		/** Content in an XML document that is not part of the syntax or content. Typically spaces, tabs, and new line characters. */
 		IgnorableWhitespace;
@@ -545,7 +538,7 @@ public class MinML {
 	 * An XML processing instruction parsed by a {@link MinML}.
 	 * </p>
 	 * <p>
-	 * A processing instruction is of the form <code>&lt;?TARGET VALUE?></code>, where VALUE is optional
+	 * A processing instruction is of the form <code>&lt;?TARGET VALUE?&gt;</code>, where VALUE is optional
 	 */
 	public static class XmlProcessingInstruction implements XmlComponent {
 		private final String theTargetName;
@@ -555,7 +548,7 @@ public class MinML {
 		/**
 		 * @param targetName The name of the processing instruction's target
 		 * @param contentOffset The offset of the processing instruction's content, or -1 if there was no content
-		 * @param content The text content defining the processing instruction, including <code>&lt;?</code> and <code>?></code>
+		 * @param content The text content defining the processing instruction, including <code>&lt;?</code> and <code>?&gt;</code>
 		 */
 		public XmlProcessingInstruction(String targetName, int contentOffset, PositionedContent content) {
 			theTargetName = targetName;
@@ -605,7 +598,7 @@ public class MinML {
 	public static class XmlComment implements XmlComponent {
 		private final PositionedContent theContent;
 
-		/** @param content The text content defining the comment, including <code>&lt;!--</code> and <code>--></code> */
+		/** @param content The text content defining the comment, including <code>&lt;!--</code> and <code>--&gt;</code> */
 		public XmlComment(PositionedContent content) {
 			theContent = content;
 		}
@@ -620,7 +613,7 @@ public class MinML {
 			return theContent;
 		}
 
-		/** @return The text content of the comment, between the opening <code>&lt;!--</code> and the closing <code>--></code> */
+		/** @return The text content of the comment, between the opening <code>&lt;!--</code> and the closing <code>--&gt;</code> */
 		public PositionedContent getValueContent() {
 			return theContent.subSequence(COMMENT_START.length(), theContent.length() - COMMENT_END.length());
 		}
@@ -646,8 +639,8 @@ public class MinML {
 		 * @param depth The depth of this element below the root (root=0)
 		 * @param nameOffset The offset of the name of the element in the open or close tag
 		 * @param content The content defining the element's open (everything between and including the initial <code>&lt;</code> and the
-		 *        element's name) or close tag (everything between and including <code>&lt;/</code> and <code>></code>
-		 * @param selfClosing
+		 *        element's name) or close tag (everything between and including <code>&lt;/</code> and <code>&gt;</code>
+		 * @param selfClosing Whether the element was self-closing (e.g. &lt;element-name /&gt;)
 		 */
 		public XmlElementTerminal(String elementName, boolean open, int depth, int nameOffset, PositionedContent content,
 			boolean selfClosing) {
@@ -701,7 +694,7 @@ public class MinML {
 			return theContent.subSequence(theNameOffset);
 		}
 
-		/** @return If this is a close tag (see {@link #isOpen()}), then whether this represents the self-close of an element ('/>') */
+		/** @return If this is a close tag (see {@link #isOpen()}), then whether this represents the self-close of an element ('/&gt;') */
 		public boolean isSelfClosing() {
 			return isSelfClosing;
 		}
@@ -786,7 +779,7 @@ public class MinML {
 		}
 	}
 
-	/** The beginning of an XML element's content ('>') */
+	/** The beginning of an XML element's content ('&gt;') */
 	public static class XmlElementOpen extends XmlElementContentComponent {
 		/**
 		 * @param elementName The name of the element
@@ -909,7 +902,10 @@ public class MinML {
 
 	/** A handler to be notified for each item of content in an XML document */
 	public interface ParseHandler {
-		/** @param component The encountered component */
+		/**
+		 * @param component The encountered component
+		 * @throws TextParseException If the handler determines that the given component is inappropriate in its position
+		 */
 		default void handleXmlComponent(XmlComponent component) throws TextParseException {
 			switch (component.getComponentType()) {
 			case Declaration:
@@ -954,14 +950,16 @@ public class MinML {
 		 * if it is missing.
 		 * 
 		 * @param declaration The XML declaration in the document
+		 * @throws TextParseException If the handler determines that the given component is inappropriate in its position
 		 */
 		default void handleDeclaration(XmlDeclaration declaration) throws TextParseException {
 		}
 
 		/**
-		 * Called when an XML processing instruction is encountered: <code>&lt;?TARGET?></code> or <code>&lt;?TARGET CONTENT?></code>.
+		 * Called when an XML processing instruction is encountered: <code>&lt;?TARGET?&gt;</code> or <code>&lt;?TARGET CONTENT?&gt;</code>.
 		 * 
 		 * @param pi The processing instruction
+		 * @throws TextParseException If the handler determines that the given component is inappropriate in its position
 		 */
 		default void handleProcessingInstruction(XmlProcessingInstruction pi) throws TextParseException {
 		}
@@ -970,6 +968,7 @@ public class MinML {
 		 * Called when an XML comment is encountered
 		 * 
 		 * @param comment The comment
+		 * @throws TextParseException If the handler determines that the given component is inappropriate in its position
 		 */
 		default void handleComment(XmlComment comment) throws TextParseException {
 		}
@@ -978,6 +977,7 @@ public class MinML {
 		 * Called when the declaration of a root or a child element is encountered
 		 * 
 		 * @param element The element
+		 * @throws TextParseException If the handler determines that the given component is inappropriate in its position
 		 */
 		default void handleElementStart(XmlElementTerminal element) throws TextParseException {
 		}
@@ -987,6 +987,7 @@ public class MinML {
 		 * 
 		 * @param elementName The name of the element
 		 * @param openEnd The content closing the open tag
+		 * @throws TextParseException If the handler determines that the given component is inappropriate in its position
 		 */
 		default void handleElementOpen(String elementName, XmlElementOpen openEnd) throws TextParseException {
 		}
@@ -995,6 +996,7 @@ public class MinML {
 		 * Called when an attribute is encountered
 		 * 
 		 * @param attribute The attribute
+		 * @throws TextParseException If the handler determines that the given component is inappropriate in its position
 		 */
 		default void handleAttribute(XmlAttribute attribute) throws TextParseException {
 		}
@@ -1002,34 +1004,37 @@ public class MinML {
 		/**
 		 * <p>
 		 * Called when any characters occur between an element's open and close tags which is not an XML structure such as a
-		 * {@link #handleElementStart(XmlElementTerminal) child element}, a {@link #handleCDataContent(String, XmlCdata) CDATA} structure,
-		 * or a {@link #handleCDataContent(String, XmlCdata) comment}.
+		 * {@link #handleElementStart child element}, a {@link #handleCDataContent CDATA} structure, or a {@link #handleCDataContent
+		 * comment}.
 		 * </p>
 		 * <p>
-		 * This method will not be called for an element that is self-closing (e.g. &lt;element />), for empty content (e.g.
-		 * &lt;element>&lt;/element>), or between adjacent XML structures (e.g. &lt;parent>&lt;child />&lt;child />&lt;/parent>).
+		 * This method will not be called for an element that is self-closing (e.g. &lt;element /&gt;), for empty content (e.g.
+		 * &lt;element&gt;&lt;/element&gt;), or between adjacent XML structures (e.g. &lt;parent&gt;&lt;child /&gt;lt;child
+		 * /&gt;&lt;/parent&gt;).
 		 * </p>
 		 * <p>
-		 * This method will be called each time there is non-empty content under an element that is not an XML structure. E.g. for<br />
+		 * This method will be called each time there is non-empty content under an element that is not an XML structure. E.g. for<br>
 		 * <code>
-		 * &lt;parent><br />
-		 * &nbsp;&nbsp;&nbsp;&lt;child /><br />
-		 * &nbsp;&nbsp;&nbsp;Some text<br />
-		 * &nbsp;&nbsp;&nbsp;&lt;child /><br />
-		 * &lt;/parent>
-		 * </code><br />
+		 * &lt;parent&gt;<br>
+		 * &nbsp;&nbsp;&nbsp;&lt;child /&gt;<br>
+		 * &nbsp;&nbsp;&nbsp;Some text<br>
+		 * &nbsp;&nbsp;&nbsp;&lt;child /&gt;<br>
+		 * &lt;/parent&gt;
+		 * </code><br>
 		 * this method will be called 3 times:
-		 * <ul>
-		 * <li>once for the white space between &lt;parent> and the first &lt;child></li>
-		 * <li>once for "Some text" (which will be surrounded by white space)</li>
-		 * <li>once for the white space between the last &lt;child> and &lt;/parent></li>
 		 * </p>
+		 * <ul>
+		 * <li>once for the white space between &lt;parent&gt; and the first &lt;child&gt;</li>
+		 * <li>once for "Some text" (which will be surrounded by white space)</li>
+		 * <li>once for the white space between the last &lt;child&gt; and &lt;/parent&gt;</li>
+		 * </ul>
 		 * <p>
 		 * This method is not called for white space occurring outside of the document's root element.
 		 * </p>
 		 * 
 		 * @param elementName The name of the element under which the content is occurring
 		 * @param elementValue The positioned content text
+		 * @throws TextParseException If the handler determines that the given component is inappropriate in its position
 		 */
 		default void handleElementContent(String elementName, XmlElementContent elementValue) throws TextParseException {
 		}
@@ -1039,6 +1044,7 @@ public class MinML {
 		 * 
 		 * @param elementName The name of the element under which the CDATA structure occurred
 		 * @param cdata The CDATA structure
+		 * @throws TextParseException If the handler determines that the given component is inappropriate in its position
 		 */
 		default void handleCDataContent(String elementName, XmlCdata cdata) throws TextParseException {
 		}
@@ -1048,6 +1054,7 @@ public class MinML {
 		 * 
 		 * @param element The element being closed
 		 * @param selfClosing Whether the element was self-closing, as opposed to opened and closed with separate tags
+		 * @throws TextParseException If the handler determines that the given component is inappropriate in its position
 		 */
 		default void handleElementEnd(XmlElementTerminal element, boolean selfClosing) throws TextParseException {
 		}
@@ -1057,6 +1064,7 @@ public class MinML {
 		 * element but not in a comment or processing instruction, or the white space between attributes in an element opening tag.
 		 * 
 		 * @param whitespace The positioned white space content
+		 * @throws TextParseException If the handler determines that the given component is inappropriate in its position
 		 */
 		default void handleIgnorableWhitespace(XmlIgnorableWhitespace whitespace) throws TextParseException {
 		}
@@ -1066,6 +1074,7 @@ public class MinML {
 		 * 
 		 * @param ioError The error that occurred
 		 * @param position The position of the last character that was successfully read
+		 * @throws TextParseException If the handler has positioned information to report about the error
 		 */
 		default void handleIOError(IOException ioError, FilePosition position) throws TextParseException {
 		}
@@ -1074,6 +1083,7 @@ public class MinML {
 		 * Called if the XML contains a syntax error
 		 * 
 		 * @param parseError The parse error that occurred
+		 * @throws TextParseException If the handler has positioned information to report about the error
 		 */
 		default void handleParseError(XmlParseException parseError) throws TextParseException {
 		}
@@ -1364,7 +1374,7 @@ public class MinML {
 	/**
 	 * Adds a named sequence to be recognized by this parser. E.g. this could be used to recognize HTML entities.
 	 * 
-	 * @param name The name of the entity to be recognized by the parser (the content between "&" and ";")
+	 * @param name The name of the entity to be recognized by the parser (the content between "&amp;" and ";")
 	 * @param sequence The sequence to be represented by the entity
 	 * @return This parser
 	 */
@@ -1376,8 +1386,8 @@ public class MinML {
 	/**
 	 * Adds a set of named sequences to be recognized by this parser. E.g. this could be used to recognize HTML entities.
 	 * 
-	 * @param entities A map whose keys are the names of the entities to be recognized by the parser (the content between "&" and ";") and
-	 *        whose values are the sequences to be represented by each entity
+	 * @param entities A map whose keys are the names of the entities to be recognized by the parser (the content between "&amp;" and ";")
+	 *        and whose values are the sequences to be represented by each entity
 	 * @return This parser
 	 */
 	public MinML withNamedEntities(Map<String, String> entities) {
@@ -1432,7 +1442,7 @@ public class MinML {
 
 	/**
 	 * Parses XML from a reader. If character encoding is specified by the XML declaration in the document, it will be ignored, other than
-	 * being {@link ParseHandler#handleDeclaration(XmlDeclaration) passed} to the handler.
+	 * being {@link ParseHandler#handleDeclaration passed} to the handler.
 	 * 
 	 * @param <H> The type of the handler
 	 * @param fileLocation The location of the file. This can be anything, including null, and only matters when errors are thrown. When
@@ -1665,7 +1675,8 @@ public class MinML {
 		/** After the XML declaration statement but prior to the beginning of the root element */
 		PreRoot,
 		/**
-		 * Within an element declaration--after its name and before the '>' declaring the beginning of its content or the self-closing '/>'
+		 * Within an element declaration--after its name and before the '&gt;' declaring the beginning of its content or the self-closing
+		 * '/&gt;'
 		 */
 		ElementDeclaration,
 		/** Within an element's content, outside of an element declaration */

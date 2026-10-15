@@ -6,7 +6,12 @@ import java.text.ParseException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.function.*;
+import java.util.function.BiPredicate;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.function.ToIntBiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -34,25 +39,25 @@ import org.qommons.io.NativeFileSource;
  * the individual arguments. Several default patterns are provided:
  * <ul>
  * <li>{@link #DEFAULT_VALUE_PATTERN} for specifying single-valued arguments, each in a single command-line argument. E.g.
- * "--argName=value". Specified with {@link ParserBuilder#forValuePattern(Consumer) forValuePattern()}.</li>
+ * "--argName=value". Specified with {@link ParserBuilder#forValuePattern forValuePattern()}.</li>
  * <li>{@link #DEFAULT_MULTI_VALUE_PATTERN} for specifying multi-valued arguments, each in a singled command-line arguments. E.g.
- * "-argName=value1,value2,...". Specified with {@link ParserBuilder#forMultiValuePattern(Consumer) forMultiValuePattern()}.</li>
- * <li>{@link #DEFAULT_FLAG_PATTERN} for specifying flag-type arguments. E.g. "--flag". Specified with
- * {@link ParserBuilder#forFlagPattern(Consumer) forFlagPattern()}.</li>
+ * "-argName=value1,value2,...". Specified with {@link ParserBuilder#forMultiValuePattern forMultiValuePattern()}.</li>
+ * <li>{@link #DEFAULT_FLAG_PATTERN} for specifying flag-type arguments. E.g. "--flag". Specified with {@link ParserBuilder#forFlagPattern
+ * forFlagPattern()}.</li>
  * <li>{@link #SPLIT_VALUE_PATTERN} for specifying single-valued arguments across multiple command-line arguments. E.g. "--argName"
  * "value".</li>
  * <li>{@link #SPLIT_MULTI_VALUE_PATTERN} for specifying multi-valued arguments across multiple command-line arguments. E.g. "--argName"
  * "value1" "value2"....</li>
  * </ul>
  * Implement the {@link ArgumentPattern} interface to create your own patterns. All non-default patterns are specified with
- * {@link ParserBuilder#forFlagPattern(ArgumentPattern, Consumer) forFlagPattern(ArgumentPattern, Consumer)} or
- * {@link ParserBuilder#forValuePattern(ArgumentPattern, Consumer) forValuePattern(ArgumentPattern, Consumer)}</li>
+ * {@link ParserBuilder#forFlagPattern forFlagPattern(ArgumentPattern, Consumer)} or {@link ParserBuilder#forValuePattern
+ * forValuePattern(ArgumentPattern, Consumer)}</li>
  * <li>
  * <p>
  * In the Consumer's {@link Consumer#accept(Object) accept()} method, call one or more of the <code>addArgument</code> methods on the
  * argument set builder argument (either {@link FlagArgumentSetBuilder} or {@link ValuedArgumentSetBuilder}) to add arguments. Several
- * argument types are available by default, and any type of argument can be specified with the
- * {@link ValuedArgumentSetBuilder#addArgument(String, Class, ArgumentValueParser, Consumer)} method.
+ * argument types are available by default, and any type of argument can be specified with the {@link ValuedArgumentSetBuilder#addArgument}
+ * method.
  * </p>
  * <p>
  * The last argument to all the addArgument methods is a consumer that allows the caller to build out the argument's options. Some special
@@ -72,33 +77,35 @@ import org.qommons.io.NativeFileSource;
  * <li>Call {@link Arguments#get(String, Class)} or {@link Arguments#getAll(String, Class)} to get typed argument values specified by the
  * user.</li>
  * </ol>
- * </p>
  * <p>
  * <b>Example:</b><br>
- * <code><pre>
-	static void main(String... clArgs) {
-		ArgumentParsing.Arguments args = ArgumentParsing.build()//
-			.forValuePattern(pattern -> pattern//
-				.addIntArgument("a", arg -> arg.required())//
-				.addIntArgument("b", arg -> arg//
-					.when("a", Integer.class, c -> c.matches(v -> v.lt(0)).forbidden())//
-					.when("a", Integer.class, c -> c.matches(v -> v.between(0, 100)).required())//
-					.when("a", Integer.class, c -> c.matches(v -> v.between(0, 100)).then(v -> v.between(0, 100)))//
-					.when("a", Integer.class, c -> c.matches(v -> v.gt(100)).required())//
-					.when("a", Integer.class, c -> c.matches(v -> v.gt(100)).then(v -> v.gt(100)))//
-				)//
-				.addIntArgument("c", arg -> arg.defaultValue(25))//
-			).build().parse(clArgs);
-
-		int a = args.get("a", Integer.class);
-		Integer b = args.get("b", Integer.class);
-		int c = args.get("c", Integer.class);
-
-		System.out.println("a=" + a + ", b=" + b + ", c=" + c);
-	}
- * </pre></code> In the above example, 3 integer arguments are specified. The first, "a", is required and unconstrained. The second, "b", is
- * constrained by the value of a. If <code>a&lt;0</code>, b may not be specified. If <code>a>=0 && a&lt;=100</code>, b is required and must
- * also be between 0 and 100. If <code>a>100</code> b is still required and must also be greater than 100.<br>
+ * 
+ * <pre>
+ * static void main(String... clArgs) {
+ * 	ArgumentParsing.Arguments args = ArgumentParsing.build()//
+ * 		.forValuePattern(pattern -&gt; pattern//
+ * 			.addIntArgument("a", arg -&gt; arg.required())//
+ * 			.addIntArgument("b", arg -&gt; arg//
+ * 				.when("a", Integer.class, c -&gt; c.matches(v -&gt; v.lt(0)).forbidden())//
+ * 				.when("a", Integer.class, c -&gt; c.matches(v -&gt; v.between(0, 100)).required())//
+ * 				.when("a", Integer.class, c -&gt; c.matches(v -&gt; v.between(0, 100)).then(v -&gt; v.between(0, 100)))//
+ * 				.when("a", Integer.class, c -&gt; c.matches(v -&gt; v.gt(100)).required())//
+ * 				.when("a", Integer.class, c -&gt; c.matches(v -&gt; v.gt(100)).then(v -&gt; v.gt(100)))//
+ * 			)//
+ * 			.addIntArgument("c", arg -&gt; arg.defaultValue(25))//
+ * 		).build().parse(clArgs);
+ * 
+ * 	int a = args.get("a", Integer.class);
+ * 	Integer b = args.get("b", Integer.class);
+ * 	int c = args.get("c", Integer.class);
+ * 
+ * 	System.out.println("a=" + a + ", b=" + b + ", c=" + c);
+ * }
+ * </pre>
+ * <p>
+ * In the above example, 3 integer arguments are specified. The first, "a", is required and unconstrained. The second, "b", is constrained
+ * by the value of a. If <code>a&lt;0</code>, b may not be specified. If <code>a&gt;=0 &amp;&amp; a&lt;=100</code>, b is required and must
+ * also be between 0 and 100. If <code>a&gt;100</code> b is still required and must also be greater than 100.<br>
  * The third argument, "c", may or may not be specified by the user. If unspecified, a value of 25 will be used.<br>
  * The values of each argument are then retrieved. a and c are primitive-typed because they will always have values, either because they are
  * required or defaulted. b is Integer-typed because if <code>a&lt;0</code> it may not be specified, and hence will be null.
@@ -830,7 +837,7 @@ public class ArgumentParsing {
 			/** Inclusive minimum test */
 			GTE(">=");
 		
-			/** The code descriptor of this type (e.g. ">=") */
+			/** The code descriptor of this type (e.g. "&gt;=") */
 			public final String descrip;
 		
 			private ComparisonType(String descrip) {
@@ -1580,7 +1587,7 @@ public class ArgumentParsing {
 	/**
 	 * A builder to configure flag arguments
 	 * 
-	 * @see ParserBuilder#forFlagPattern(ArgumentPattern, Consumer)
+	 * @see ParserBuilder#forFlagPattern
 	 */
 	public interface FlagArgumentSetBuilder {
 		/**
@@ -1612,7 +1619,7 @@ public class ArgumentParsing {
 	/**
 	 * A builder to configure valued arguments
 	 * 
-	 * @see ParserBuilder#forValuePattern(ArgumentPattern, Consumer)
+	 * @see ParserBuilder#forValuePattern
 	 */
 	public interface ValuedArgumentSetBuilder {
 		/**

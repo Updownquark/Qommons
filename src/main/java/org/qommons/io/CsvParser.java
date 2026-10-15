@@ -1,10 +1,21 @@
 package org.qommons.io;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 
 import org.qommons.ArgumentParsing;
@@ -594,8 +605,8 @@ public class CsvParser implements TabularFileParser {
 
 	/**
 	 * <p>
-	 * A simple program that reads in a CSV file (the "--src=&lt;file>" argument) and prints it to another file (the "--target=&lt;file>"
-	 * argument).
+	 * A simple program that reads in a CSV file (the "--src=&lt;file&gt;" argument) and prints it to another file (the
+	 * "--target=&lt;file&gt;" argument).
 	 * </p>
 	 * 
 	 * <p>

@@ -123,7 +123,7 @@ public class StateSet implements Iterable<int[]> {
 	/**
 	 * @param start The index of the first state to clear
 	 * @param end The index after the last state to clear
-	 * @return Clears all states (sets them to zero) with indexes >=start and &lt;=end
+	 * @return Clears all states (sets them to zero) with indexes &gt;=start and &lt;=end
 	 */
 	public StateSet clear(int start, int end) {
 		theBitSet.clear(start * theStateSize, end * theStateSize);

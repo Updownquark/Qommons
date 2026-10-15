@@ -215,7 +215,7 @@ public class TestUtil {
 
 	/**
 	 * @param numBytes The number of bytes to produce
-	 * @return An array of <code>numBytesrandom
+	 * @return An array of <code>numBytes</code> random bytes
 	 */
 	public byte[] getBytes(int numBytes) {
 		byte[] bytes = new byte[numBytes];

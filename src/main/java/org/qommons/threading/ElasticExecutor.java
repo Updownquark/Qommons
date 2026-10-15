@@ -28,7 +28,6 @@ import org.qommons.collect.BetterBitSet;
  * </p>
  * 
  * <h2>Justification</h2>
- * <p>
  * Although Java has many execution utilities that appear to do the same job as this class, this class has 2 advantages over them:
  * <ol>
  * <li>The {@link #waitWhileActive(int, long)} method provides the ability to be notified when the executor has finished its tasks without
@@ -39,7 +38,6 @@ import org.qommons.collect.BetterBitSet;
  * </ol>
  * This class does not provide visibility into the execution status of each executed task. This could be added, but it can easily be done by
  * the tasks themselves.
- * </p>
  * 
  * <p>
  * Note that this executor has no shutdown method. If the worker's {@link #getMinThreadCount()} is zero, this is typically not important

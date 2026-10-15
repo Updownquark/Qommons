@@ -62,7 +62,7 @@ public interface SpecialSessionImplementation<QIS extends SpecialSession<QIS>> {
 	QIS parallelView(QIS parallel, CoreSession coreSession); // No throwing here, because there shouldn't be any computation
 
 	/**
-	 * Performs any necessary initialization on the new root session, created with {@link #viewOfRoot(CoreSession, SpecialSession)}
+	 * Performs any necessary initialization on the new root session, created with {@link #viewOfRoot}
 	 * 
 	 * @param session The session to initialize
 	 * @param source The special session, if any, that requested the interpretation (via {@link AbstractQIS#interpretRoot(QonfigElement)}
@@ -71,7 +71,7 @@ public interface SpecialSessionImplementation<QIS extends SpecialSession<QIS>> {
 	void postInitRoot(QIS session, QIS source) throws QonfigInterpretationException;
 
 	/**
-	 * Performs any necessary initialization on the new child session, created with {@link #viewOfChild(SpecialSession, CoreSession)}
+	 * Performs any necessary initialization on the new child session, created with {@link #viewOfChild}
 	 * 
 	 * @param session The session to initialize
 	 * @param parent The special session of the new session's parent
@@ -80,7 +80,7 @@ public interface SpecialSessionImplementation<QIS extends SpecialSession<QIS>> {
 	void postInitChild(QIS session, QIS parent) throws QonfigInterpretationException;
 
 	/**
-	 * Performs any necessary initialization on the new child session, created with {@link #parallelView(SpecialSession, CoreSession)}
+	 * Performs any necessary initialization on the new child session, created with {@link #parallelView}
 	 * 
 	 * @param session The session to initialize
 	 * @param parallel The special session that the new session is another view of

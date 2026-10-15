@@ -9,7 +9,10 @@ package org.qommons;
 public class ComparableBiTuple<V1 extends Comparable<V1>, V2 extends Comparable<V2>> extends BiTuple<V1, V2>
 	implements Comparable<ComparableBiTuple<V1, V2>> {
 
-	/** @see BiTuple#BiTuple(Object, Object) */
+	/**
+	 * @param v1 The first value
+	 * @param v2 The second value
+	 */
 	public ComparableBiTuple(V1 v1, V2 v2) {
 		super(v1, v2);
 	}

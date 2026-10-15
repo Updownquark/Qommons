@@ -7,7 +7,7 @@ import java.util.function.Supplier;
  * An exception is often the most intuitive API feature for indicating a particular situation. Sometimes it even makes sense to advertise an
  * exception that may be thrown under semi-normal circumstances when it doesn't make sense for the natural result of an operation to be able
  * to represent that circumstance.
- * <p>
+ * </p>
  * <p>
  * This API is for handling exceptions when it may be expected that the caller will expect them and want to handle them more efficiently
  * than throwing them and catching them.

@@ -123,7 +123,7 @@ public abstract class DefaultCondition<E> implements ConditionImpl<E, DefaultCon
 
 		/**
 		 * @param precursor The precursor to this second-stage condition intermediate
-		 * @param comparison The comparison for the condition (-1 for &lt; or &lt;=, 0 for == or !=, 1 for &gt; or &gte;)
+		 * @param comparison The comparison for the condition (-1 for &lt; or &lt;=, 0 for == or !=, 1 for &gt; or &gt;=)
 		 * @param isWithEqual Whether equality results in true
 		 */
 		public DefaultCI2(DefaultCI1<E, F> precursor, int comparison, boolean isWithEqual) {

@@ -564,7 +564,7 @@ public interface Causable extends CausalLock.Cause {
 	Transaction use();
 
 	/**
-	 * Same as {@link #use()}, but may be called with null or non-Causable values, in which case {@value Transaction#NONE} will be returned
+	 * Same as {@link #use()}, but may be called with null or non-Causable values, in which case {@link Transaction#NONE} will be returned
 	 * 
 	 * @param cause The cause to use
 	 * @return A transaction whose {@link Transaction#close()} method finishes the cause

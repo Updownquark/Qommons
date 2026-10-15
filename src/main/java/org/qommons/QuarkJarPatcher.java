@@ -45,7 +45,6 @@ import org.xml.sax.SAXException;
  * jar files, they are sometimes blocked by email filters and firewalls), as opposed to sending a new version of the application, which may
  * require large uploads and downloads using commercial applications facilitating transfer of large files.
  * </p>
- * <p>
  * The patch files created by this class are executable jar files. To apply them, the end user should:
  * <ol>
  * <li>Shut down the application if it is running.</li>
@@ -55,8 +54,6 @@ import org.xml.sax.SAXException;
  * initial guesses for the parent file of the installation directory).</li>
  * <li>After the patch apples itself, restart the application.</li>
  * </ol>
- * </p>
- * <p>
  * To create a patch:
  * <ol>
  * <li>Create an XML file with extension ".patch". This patch file contains the list of files to add or replace in the installed
@@ -67,7 +64,6 @@ import org.xml.sax.SAXException;
  * from (not necessarily co-located with the patch file).</li>
  * <li>Send the patch file to the end user with the above instructions for applying it.</li>
  * </ol>
- * </p>
  */
 public class QuarkJarPatcher {
 	private static final String PATCH_MANIFEST = "Manifest-Version: 1.0"//

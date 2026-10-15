@@ -38,11 +38,10 @@ import org.qommons.tree.BetterTreeList;
  * more-or-less completely.
  * </p>
  *
- * <p>
  * For example, to test a stateful class with 3 methods, a(int arg), b(boolean arg), and c(double arg), the class could do something like
  *
  * <pre>
- * (TestHelper helper) -> {
+ * (TestHelper helper) -&gt; {
  * 	ToTest test = new ToTest();
  * 	int tries = 5000;
  * 	for (int i = 0; i &lt; tries; i++) {
@@ -64,9 +63,7 @@ import org.qommons.tree.BetterTreeList;
  * }
  * </pre>
  *
- * This would generate 5000 random states in the tested class for each test case.
- * </p>
- * <p>
+ * This would generate 5000 random states in the tested class for each test case.<br>
  * Far more than just a utility wrapper around {@link Random}, this class may be used to generate unlimited test cases that can be run
  * ad-infinitum. It keeps track of the history of each test case. It has several modes:
  * <ul>
@@ -96,7 +93,6 @@ import org.qommons.tree.BetterTreeList;
  * <li><b>--hold-time=&lt;duration&gt;</b> The maximum time to wait between invocations to this helper (if unspecified by execution) before
  * failure is assumed.</li>
  * </ul>
- * </p>
  * <p>
  * The console output of this class can be used to monitor the progress of the test. When each test case is started, the hash for that test
  * is printed immediately. When the test case finishes successfully, SUCCESS is printed, followed by the percent success for the current

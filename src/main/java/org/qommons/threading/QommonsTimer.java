@@ -696,7 +696,7 @@ public class QommonsTimer {
 	 *        being called periodically (faster than <code>inactiveTime</code>).
 	 * @param task The task to execute
 	 * @param inactiveTime The inactive time after which to perform the task
-	 * @param init Optional initialization for the task handle--e.g. to set the {@link TaskHandle#withThreading(TaskThreading) threading}
+	 * @param init Optional initialization for the task handle--e.g. to set the {@link TaskHandle#withThreading threading}
 	 * @return The task handle for the task
 	 */
 	public TaskHandle doAfterInactivity(Object taskKey, Runnable task, Duration inactiveTime, Consumer<TaskHandle> init) {

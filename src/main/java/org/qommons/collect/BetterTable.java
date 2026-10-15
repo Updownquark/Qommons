@@ -26,7 +26,6 @@ import org.qommons.Transaction;
  * BetterMap&lt;C, V>} and contains all the values for the row, keyed by the column.
  * </p>
  * <p>
- * <p>
  * The {@link #columns()} method does the inverse, presenting the table's data from the perspective of the columns. Each element of the set
  * contains all the values for the column, keyed by the row.
  * </p>

@@ -5,10 +5,10 @@ import java.util.function.Supplier;
 /**
  * Represents an element in a {@link BetterCollection} occupied by a (potentially null) value. In addition to very fast (usually
  * constant-time) access to the element's value, CollectionElements may be used to keep a parallel, ordered collection or map of a
- * collection's elements using the {@link #compareTo(Object) compareTo} method or via hashing, as a CollectionElement's {@link #hashCode()}
- * and {@link #equals(Object)} methods are for the element's position in the collection, not the value. The comparison properties of an
- * element are valid as long as the element remains {@link ElementId#isPresent() present} in the collection. The hash/equals properties
- * remain valid permanently, though a removed element may not equal anything but itself.
+ * collection's elements using the {@link #compareTo(Object) compareTo} method or via hashing, as a CollectionElement's
+ * {@link Object#hashCode()} and {@link Object#equals(Object)} methods are for the element's position in the collection, not the value. The
+ * comparison properties of an element are valid as long as the element remains {@link ElementId#isPresent() present} in the collection. The
+ * hash/equals properties remain valid permanently, though a removed element may not equal anything but itself.
  * 
  * @param <E> The type of value in the element
  */

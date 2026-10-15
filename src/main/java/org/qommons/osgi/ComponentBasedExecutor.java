@@ -7,7 +7,7 @@ import java.util.Set;
 /**
  * Represents something similar to a dependency service that can parse a dependency structure from a set of component classes.
  * 
- * Used by {@link OsgiBundleSet} with the --start-ds=<classname> argument
+ * Used by {@link OsgiBundleSet} with the --start-ds=&lt;classname&gt; argument
  */
 public interface ComponentBasedExecutor {
 	/**

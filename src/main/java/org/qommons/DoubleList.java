@@ -285,7 +285,7 @@ public class DoubleList implements Iterable<Double>, Sealable, Cloneable
 	 *
 	 * @param v1 The first value to compare
 	 * @param v2 The second value to compare
-	 * @return -1 if v1<v2, 1 if v1>v2, or 0 if the two are equivalent
+	 * @return -1 if v1&lt;v2, 1 if v1&gt;v2, or 0 if the two are equivalent
 	 * @see Double#compare(double, double)
 	 */
 	public static int compare(double v1, double v2)
@@ -297,8 +297,7 @@ public class DoubleList implements Iterable<Double>, Sealable, Cloneable
 	 * Adds a value to this list at the given index.
 	 *
 	 * <p>
-	 * If this list is sorted, the index parameter will be ignored and the value will be inserted at
-	 * the index where it belongs.
+	 * If this list is sorted, the index parameter will be ignored and the value will be inserted at the index where it belongs.
 	 * </p>
 	 *
 	 * <p>
@@ -307,8 +306,7 @@ public class DoubleList implements Iterable<Double>, Sealable, Cloneable
 	 *
 	 * @param index The index to add the value at
 	 * @param value The value to add to the list
-	 * @return Whether the value was added. This will only be false if this list is unique and the
-	 *         value already exists.
+	 * @return Whether the value was added. This will only be false if this list is unique and the value already exists.
 	 */
 	public boolean add(int index, double value)
 	{

@@ -61,7 +61,6 @@ public interface ValueStoredCollection<E> extends BetterCollection<E> {
 	 */
 	interface RepairListener<E, X> {
 		/**
-		 * <p>
 		 * Called immediately before an element is removed from a collection. After removal, its value <b>may</b> be transferred to a new
 		 * position in the collection. This call will be followed (but not necessarily immediately) by a call to either:
 		 * <ul>
@@ -70,7 +69,6 @@ public interface ValueStoredCollection<E> extends BetterCollection<E> {
 		 * </ul>
 		 * depending on what the collection decided to do with the element after it was removed. When this method is called, the collection
 		 * may not even know what the ultimate fate of the node will be.
-		 * </p>
 		 * <p>
 		 * For some derived collections, e.g. sub-sets, it is not possible for the view to determine whether an element previously belonged
 		 * to the collection. So this method may be called for elements that were not present previously, but are now.

@@ -1,6 +1,11 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -16,7 +21,6 @@ import org.qommons.fn.FunctionUtils;
  * A very simple, fast, flexible, thread-safe list originally intended for listeners registered to an event source. It has special features
  * that lend itself to that use extremely well, but has many other uses as well.
  * </p>
- * <p>
  * This class is basically a linked queue, but operates differently than a java {@link Collection}:
  * <ul>
  * <li>When a value is {@link #add(Object, boolean) added} to a ListenerList, the return value is a reference to the element in the list
@@ -32,11 +36,10 @@ import org.qommons.fn.FunctionUtils;
  * list at any position, or perform any other operation on the list. The {@link #add(Object, boolean)} method provides a parameter to
  * control whether the new value participates in the current iteration (on the current thread).</li>
  * </ul>
- * </p>
  * 
  * <p>
  * This class also provides the ability to perform an action when this class goes into or falls out of use, i.e., when a value is added to
- * an empty list, or the last value is removed from a list. See {@link Builder#withInUse(InUseListener)}.
+ * an empty list, or the last value is removed from a list. See {@link Builder#withInUse}.
  * </p>
  * 
  * <p>
@@ -160,7 +163,7 @@ public class ListenerList<E> implements ListenerQueue<E> {
 		/**
 		 * @param fast Whether this list should maintain an {@link AtomicInteger} with its current size, so that {@link ListenerList#size()}
 		 *        is constant time. If false, this list is a bit lighter, but the {@link ListenerList#size()} operation is linear time. This
-		 *        option is ignored (effectively true) if the {@link #withInUse(InUseListener) in-use listener} is set.
+		 *        option is ignored (effectively true) if the {@link #withInUse in-use listener} is set.
 		 * @return This builder
 		 */
 		public Builder withFastSize(boolean fast) {

@@ -58,7 +58,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	 * 
 	 * @param <K> The key-type of the node's view
 	 * @param <V> The value-type of the node's view
-	 * @see Node#visitChildren(Navigator)
+	 * @see Node#visitChildren
 	 */
 	public interface Navigator<K, V> {
 		/**
@@ -247,8 +247,8 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	/**
 	 * A {@link MultiInheritanceView} that supports modification
 	 * 
-	 * @param <K>
-	 * @param <V>
+	 * @param <K> The key type for the view
+	 * @param <V> The value type for the view
 	 */
 	interface MultiInheritanceMap2<K, V> extends MultiInheritanceView<K, V> {
 		/** @return The number of keys in this map */
@@ -649,7 +649,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	}
 
 	/**
-	 * Default implementation for {@link MultiInheritanceView#hashCode()}
+	 * Default implementation for {@link Object#hashCode()}
 	 * 
 	 * @param view The view to hash
 	 * @return The hash code for the view
@@ -663,7 +663,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	}
 
 	/**
-	 * Default implementation for {@link Node#hashCode()}
+	 * Default implementation for {@link Object#hashCode()}
 	 * 
 	 * @param node The node to hash
 	 * @return The hash code for the node
@@ -676,7 +676,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	}
 
 	/**
-	 * Default implementation for {@link MultiInheritanceView#equals(Object)}
+	 * Default implementation for {@link Object#equals(Object)}
 	 * 
 	 * @param view The view to test
 	 * @param o The object to test
@@ -698,7 +698,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	}
 
 	/**
-	 * Default implementation for {@link Node#equals(Object)}
+	 * Default implementation for {@link Object#equals(Object)}
 	 * 
 	 * @param node The node to test
 	 * @param o The object to test
@@ -714,7 +714,7 @@ public interface MultiInheritanceView<K, V> extends Stamped {
 	}
 
 	/**
-	 * Default implementation for {@link MultiInheritanceView#toString()}
+	 * Default implementation for {@link Object#toString()}
 	 * 
 	 * @param view The map to print
 	 * @return The printed map

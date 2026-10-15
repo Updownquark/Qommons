@@ -1,7 +1,12 @@
 package org.qommons.tree;
 
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.function.Function;
 
 import org.qommons.Stamped;
@@ -143,16 +148,31 @@ public class RedBlackTree<E> implements Iterable<E>, Stamped {
 	 * @param <X> The custom data object to use to track removed and moved nodes
 	 */
 	public interface RepairListener<E, X> {
-		/** @see org.qommons.collect.ValueStoredCollection.RepairListener#removed(org.qommons.collect.CollectionElement) */
-		@SuppressWarnings("javadoc")
+		/**
+		 * @param node The node, having just been removed, which may or may not be transferred to another position in the collection, with a
+		 *        corresponding call to {@link #transferred(RedBlackNode, Object)} or {@link #disposed(Object, Object)}
+		 * @return A piece of data which will be given as the second argument to {@link #transferred(RedBlackNode, Object)} or
+		 *         {@link #disposed(Object, Object)} as a means of tracking
+		 * @see org.qommons.collect.ValueStoredCollection.RepairListener#removed(org.qommons.collect.CollectionElement)
+		 */
 		X removed(RedBlackNode<E> node);
 
-		/** @see org.qommons.collect.ValueStoredCollection.RepairListener#disposed(org.qommons.collect.CollectionElement) */
-		@SuppressWarnings("javadoc")
+		/**
+		 * @param value The value removed due to a collision or due to the element no longer being compatible with this collection (i.e. a
+		 *        sub-set)
+		 * @param data The data returned from the {@link #removed(RedBlackNode)} call, or null if the pre-transferred element was not a
+		 *        member of this collection
+		 * @see org.qommons.collect.ValueStoredCollection.RepairListener#disposed(Object, Object)
+		 */
 		void disposed(E value, X data);
 
-		/** @see org.qommons.collect.ValueStoredCollection.RepairListener#transferred(org.qommons.collect.CollectionElement) */
-		@SuppressWarnings("javadoc")
+		/**
+		 * @param node The node previously removed (most likely, with a corresponding call to {@link #removed(RedBlackNode)}) and now
+		 *        re-added in a different position within the collection
+		 * @param data The data returned from the {@link #removed(RedBlackNode)} call, or null if it is known that the pre-transferred
+		 *        element was not a member of this collection
+		 * @see org.qommons.collect.ValueStoredCollection.RepairListener#transferred(org.qommons.collect.CollectionElement, Object)
+		 */
 		void transferred(RedBlackNode<E> node, X data);
 	}
 

@@ -295,7 +295,8 @@ public class PartialQonfigElement implements FileSourced, SelfDescribed {
 	}
 
 	/**
-	 * A shortcut for <code>(BetterList<QonfigElement>) getChildrenByRole().get(toolkit.getChild(elementOrAddOnName, childName))</code> that
+	 * A shortcut for
+	 * <code>(BetterList&lt;QonfigElement&gt;) getChildrenByRole().get(toolkit.getChild(elementOrAddOnName, childName))</code> that
 	 * additionally throws an exception if the given child is declared by a type that this element does not extend/inherit.
 	 * 
 	 * @param toolkit The toolkit that defines the target child

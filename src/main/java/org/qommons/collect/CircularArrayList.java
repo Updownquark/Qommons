@@ -993,7 +993,7 @@ public class CircularArrayList<E> implements DequeList<E> {
 	/**
 	 * Ensures that this list has at least the given capacity.
 	 * 
-	 * This method does not affect the list's {@link #getMaxCapacity() max capacity}. If size>maxCapacity, the capacity ensured will be
+	 * This method does not affect the list's {@link #getMaxCapacity() max capacity}. If size&gt;maxCapacity, the capacity ensured will be
 	 * maxCapacity.
 	 * 
 	 * @param capacity The minimum capacity to ensure for this list

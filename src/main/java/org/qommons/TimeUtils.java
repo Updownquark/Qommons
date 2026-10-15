@@ -209,11 +209,11 @@ public class TimeUtils {
 		boolean mayMatch(Instant time);
 
 		/**
-		 * Whether this time can be {@link #compareTo(ParsedInstant) compared} to the given time. E.g. relative times cannot be compared if the
-		 * largest time granularity they specify is not the same, like ("18May" and "12:15").
+		 * Whether this time can be {@link #compareTo compared} to the given time. E.g. relative times cannot be compared if the largest
+		 * time granularity they specify is not the same, like ("18May" and "12:15").
 		 * 
 		 * @param other The time to compare to
-		 * @return Whether the result of {@link #compareTo(ParsedInstant)} will have meaning for the given time
+		 * @return Whether the result of {@link #compareTo} will have meaning for the given time
 		 */
 		boolean isComparable(ParsedInstant other);
 
@@ -2222,7 +2222,6 @@ public class TimeUtils {
 	 * <p>
 	 * Parses a date/time with flexible format.
 	 * </p>
-	 * <p>
 	 * Standard formats supported are:
 	 * <ul>
 	 * <li>YYYY</li>
@@ -2233,7 +2232,7 @@ public class TimeUtils {
 	 * <li>DDMonth</li>
 	 * <li>DDMonthYY</li>
 	 * <li>DDMonthYYYY</li>
-	 * </p>
+	 * </ul>
 	 * For standard date formats, separators can be '-', '/', or '.'. Non-standard formats supported are:
 	 * <ul>
 	 * <li>MM/YYYY</li>
@@ -2245,7 +2244,6 @@ public class TimeUtils {
 	 * <li>DD.MM.YYYY</li>
 	 * </ul>
 	 * For non-standard, slash-separated formats, '/' may be replaced with '-'.
-	 * </p>
 	 * <p>
 	 * Time format is HH(:MM(:ss(.S*)))(am|pm). am/pm may also contain '.' characters. The time may end with a time zone identifier. The
 	 * hour-only format (HH) may only be used in conjunction with a date format--this parser will fail to parse a sole integer.
@@ -4264,13 +4262,13 @@ public class TimeUtils {
 		DURATION_PRECISION_ABBREVS = Collections.unmodifiableList(abbrevs);
 	}
 
-	/** @see RelativeTimeFormat#withAboveDayStrategy(AboveDaysStrategy) */
+	/** @see RelativeTimeFormat#withAboveDayStrategy */
 	public enum AboveDaysStrategy {
-		/** Prints >1 day time differences in terms of months and years */
+		/** Prints &gt;1 day time differences in terms of months and years */
 		MonthYear,
-		/** Prints >1 day time differences in terms of weeks */
+		/** Prints &gt;1 day time differences in terms of weeks */
 		Week,
-		/** Prints >1 day time differences in terms of days */
+		/** Prints &gt;1 day time differences in terms of days */
 		None;
 	}
 
@@ -4319,7 +4317,7 @@ public class TimeUtils {
 			return theAgo;
 		}
 
-		/** @return This format's {@link #withMaxPrecision(DurationComponentType) max precision} */
+		/** @return This format's {@link #withMaxPrecision max precision} */
 		public DurationComponentType getMaxPrecision() {
 			return theMaxPrecision;
 		}
@@ -4334,7 +4332,7 @@ public class TimeUtils {
 			return thePrecisionNames;
 		}
 
-		/** @return The duration within which times will be represented by "&lt;duration> ago" */
+		/** @return The duration within which times will be represented by "&lt;duration&gt; ago" */
 		public Duration getAgoTransition() {
 			return theAgoTransition;
 		}
@@ -4398,7 +4396,7 @@ public class TimeUtils {
 		}
 
 		/**
-		 * @param agoTransition The duration within which times will be represented by "&lt;duration> ago"
+		 * @param agoTransition The duration within which times will be represented by "&lt;duration&gt; ago"
 		 * @return This format
 		 */
 		public RelativeTimeFormat withAgoTransition(Duration agoTransition) {
@@ -4439,8 +4437,8 @@ public class TimeUtils {
 		}
 
 		/**
-		 * @param justNow The string to print if the duration is zero within the configured {@link #withMaxPrecision(DurationComponentType)
-		 *        max precision}, or null to just print 0&lt;max prec unit>
+		 * @param justNow The string to print if the duration is zero within the configured {@link #withMaxPrecision max precision}, or null
+		 *        to just print 0&lt;max prec unit&gt;
 		 * @param transition The duration within which times will be represented by just now
 		 * @return This format
 		 */
@@ -4471,7 +4469,7 @@ public class TimeUtils {
 		}
 
 		/**
-		 * Uses an {@link #withAboveDayStrategy(AboveDaysStrategy) above day strategy} of {@link AboveDaysStrategy#MonthYear}
+		 * Uses an {@link #withAboveDayStrategy above day strategy} of {@link AboveDaysStrategy#MonthYear}
 		 * 
 		 * @return This format
 		 */
@@ -4480,7 +4478,7 @@ public class TimeUtils {
 		}
 
 		/**
-		 * Uses an {@link #withAboveDayStrategy(AboveDaysStrategy) above day strategy} of {@link AboveDaysStrategy#Week}
+		 * Uses an {@link #withAboveDayStrategy above day strategy} of {@link AboveDaysStrategy#Week}
 		 * 
 		 * @return This format
 		 */
@@ -4701,7 +4699,7 @@ public class TimeUtils {
 		/**
 		 * @param time The time to turn into an instant
 		 * @param reference The reference time to determine the precision of the result
-		 * @param dayFormat The day format to use if the time difference is >= 1 day
+		 * @param dayFormat The day format to use if the time difference is &gt;= 1 day
 		 * @return The instant
 		 */
 		public ParsedInstant relative(Instant time, Instant reference, String dayFormat) {
@@ -4711,7 +4709,7 @@ public class TimeUtils {
 		/**
 		 * @param time The time to turn into an instant
 		 * @param reference The reference time to determine the precision of the result
-		 * @param dayFormat The day format to use if the time difference is >= 1 day
+		 * @param dayFormat The day format to use if the time difference is &gt;= 1 day
 		 * @return The instant
 		 */
 		public ParsedInstant relative(Instant time, Instant reference, DayFormat dayFormat) {
@@ -4973,7 +4971,7 @@ public class TimeUtils {
 	/**
 	 * @param d1 The first duration (numerator)
 	 * @param d2 The second duration (denominator)
-	 * @return The maximum number <code>n</code> such that <code>d2*n<=d1</code>. The result will be negative IFF d1 XOR d2 is negative.
+	 * @return The maximum number <code>n</code> such that <code>d2*n&lt;=d1</code>. The result will be negative IFF d1 XOR d2 is negative.
 	 */
 	public static int divide(Duration d1, Duration d2) {
 		if (d2.isZero()) {
@@ -5153,7 +5151,6 @@ public class TimeUtils {
 	 * <p>
 	 * Represents an interval between recurrence of some event, which may be based on a constant duration or on calendar months.
 	 * </p>
-	 * <p>
 	 * Examples of non-duration-based intervals are:
 	 * <ul>
 	 * <li>Monthly on the Nth day of the month</li>
@@ -5165,7 +5162,6 @@ public class TimeUtils {
 	 * <li>Annually on the Nth of [month]</li>
 	 * <li>Quarterly on the Nth [weekday] of [month]</li>
 	 * </ul>
-	 * </p>
 	 * <p>
 	 * This class does not contain the anchor determining when exactly the event occurs--only the interval between events. The anchor must
 	 * be passed to all methods of this class.
@@ -5419,12 +5415,11 @@ public class TimeUtils {
 	 * Parses a recurrence interval from text.
 	 * </p>
 	 * <p>
-	 * This method uses '-' and '#' notation to denote the 2 non-{@link RecurrenceInterval#normal(String, ParsedDuration) normal} recurrence
-	 * types. The presence of a '-' terminator is used to denote an interval that occurs on the last Nth day of a month. A '#' terminator
-	 * denotes an interval that occurs on a particular Nth [weekday] of a month. When using these special types, only
-	 * {@link DurationComponentType#Year year} and {@link DurationComponentType#Month month} components may be used for the interval.
+	 * This method uses '-' and '#' notation to denote the 2 non-{@link RecurrenceInterval#normal normal} recurrence types. The presence of
+	 * a '-' terminator is used to denote an interval that occurs on the last Nth day of a month. A '#' terminator denotes an interval that
+	 * occurs on a particular Nth [weekday] of a month. When using these special types, only {@link DurationComponentType#Year year} and
+	 * {@link DurationComponentType#Month month} components may be used for the interval.
 	 * </p>
-	 * <p>
 	 * Examples:
 	 * <ul>
 	 * <li>"1mo-" This recurrence will occur on the same day of the month before the end as the given occurrence. E.g. If the occurrence is
@@ -5432,7 +5427,6 @@ public class TimeUtils {
 	 * will always recur 5 days before the end of a month</li>
 	 * <li>"1mo#" This recurrence will occur on the same Nth [weekday] of a month as the given occurrence</li>
 	 * </ul>
-	 * </p>
 	 * 
 	 * @param recur The String to parse the recurrence from
 	 * @param occurrence An occurrence time of the vent. This time will be used to determine the week and day of special-type intervals.

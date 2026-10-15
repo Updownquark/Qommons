@@ -1,8 +1,12 @@
 package org.qommons;
 
-import static org.qommons.Lockable.lockAll;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -173,6 +177,7 @@ public interface Lockable extends ThreadConstrained {
 	 * composite locks, all locks will be released and re-tried. This is very effective at preventing deadlock where multiple thread-safe
 	 * resources are needed for an operation.
 	 * 
+	 * @param tryOnly Whether to abandon the attempt if the lock cannot be immediately obtained
 	 * @param lockables The lockables to lock, any of which may be null
 	 * @return The transaction to use to unlock the lock, or null if <code>tryOnly</code> is true and the lock could not be immediately
 	 *         obtained
@@ -188,6 +193,7 @@ public interface Lockable extends ThreadConstrained {
 	 * resources are needed for an operation.
 	 * 
 	 * @param lockables The lockables to lock, any of which may be null
+	 * @param tryOnly Whether to abandon the attempt if the lock cannot be immediately obtained
 	 * @return The transaction to close to release the lock
 	 */
 	static Transaction lockAll(Collection<? extends Lockable> lockables, boolean tryOnly) {
@@ -201,6 +207,7 @@ public interface Lockable extends ThreadConstrained {
 	 * 
 	 * @param outer The first lockable to lock
 	 * @param lockables The additional lockables to lock, any of which may be null
+	 * @param tryOnly Whether to abandon the attempt if the lock cannot be immediately obtained
 	 * @return The transaction to close to release the lock
 	 */
 	static Transaction lockAll(Lockable outer, Collection<? extends Lockable> lockables, boolean tryOnly) {
@@ -217,6 +224,7 @@ public interface Lockable extends ThreadConstrained {
 	 * @param outer The first lockable to lock
 	 * @param lockables The additional structures to lock, any of which may be null
 	 * @param map The map to produce Lockables from each item in the list
+	 * @param tryOnly Whether to abandon the attempt if the lock cannot be immediately obtained
 	 * @return The transaction to close to release the lock
 	 */
 	static <X> Transaction lockAll(Lockable outer, Supplier<? extends Collection<? extends X>> lockables,
@@ -373,7 +381,8 @@ public interface Lockable extends ThreadConstrained {
 	/**
 	 * @param outer The first lockable to lock
 	 * @param getInner The additional lockable to lock--may supply null
-	 * @return A lockable whose {@link #lock(boolean)} method works like {@link #lock(Lockable, Supplier)}
+	 * @param tryOnly Whether to abandon the attempt if the lock cannot be immediately obtained
+	 * @return A lockable whose {@link #lock(boolean)} method works like {@link #lock(Lockable, Supplier, boolean)}
 	 */
 	static Lockable lockable(Lockable outer, Supplier<Lockable> getInner, boolean tryOnly) {
 		return new CollapsedLockable(outer, () -> Collections.singleton(getInner.get()), false);
@@ -386,6 +395,7 @@ public interface Lockable extends ThreadConstrained {
 	 * 
 	 * @param outer The first lockable to lock
 	 * @param getInner The additional lockable to lock--may supply null
+	 * @param tryOnly Whether to abandon the attempt if the lock cannot be immediately obtained
 	 * @return The transaction to close to release the lock
 	 */
 	static Transaction lock(Lockable outer, Supplier<Lockable> getInner, boolean tryOnly) {
@@ -476,7 +486,7 @@ public interface Lockable extends ThreadConstrained {
 		}
 	}
 
-	/** Implements all the {@link Lockable#lockAll(boolean Lockable...)} methods */
+	/** Implements all the {@link Lockable#lockAll(boolean, Lockable...)} methods */
 	static class CollapsedLockable implements Lockable {
 		private final Lockable theFirst;
 		private final Supplier<? extends Collection<? extends Lockable>> theLocks;

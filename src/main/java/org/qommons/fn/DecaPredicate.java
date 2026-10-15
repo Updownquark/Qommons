@@ -45,8 +45,8 @@ public interface DecaPredicate<A1, A2, A3, A4, A5, A6, A7, A8, A9, A10> {
 	 * @param <A9> The type of the ninth argument to the predicate
 	 * @param <A10> The type of the tenth argument to the predicate
 	 * @param function The implementation
-	 * @param print The string for the wrapped predicate's {@link #toString()}
-	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped predicate's {@link Object#toString()}
+	 * @param identity The identity for the predicate's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable predicate
 	 */
 	public static <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10> DecaPredicate<A1, A2, A3, A4, A5, A6, A7, A8, A9, A10> printable(
@@ -67,8 +67,8 @@ public interface DecaPredicate<A1, A2, A3, A4, A5, A6, A7, A8, A9, A10> {
 	 * @param <A9> The type of the ninth argument to the predicate
 	 * @param <A10> The type of the tenth argument to the predicate
 	 * @param function The implementation
-	 * @param print Supplies the string for the wrapped predicate's {@link #toString()}
-	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped predicate's {@link Object#toString()}
+	 * @param identity The identity for the predicate's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable predicate
 	 */
 	public static <A1, A2, A3, A4, A5, A6, A7, A8, A9, A10> DecaPredicate<A1, A2, A3, A4, A5, A6, A7, A8, A9, A10> printable(

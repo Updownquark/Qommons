@@ -83,7 +83,8 @@ public class Range<C> implements Comparable<C> {
 		 *         <ul>
 		 *         <li><b>-1</b> if the division of containment for this bound is less than that of the other</li>
 		 *         <li><b>0</b> if the division of containment for this bound is the same as that of the other</li>
-		 *         <li><b>-1</b> if the division of containment for this bound is greater than that of the other</li></li>
+		 *         <li><b>-1</b> if the division of containment for this bound is greater than that of the other</li>
+		 *         </ul>
 		 * @throws IllegalArgumentException If the two bounds are not on the same end of their respective ranges
 		 * @see #isLowerBound()
 		 */
@@ -177,8 +178,8 @@ public class Range<C> implements Comparable<C> {
 		 * The {@link Range#getUpperBound() upper bound} of the left range is less than the {@link Range#getLowerBound() lower bound} of the
 		 * right range.
 		 * <p>
-		 * <b>Range 1:</b><code>&nbsp;&lt;----></code><br>
-		 * <b>Range 2:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;----></code>
+		 * <b>Range 1:</b><code>&nbsp;&lt;----&gt;</code><br>
+		 * <b>Range 2:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;----&gt;</code>
 		 */
 		LESS(-1, -1, -1, false),
 		/**
@@ -186,8 +187,8 @@ public class Range<C> implements Comparable<C> {
 		 * The left range {@link Range#contains(Object) contains} the right range's {@link Range#getLowerBound() lower bound} and is less
 		 * than the right range's {@link Range#getUpperBound() upper bound}.
 		 * </p>
-		 * <b>Range 1:</b><code>&nbsp;&lt;----></code><br>
-		 * <b>Range 2:</b><code>&nbsp;&nbsp;&nbsp;&lt;----></code>
+		 * <b>Range 1:</b><code>&nbsp;&lt;----&gt;</code><br>
+		 * <b>Range 2:</b><code>&nbsp;&nbsp;&nbsp;&lt;----&gt;</code>
 		 */
 		OVERLAP_LOW(-1, -1, -1, true), //
 		/**
@@ -196,8 +197,8 @@ public class Range<C> implements Comparable<C> {
 		 * upper bounds} are equal.
 		 * </p>
 		 * 
-		 * <b>Range 1:</b><code>&nbsp;&lt;-------></code><br>
-		 * <b>Range 2:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&lt;----></code>
+		 * <b>Range 1:</b><code>&nbsp;&lt;-------&gt;</code><br>
+		 * <b>Range 2:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&lt;----&gt;</code>
 		 */
 		CONTAINS_LOW(-1, -1, 0, true),
 		/**
@@ -206,8 +207,8 @@ public class Range<C> implements Comparable<C> {
 		 * upper bound} is greater than the right range's.
 		 * </p>
 		 * 
-		 * <b>Range 1:</b><code>&nbsp;&lt;----------></code><br>
-		 * <b>Range 2:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&lt;----></code>
+		 * <b>Range 1:</b><code>&nbsp;&lt;----------&gt;</code><br>
+		 * <b>Range 2:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&lt;----&gt;</code>
 		 */
 		CONTAINS(0, -1, 1, true), //
 		/**
@@ -216,8 +217,8 @@ public class Range<C> implements Comparable<C> {
 		 * bound} is less than than the right range's.
 		 * </p>
 		 * 
-		 * <b>Range 1:</b><code>&nbsp;&lt;----></code><br>
-		 * <b>Range 2:</b><code>&nbsp;&lt;-------></code>
+		 * <b>Range 1:</b><code>&nbsp;&lt;----&gt;</code><br>
+		 * <b>Range 2:</b><code>&nbsp;&lt;-------&gt;</code>
 		 */
 		CONTAINED_LOW(-1, 0, -1, true), //
 		/**
@@ -226,8 +227,8 @@ public class Range<C> implements Comparable<C> {
 		 * equal.
 		 * </p>
 		 * 
-		 * <b>Range 1:</b><code>&nbsp;&lt;------></code><br>
-		 * <b>Range 2:</b><code>&nbsp;&lt;------></code>
+		 * <b>Range 1:</b><code>&nbsp;&lt;------&gt;</code><br>
+		 * <b>Range 2:</b><code>&nbsp;&lt;------&gt;</code>
 		 */
 		EQUAL(0, 0, 0, true), //
 		/**
@@ -236,8 +237,8 @@ public class Range<C> implements Comparable<C> {
 		 * bound} is greater than than the right range's.
 		 * </p>
 		 * 
-		 * <b>Range 1:</b><code>&nbsp;&lt;-------></code><br>
-		 * <b>Range 2:</b><code>&nbsp;&lt;----></code>
+		 * <b>Range 1:</b><code>&nbsp;&lt;-------&gt;</code><br>
+		 * <b>Range 2:</b><code>&nbsp;&lt;----&gt;</code>
 		 */
 		CONTAINS_HIGH(1, 0, 1, true), //
 		/**
@@ -246,8 +247,8 @@ public class Range<C> implements Comparable<C> {
 		 * {@link Range#getUpperBound() upper bound} is less than the right range's.
 		 * </p>
 		 * 
-		 * <b>Range 1:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&lt;----></code><br>
-		 * <b>Range 2:</b><code>&nbsp;&lt;----------></code>
+		 * <b>Range 1:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&lt;----&gt;</code><br>
+		 * <b>Range 2:</b><code>&nbsp;&lt;----------&gt;</code>
 		 */
 		CONTAINED(0, 1, -1, true), //
 		/**
@@ -256,8 +257,8 @@ public class Range<C> implements Comparable<C> {
 		 * {@link Range#getUpperBound() upper bounds} are equal.
 		 * </p>
 		 * 
-		 * <b>Range 1:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;---></code><br>
-		 * <b>Range 2:</b><code>&nbsp;&lt;-------></code>
+		 * <b>Range 1:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;---&gt;</code><br>
+		 * <b>Range 2:</b><code>&nbsp;&lt;-------&gt;</code>
 		 */
 		CONTAINED_HIGH(1, 1, 0, true), //
 		/**
@@ -265,8 +266,8 @@ public class Range<C> implements Comparable<C> {
 		 * The left range {@link Range#contains(Object) contains} the right range's {@link Range#getUpperBound() upper bound} and is greater
 		 * than the right range's {@link Range#getLowerBound() lower bound}.
 		 * </p>
-		 * <b>Range 1:</b><code>&nbsp;&nbsp;&nbsp;&lt;----></code><br>
-		 * <b>Range 2:</b><code>&nbsp;&lt;----></code>
+		 * <b>Range 1:</b><code>&nbsp;&nbsp;&nbsp;&lt;----&gt;</code><br>
+		 * <b>Range 2:</b><code>&nbsp;&lt;----&gt;</code>
 		 */
 		OVERLAP_HIGH(1, 1, 1, true), //
 		/**
@@ -274,8 +275,8 @@ public class Range<C> implements Comparable<C> {
 		 * The {@link Range#getLowerBound() lower bound} of the left range is greater than the {@link Range#getUpperBound() upper bound} of
 		 * the right range.
 		 * <p>
-		 * <b>Range 1:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;----></code><br>
-		 * <b>Range 2:</b><code>&nbsp;&lt;----></code>
+		 * <b>Range 1:</b><code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;----&gt;</code><br>
+		 * <b>Range 2:</b><code>&nbsp;&lt;----&gt;</code>
 		 */
 		GREATER(1, 1, 1, false);
 

@@ -381,15 +381,15 @@ public interface TableContentControl {
 	 * 'co*t' would match 'content', 'couldn't', or the first part of 'cotton'.</li>
 	 * <li><b>Full pattern</b> elements are specified by a leading '\' character and are parsed as java {@link Pattern}s.</li>
 	 * <li><b>Number</b> elements search text for numbers. Number elements differ from number text in that '1.5' matches '1.46' since 1.46
-	 * rounds to 1.5 with 2 significant digits.<br />
+	 * rounds to 1.5 with 2 significant digits.<br>
 	 * Numbers can also be specified in ranges, e.g. '1.5-3.5' will match any number found in text between those two numbers.</li>
 	 * <li><b>Date</b> elements can be specified with nearly any date format, e.g. '06Feb2013', 'Jan12', or '8:00'. Dates will match any
 	 * date found in text whose similar expression in the format specified is the same. E.g. '8:00' would match '8:00 Dec 15', and 'Jan12'
-	 * would match 'January 12th, 2050 9:15am'.<br />
+	 * would match 'January 12th, 2050 9:15am'.<br>
 	 * Dates may also be specified in ranges, like numbers.</li>
 	 * <li><b>Duration</b> filters are specified in the form of integers with units, such as '1h30m' or '1y3mo'. Similarly to dates,
 	 * durations will match any text whose expression with the same units matches the specified numbers. So '1h30m' will match '90m
-	 * 21s'.<br />
+	 * 21s'.<br>
 	 * Durations may also be specified in ranges.</li>
 	 * </ul>
 	 *
@@ -403,16 +403,16 @@ public interface TableContentControl {
 	 * <p>
 	 * The form 'sort:category' is reserved for sorting rows. Using 'sort:a' will not filter on a category named 'sort', but rather will
 	 * cause the rows to be sorted by columns starting with 'a'. Similar to category-specific filtering, the category name is
-	 * case-insensitive, may be incomplete (only the beginning of a category name), and may omit whitespace from the category name.<br />
-	 * To sort rows in descending order, use a '-' character, like 'sort:-name' to sort by name, descending.<br />
-	 * Multiple categories may be specified, e.g. 'sort:a,-b' will sort by a primarily, then b descending secondarily.<br />
+	 * case-insensitive, may be incomplete (only the beginning of a category name), and may omit whitespace from the category name.<br>
+	 * To sort rows in descending order, use a '-' character, like 'sort:-name' to sort by name, descending.<br>
+	 * Multiple categories may be specified, e.g. 'sort:a,-b' will sort by a primarily, then b descending secondarily.<br>
 	 * To search on a category named 'sort', one may surround 'sort' with quotes, e.g. '"sort":search'.
 	 * </p>
 	 *
 	 * <p>
 	 * The form 'columns:category' is reserved for sorting columns. Using 'columns:a' will not filter on a category named 'columns', but
 	 * rather will cause the 'a' column of the table to move to the left-most position, followed by the rest of the columns. Multiple
-	 * columns may be separated by commas.<br />
+	 * columns may be separated by commas.<br>
 	 * To search on a category named 'columns', one may surround 'columns' with quotes, e.g. '"columns":search'.
 	 * </p>
 	 *
@@ -2058,7 +2058,7 @@ public interface TableContentControl {
 		 * @param inCategory Whether the text being parsed is already category-specific, so that this method should not parse categorical
 		 *        filters
 		 * @return The control parsed out of the text between the starting position and the end or the next unclosed parenthesis (if
-		 *         depth>0)
+		 *         depth&gt;0)
 		 * @throws ParseException If an error is found in the text
 		 */
 		public static TableContentControl parseContentControl(CharSequence controlText, int[] c, int depth, boolean inCategory)

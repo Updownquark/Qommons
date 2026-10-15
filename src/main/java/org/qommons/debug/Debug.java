@@ -19,7 +19,7 @@ import org.qommons.threading.QommonsTimer;
  * <p>
  * This is a class I created to ease debugging. Production code can be set up to query this class and print out debugging information or
  * call breakpoints when needed. If called correctly these features will be virtually free in production or when debugging is inactive.
- * <p>
+ * </p>
  * <p>
  * It has several features that can be useful.
  * </p>

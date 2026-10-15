@@ -219,7 +219,7 @@ public class SAJParser {
 		}
 
 		/**
-		 * By default, {@link #valueString(ParseState, Reader)} merely reads the string and passes it to this method for easier handling
+		 * By default, {@link #valueString} merely reads the string and passes it to this method for easier handling
 		 *
 		 * @param state The current parsing state
 		 * @param value The string value that was parsed
@@ -321,7 +321,7 @@ public class SAJParser {
 
 		/**
 		 * @param depth The depth of the item to get
-		 * @return The item that is being parsed at the given depth, or null if depth> {@link #getDepth()}
+		 * @return The item that is being parsed at the given depth, or null if depth&gt; {@link #getDepth()}
 		 */
 		public Object fromTop(int depth) {
 			if(thePath.size() <= depth)
@@ -827,7 +827,7 @@ public class SAJParser {
 
 		/**
 		 * @param depth The depth of the item to get
-		 * @return The item that is being parsed at the given depth, or null if depth>= {@link #getDepth()}
+		 * @return The item that is being parsed at the given depth, or null if depth&gt;={@link #getDepth()}
 		 */
 		public ParseNode fromTop(int depth) {
 			if(thePath.size() <= depth)
@@ -873,7 +873,6 @@ public class SAJParser {
 		 * parser can parse the value of data and this method can be called to satisfy the parser so the event can be further parsed. This
 		 * method does not cause any callbacks to be invoked in the handler.
 		 * </p>
-		 * <p>
 		 * This method will throw a ParseException unless it is invoked in one of the following situations:
 		 * <ul>
 		 * <li>Before any content has been parsed. Calling this in this situation will have no effect at all.</li>
@@ -881,7 +880,6 @@ public class SAJParser {
 		 * <li>After the beginning of an array</li>
 		 * <li>After a separator comma within an array</li>
 		 * </ul>
-		 * </p>
 		 * <p>
 		 * If this method is called superfluously even though the stream is read exclusively from this parser, the parser will throw a
 		 * ParseException after the stream's content is read since it will believe it already encountered a value and duplicate values

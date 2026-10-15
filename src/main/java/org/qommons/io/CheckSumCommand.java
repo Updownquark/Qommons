@@ -115,7 +115,7 @@ public interface CheckSumCommand{
 	String getCommand(CheckSumType type, String filePath);
 	
 	/**
-	 * @param commandOut The output of the process being executed against the command given type {@link #getCommand(CheckSumType, String)}
+	 * @param commandOut The output of the process being executed against the command given type {@link #getCommand}
 	 * @param type The type of the checksum
 	 * @return The hex-encoded checksum output
 	 * @throws IOException If the checksum output could not be read or parsed

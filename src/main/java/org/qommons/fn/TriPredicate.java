@@ -49,8 +49,8 @@ public interface TriPredicate<T, U, V> {
 	 * @param <A2> The type of the second argument to the ternary predicate
 	 * @param <A3> The type of the third argument to the ternary predicate
 	 * @param function The implementation
-	 * @param print The string for the wrapped predicate's {@link #toString()}
-	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped predicate's {@link Object#toString()}
+	 * @param identity The identity for the predicate's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable ternary predicate
 	 */
 	static <A1, A2, A3> TriPredicate<A1, A2, A3> printable(TriPredicate<? super A1, ? super A2, ? super A3> function, String print,
@@ -63,8 +63,8 @@ public interface TriPredicate<T, U, V> {
 	 * @param <A2> The type of the second argument to the ternary predicate
 	 * @param <A3> The type of the third argument to the ternary predicate
 	 * @param function The implementation
-	 * @param print Supplies the string for the wrapped predicate's {@link #toString()}
-	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped predicate's {@link Object#toString()}
+	 * @param identity The identity for the predicate's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable ternary predicate
 	 */
 	static <A1, A2, A3> TriPredicate<A1, A2, A3> printable(TriPredicate<? super A1, ? super A2, ? super A3> function,

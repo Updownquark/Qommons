@@ -28,7 +28,7 @@ public interface AbstractQIS<QIS extends AbstractQIS<QIS>>
 	 * @return The special session of the given type
 	 * @throws IllegalArgumentException If the given session type is not supported
 	 * @throws QonfigInterpretationException If an error occurs configuring the special session
-	 * @see {@link QonfigInterpreterCore.Builder#withSpecial(Class, SpecialSessionImplementation)}
+	 * @see QonfigInterpreterCore.Builder#withSpecial
 	 */
 	<QIS2 extends SpecialSession<QIS2>> QIS2 as(Class<QIS2> sessionType) throws IllegalArgumentException, QonfigInterpretationException;
 

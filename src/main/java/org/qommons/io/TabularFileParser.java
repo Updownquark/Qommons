@@ -897,6 +897,7 @@ public interface TabularFileParser extends AutoCloseable {
 		 *        <ol>
 		 *        <li>The index of the column (or -1 if the column was not present and optional)</li>
 		 *        <li>The index of the option that matched the column name (for matches with multiple options)
+		 *        </ol>
 		 * @param parser The parser to parse the column value
 		 * @return A new parser that can parse lines containing the given column
 		 */

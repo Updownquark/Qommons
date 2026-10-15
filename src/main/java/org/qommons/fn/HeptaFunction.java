@@ -38,8 +38,8 @@ public interface HeptaFunction<A1, A2, A3, A4, A5, A6, A7, R> {
 	 * @param <A7> The type of the seventh argument to the function
 	 * @param <R> The return type of the function
 	 * @param function The implementation
-	 * @param print The string for the wrapped function's {@link #toString()}
-	 * @param identity The identity for the function's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped function's {@link Object#toString()}
+	 * @param identity The identity for the function's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable function
 	 */
 	public static <A1, A2, A3, A4, A5, A6, A7, R> HeptaFunction<A1, A2, A3, A4, A5, A6, A7, R> printable(
@@ -58,8 +58,8 @@ public interface HeptaFunction<A1, A2, A3, A4, A5, A6, A7, R> {
 	 * @param <A7> The type of the seventh argument to the function
 	 * @param <R> The return type of the function
 	 * @param function The implementation
-	 * @param print Supplies the string for the wrapped function's {@link #toString()}
-	 * @param identity The identity for the function's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped function's {@link Object#toString()}
+	 * @param identity The identity for the function's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable function
 	 */
 	public static <A1, A2, A3, A4, A5, A6, A7, R> HeptaFunction<A1, A2, A3, A4, A5, A6, A7, R> printable(

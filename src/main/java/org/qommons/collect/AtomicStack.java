@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * Since the calling instance is unchanged, this class may be used in, e.g. an {@link AtomicReference} where multiple threads may be
  * attempting to add or remove values on the stack at once. The atomicity of this structure guarantees that e.g.
- * <code>{@link AtomicReference#updateAndGet(java.util.function.UnaryOperator) reference.updateAndGet}(stack->stack.{@link #push(Object) push(value)})</code>
+ * <code>{@link AtomicReference#updateAndGet(java.util.function.UnaryOperator) reference.updateAndGet}(stack-&gt;stack.{@link #push(Object) push(value)})</code>
  * will succeed in adding the value to the stack exactly once.
  * </p>
  * <p>
@@ -31,7 +31,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * <ul>
  * <li>The {@link #top()} and {@link #bottom()} methods return null instead of throwing an exception. The standard {@link Queue} methods
  * behave as expected.</li>
- * <li>The {@link #pop()} method returns the empty instance There is no such thing as an empty instance of this
+ * <li>The {@link #pop()} method returns the empty instance</li>
+ * </ul>
+ * There is no such thing as an empty instance of this class.
  * 
  * @param <T> The type of values in the stack
  */

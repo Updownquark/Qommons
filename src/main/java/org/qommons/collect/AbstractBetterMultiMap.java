@@ -87,8 +87,8 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 
 	/**
 	 * An implementation in {@link AbstractBetterMultiMap} used by
-	 * {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection(ValueCollectionBacking)}. It represents the state of a
-	 * particular key in the multi-map.
+	 * {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection}. It represents the state of a particular key in the
+	 * multi-map.
 	 * 
 	 * @param <V> The value type of the map
 	 */
@@ -1167,7 +1167,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 	}
 
 	/**
-	 * Implements {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection(ValueCollectionBacking)} for
+	 * Implements {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection} for
 	 * {@link AbstractBetterMultiMap#LIST_SUPPLIER}
 	 * 
 	 * @param <E> The type of values in the collection
@@ -1276,7 +1276,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 	}
 
 	/**
-	 * Implements {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection(ValueCollectionBacking)} for
+	 * Implements {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection} for
 	 * {@link AbstractBetterMultiMap#DISTINCT_SUPPLIER}
 	 * 
 	 * @param <E> The type of values in the collection
@@ -1350,7 +1350,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 	}
 
 	/**
-	 * Implements {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection(ValueCollectionBacking)} for
+	 * Implements {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection} for
 	 * {@link AbstractBetterMultiMap#sortedSupplier(Comparator, boolean) sortedSupplier(false)}
 	 * 
 	 * @param <E> The type of values in the collection
@@ -1424,7 +1424,7 @@ public abstract class AbstractBetterMultiMap<K, V> extends AbstractIdentifiable 
 	}
 
 	/**
-	 * Implements {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection(ValueCollectionBacking)} for
+	 * Implements {@link AbstractBetterMultiMap.ValueCollectionSupplier#createWrapperCollection} for
 	 * {@link AbstractBetterMultiMap#sortedSupplier(Comparator, boolean) sortedSupplier(true)}
 	 * 
 	 * @param <E> The type of values in the collection

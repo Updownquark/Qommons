@@ -354,7 +354,7 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	/**
 	 * @param from The lower bound for the sub-map
 	 * @param to The upper bound for the sub-map
-	 * @return A {@link BetterSortedMap} with the all of this map's entries whose keys are <code>&gt;=from && &lt;=to</code>
+	 * @return A {@link BetterSortedMap} with the all of this map's entries whose keys are <code>&gt;=from &amp;&amp; &lt;=to</code>
 	 */
 	default BetterSortedMap<K, V> subMap(Comparable<? super K> from, Comparable<? super K> to) {
 		return new BetterSubMap<>(this, from, to);
@@ -414,8 +414,8 @@ public interface BetterSortedMap<K, V> extends BetterMap<K, V>, NavigableMap<K, 
 	/**
 	 * A map entry whose {@link java.util.Map.Entry#setValue(Object) setValue} method is disabled
 	 * 
-	 * @param <K>
-	 * @param <V>
+	 * @param <K> The key type of the entry
+	 * @param <V> The value type of the entry
 	 */
 	class ImmutableMapEntry<K, V> implements Map.Entry<K, V> {
 		private final K theKey;

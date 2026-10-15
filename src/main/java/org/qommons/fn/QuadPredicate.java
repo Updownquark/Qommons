@@ -27,8 +27,8 @@ public interface QuadPredicate<A1, A2, A3, A4> {
 	 * @param <A3> The type of the third argument to the quaternary predicate
 	 * @param <A4> The type of the fourth argument to the quaternary predicate
 	 * @param function The implementation
-	 * @param print The string for the wrapped predicate's {@link #toString()}
-	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped predicate's {@link Object#toString()}
+	 * @param identity The identity for the predicate's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable quaternary predicate
 	 */
 	public static <A1, A2, A3, A4> QuadPredicate<A1, A2, A3, A4> printable(
@@ -42,8 +42,8 @@ public interface QuadPredicate<A1, A2, A3, A4> {
 	 * @param <A3> The type of the third argument to the quaternary predicate
 	 * @param <A4> The type of the fourth argument to the quaternary predicate
 	 * @param function The implementation
-	 * @param print Supplies the string for the wrapped predicate's {@link #toString()}
-	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped predicate's {@link Object#toString()}
+	 * @param identity The identity for the predicate's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable quaternary predicate
 	 */
 	public static <A1, A2, A3, A4> QuadPredicate<A1, A2, A3, A4> printable(

@@ -1,6 +1,12 @@
 package org.qommons.config;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import org.qommons.MultiInheritanceSet;
@@ -410,7 +416,6 @@ public class QonfigInterpreterCore {
 	 */
 	public interface QonfigValueCreator<T> {
 		/**
-		 * @param element The element to create the value for
 		 * @param session The active interpreter session
 		 * @return The created value
 		 * @throws QonfigInterpretationException If the value could not be created
@@ -454,7 +459,7 @@ public class QonfigInterpreterCore {
 	public interface QonfigValueModifier<T> {
 		/**
 		 * @param session The active interpreter session
-		 * @return An Object to pass to {@link #postPrepare(CoreSession, Object)} after the all modifiers have prepared the session
+		 * @return An Object to pass to {@link #postPrepare} after the all modifiers have prepared the session
 		 * @throws QonfigInterpretationException If anything goes wrong with the preparation
 		 */
 		default Object prepareSession(CoreSession session) throws QonfigInterpretationException {
@@ -462,10 +467,9 @@ public class QonfigInterpreterCore {
 		}
 
 		/**
-		 * @param value The value created for the element
 		 * @param session The active interpreter session
-		 * @param prepared Object returned from {@link #prepareSession(CoreSession)}, default null
-		 * @return The Object to pass to {@link #modifyValue(Object, CoreSession, Object)} after the value has been created
+		 * @param prepared Object returned from {@link #prepareSession}, default null
+		 * @return The Object to pass to {@link #modifyValue} after the value has been created
 		 * @throws QonfigInterpretationException If the post-modification operation could not be performed
 		 */
 		default Object postPrepare(CoreSession session, Object prepared) throws QonfigInterpretationException {
@@ -475,7 +479,7 @@ public class QonfigInterpreterCore {
 		/**
 		 * @param value The value created for the element
 		 * @param session The active interpreter session
-		 * @param prepared Object returned from {@link #prepareSession(CoreSession)}, default null
+		 * @param prepared Object returned from {@link #prepareSession}, default null
 		 * @return The modified value
 		 * @throws QonfigInterpretationException If the value could not be modified
 		 */

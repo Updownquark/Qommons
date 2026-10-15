@@ -1,20 +1,6 @@
 package org.qommons.collect;
 
-import java.util.AbstractList;
-import java.util.AbstractMap;
-import java.util.AbstractSet;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.Spliterators;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -366,8 +352,8 @@ public final class QuickSet<E> extends AbstractSet<E> implements Comparable<Quic
 	// It throws exceptions when a value is requested for a key that does not exist in the key set
 	/**
 	 * <p>
-	 * A "map" whose key set is a {@link QuickSet}. This interface does not extend Map<String, V> because its functionality differs a bit.
-	 * In particular it throws exceptions when a value is requested for a key that does not exist in the key set.
+	 * A "map" whose key set is a {@link QuickSet}. This interface does not extend Map&lt;String, V&gt; because its functionality differs a
+	 * bit. In particular it throws exceptions when a value is requested for a key that does not exist in the key set.
 	 * </p>
 	 * <p>
 	 * This map, like {@link QuickSet}, has extremely high performance for small key sets. Indexes for keys in the key set may be used to

@@ -238,9 +238,9 @@ public abstract class QonfigElementOrAddOn extends AbstractQonfigType {
 		return getDeclarer().equals(other.getDeclarer()) && getName().equals(other.getName());
 	}
 
-	/** Suffix on the element names of &lt;element-def> metadata */
+	/** Suffix on the element names of &lt;element-def&gt; metadata */
 	public static final String ELEMENT_METADATA_SUFFIX = "$META";
-	/** Suffix on the element names of &lt;add-on> metadata */
+	/** Suffix on the element names of &lt;add-on&gt; metadata */
 	public static final String ADD_ON_METADATA_ELEMENT = "$ELEMENT";
 
 	/** Abstract builder for element-defs or add-ons */

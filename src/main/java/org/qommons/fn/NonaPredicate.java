@@ -42,8 +42,8 @@ public interface NonaPredicate<A1, A2, A3, A4, A5, A6, A7, A8, A9> {
 	 * @param <A8> The type of the eighth argument to the predicate
 	 * @param <A9> The type of the ninth argument to the predicate
 	 * @param function The implementation
-	 * @param print The string for the wrapped predicate's {@link #toString()}
-	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped predicate's {@link Object#toString()}
+	 * @param identity The identity for the predicate's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable predicate
 	 */
 	public static <A1, A2, A3, A4, A5, A6, A7, A8, A9> NonaPredicate<A1, A2, A3, A4, A5, A6, A7, A8, A9> printable(
@@ -63,8 +63,8 @@ public interface NonaPredicate<A1, A2, A3, A4, A5, A6, A7, A8, A9> {
 	 * @param <A8> The type of the eighth argument to the predicate
 	 * @param <A9> The type of the ninth argument to the predicate
 	 * @param function The implementation
-	 * @param print Supplies the string for the wrapped predicate's {@link #toString()}
-	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped predicate's {@link Object#toString()}
+	 * @param identity The identity for the predicate's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable predicate
 	 */
 	public static <A1, A2, A3, A4, A5, A6, A7, A8, A9> NonaPredicate<A1, A2, A3, A4, A5, A6, A7, A8, A9> printable(

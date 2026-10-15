@@ -16,7 +16,6 @@ import org.qommons.Transaction;
  * This class supports obtaining a read lock from any thread, but a non-try-only attempt to obtain a write lock on a thread other than the
  * event thread will result in an {@link IllegalStateException}.
  * </p>
- * <p>
  * Beyond this constraint, this lock behaves as expected:
  * <ul>
  * <li>Unlimited read (non-exclusive) locks are available from any threads simultaneously while no exclusive (write) lock is held.</li>
@@ -24,7 +23,6 @@ import org.qommons.Transaction;
  * <li>The {@link Transaction}s obtained by successful lock calls on the event thread must be released on the thread they are obtained from.
  * This is not checked for performance reasons, but failure to do this could result in the lock becoming unusable and blocking forever.</li>
  * </ul>
- * </p>
  * <p>
  * Unlike most other lock implementations, this lock supports the safe, reliable upgrade of a read lock to a write lock (like all write lock
  * acquisitions, only on the event thread).

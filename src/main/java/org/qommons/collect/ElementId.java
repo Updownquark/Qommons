@@ -15,8 +15,8 @@ package org.qommons.collect;
  * 
  * <p>
  * A collection may create new ElementId instances each time one is requested, but different ElementId instances for a common element must
- * return 0 from {@link #compareTo(ElementId)} for equivalent elements. They must also {@link #equals(Object)} each other (and have a common
- * {@link #hashCode()}) forever, no matter how long ago the element was removed from the collection or how much it has changed since.
+ * return 0 from {@link #compareTo} for equivalent elements. They must also {@link Object#equals(Object)} each other (and have a common
+ * {@link Object#hashCode()}) forever, no matter how long ago the element was removed from the collection or how much it has changed since.
  * </p>
  *
  * <p>

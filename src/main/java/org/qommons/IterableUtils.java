@@ -1148,7 +1148,6 @@ public class IterableUtils {
 	 * <p>
 	 * An iterable of all possible permutations of the given source values with the given constraints.
 	 * </p>
-	 * <p>
 	 * E.g. If {0, 1, 2, 3} is given for the source with {@link #setMinSize(int) minSize}=1, {@link #setMaxSize(int) max
 	 * size}={@link Integer#MAX_VALUE}, {@link #setDistinct(boolean, boolean) distinct/ascending}=true/true, the result will be an iterator
 	 * that iterates over:
@@ -1168,7 +1167,6 @@ public class IterableUtils {
 	 * <li>[0,2,3]</li>
 	 * <li>[0,1,2,3]</li>
 	 * </ol>
-	 * </p>
 	 * <p>
 	 * For efficiency, the list returned from {@link Iterator#next()} will be the same instance each time--an unmodifiable wrapper around a
 	 * list that is updated internally for each iteration.

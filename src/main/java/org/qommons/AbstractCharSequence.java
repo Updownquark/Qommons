@@ -43,7 +43,7 @@ public abstract class AbstractCharSequence implements CharSequence {
 	}
 
 	/**
-	 * Default {@link CharSequence#hashCode()} implementation
+	 * Default {@link Object#hashCode()} implementation
 	 * 
 	 * @param seq The character sequence to hash
 	 * @return The hash code for the sequence
@@ -57,7 +57,7 @@ public abstract class AbstractCharSequence implements CharSequence {
 	}
 
 	/**
-	 * Default {@link CharSequence#equals(Object)} implementation
+	 * Default {@link Object#equals(Object)} implementation
 	 * 
 	 * @param seq The character sequence to compare
 	 * @param obj The other object to compare

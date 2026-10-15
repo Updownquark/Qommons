@@ -14,11 +14,11 @@ import org.qommons.fn.FunctionUtils;
  * BetterCollection is an ordered {@link Collection} (also a {@link Deque}) that provides a great deal of extra capability.
  * 
  * Fundamentally, each value in a BetterCollection is stored in an element, each of which has an {@link ElementId ID}. The ID of an element
- * is like an address, which can be {@link ElementId#compareTo(ElementId) compared} to other elements. It is immutable until that element is
- * removed from the collection, so it can be used to access elements even if the properties used to store the elements may have changed,
- * e.g. the hash code of an item in a hash set or the name of an item in a sorted set ordered by name. Since it is a direct link to the
- * placeholder of the element, access or modification to the element by its ID may be significantly faster than access by value. Access and
- * update by ID are typically constant time.
+ * is like an address, which can be {@link ElementId#compareTo compared} to other elements. It is immutable until that element is removed
+ * from the collection, so it can be used to access elements even if the properties used to store the elements may have changed, e.g. the
+ * hash code of an item in a hash set or the name of an item in a sorted set ordered by name. Since it is a direct link to the placeholder
+ * of the element, access or modification to the element by its ID may be significantly faster than access by value. Access and update by ID
+ * are typically constant time.
  * 
  * A BetterCollection must provide access to its elements by ID and value; and iteration from a BetterCollection is by element and not value
  * only. BetterCollection itself provides more functionality on top of this and implements most of the {@link Collection} API as well.
@@ -145,7 +145,8 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	 *        <li>Strictly obeyed, in which the value will be added at the beginning (true) or end (false) of the collection</li>
 	 *        <li>Ignored if the collection does not support position-indicated addition</li>
 	 *        <li>Used as a suggestion, where the insertion will be closer to the beginning (true) or end (false) of the collection as
-	 *        indicated by the parameter</li></li>
+	 *        indicated by the parameter</li>
+	 *        </ul>
 	 * @return The element at which the value was added, or null if the value was not added because it already exists in the collection and
 	 *         this collection does not permit duplicates
 	 * @throws UnsupportedOperationException If such an operation is not supported by this collection in general
@@ -902,7 +903,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	}
 
 	/**
-	 * A static utility method to be used by {@link BetterCollection#equals(Object)} implementations
+	 * A static utility method to be used by {@link Object#equals(Object)} implementations
 	 * 
 	 * @param c The collection
 	 * @param o The object to compare with the collection
@@ -932,7 +933,7 @@ public interface BetterCollection<E> extends SequencedDeque<E>, TransactableColl
 	}
 
 	/**
-	 * A static utility method to be used by {@link BetterCollection#toString()} implementations
+	 * A static utility method to be used by {@link Object#toString()} implementations
 	 * 
 	 * @param c The collection
 	 * @return A string representation of the collection's content

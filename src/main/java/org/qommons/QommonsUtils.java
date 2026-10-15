@@ -519,7 +519,7 @@ public class QommonsUtils {
 	 * <li>nanosecond/nano/ns</li>
 	 * </ul>
 	 * 
-	 * The plural 's' is accepted on any units > 1 character
+	 * The plural 's' is accepted on any units &gt; 1 character
 	 * 
 	 * @param text The text to parse
 	 * @return The duration specified in the text
@@ -1862,7 +1862,7 @@ public class QommonsUtils {
 	 * @param max The maximum index
 	 * @param maxOk Whether index==max is ok
 	 * @param message The message for the exception
-	 * @throws IndexOutOfBoundsException If index&lt;0, index>max, or !maxOk and index==max
+	 * @throws IndexOutOfBoundsException If index&lt;0, index&gt;max, or !maxOk and index==max
 	 */
 	public static void checkIndex(int index, int max, boolean maxOk, Object... message) throws IndexOutOfBoundsException {
 		if (index < 0 || (index > max) || (!maxOk && index == max)) {

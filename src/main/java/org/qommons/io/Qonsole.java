@@ -42,7 +42,7 @@ public class Qonsole implements Named, AutoCloseable {
 	/**
 	 * A plugin to handle command-line argument-style plugin input
 	 * 
-	 * @see Qonsole#addPlugin(String, ArgumentParser, QonsoleArgsHandler)
+	 * @see Qonsole#addPlugin
 	 */
 	public class QonsoleArgsPlugin implements QonsolePlugin {
 		private final ArgumentParsing.ArgumentParser theParser;

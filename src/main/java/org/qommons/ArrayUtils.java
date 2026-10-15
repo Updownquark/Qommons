@@ -455,9 +455,9 @@ public final class ArrayUtils {
 	 * @param <T> The type of array to search
 	 * @param array The array to search
 	 * @param search A comparable value to use to search the array
-	 * @return If there exists in the array an <code>element</code> for which <code>search.compareTo(element)==0</search>, then the index
-	 * of that element; otherwise <code>-(index+1)</code>, where <code>index</code> is the index where such an element would be inserted
-	 *         into the sorted array
+	 * @return If there exists in the array an <code>element</code> for which <code>search.compareTo(element)==0</code>, then the index of
+	 *         that element; otherwise <code>-(index+1)</code>, where <code>index</code> is the index where such an element would be
+	 *         inserted into the sorted array
 	 */
 	public static <T> int binarySearch(T[] array, Comparable<? super T> search) {
 		return binarySearch(java.util.Arrays.asList(array), search);
@@ -479,9 +479,9 @@ public final class ArrayUtils {
 	 * @param <T> The type of list to search
 	 * @param list The list to search
 	 * @param search A comparable value to use to search the list
-	 * @return If there exists in the list an <code>element</code> for which <code>search.compareTo(element)==0</search>, then the index
-	 * of that element; otherwise <code>-(index+1)</code>, where <code>index</code> is the index where such an element would be inserted
-	 *         into the sorted list
+	 * @return If there exists in the list an <code>element</code> for which <code>search.compareTo(element)==0</code>, then the index of
+	 *         that element; otherwise <code>-(index+1)</code>, where <code>index</code> is the index where such an element would be
+	 *         inserted into the sorted list
 	 */
 	public static <T> int binarySearch(List<? extends T> list, Comparable<? super T> search) {
 		return binarySearch(0, list.size() - 1, index -> search.compareTo(list.get(index)));
@@ -992,7 +992,7 @@ public final class ArrayUtils {
 	 * @param o1 The first object to compare
 	 * @param o2 The second object to compare
 	 * @return true if <code>o1</code> and <code>o2</code> are arrays and their elements are equivalent or if either
-	 *         <code>o1==null && o2==null</code> or <code>o1.equals(o2)</code>, false otherwise
+	 *         <code>o1==null &amp;&amp; o2==null</code> or <code>o1.equals(o2)</code>, false otherwise
 	 */
 	public static boolean equals(Object o1, Object o2) {
 		if(o1 == null)
@@ -1038,7 +1038,7 @@ public final class ArrayUtils {
 	 * @param o1 The first object to compare
 	 * @param o2 The second object to compare
 	 * @return true if <code>o1</code> and <code>o2</code> are arrays and their elements are equivalent or if either
-	 *         <code>o1==null && o2==null</code> or <code>o1.equals(o2)</code>, false otherwise
+	 *         <code>o1==null &amp;&amp; o2==null</code> or <code>o1.equals(o2)</code>, false otherwise
 	 */
 	public static boolean equalsUnordered(Object o1, Object o2) {
 		return equalsUnordered(o1, o2, new EqualsChecker() {
@@ -1081,7 +1081,7 @@ public final class ArrayUtils {
 	 * @param o2 The second object to compare
 	 * @param checker The checker to check elements for equality
 	 * @return true if <code>o1</code> and <code>o2</code> are arrays and their elements are equivalent or if either
-	 *         <code>o1==null && o2==null</code> or <code>o1.equals(o2)</code>, false otherwise
+	 *         <code>o1==null &amp;&amp; o2==null</code> or <code>o1.equals(o2)</code>, false otherwise
 	 */
 	public static boolean equalsUnordered(Object o1, Object o2, EqualsChecker checker) {
 		if(o1 == null)
@@ -1583,6 +1583,7 @@ public final class ArrayUtils {
 	 *
 	 * <p>
 	 * There are many different indices that may or may not be relevant to a particular listener:
+	 * </p>
 	 * <ul>
 	 * <li><b>oIdx:</b> The index of the element in the original array</li>
 	 * <li><b>incMod:</b> The index of the element in a copy of the original array that has been modified incrementally for each add,
@@ -1592,10 +1593,9 @@ public final class ArrayUtils {
 	 * </ul>
 	 * oIdx and mIdx are self-explanatory. incMod and retIdx are useful for listeners that modify an external ordered set incrementally with
 	 * each listener method invocation.
-	 * </p>
 	 *
 	 * <p>
-	 * <b>An Example</b><br />
+	 * <b>An Example</b><br>
 	 * Suppose there is a list, <b>L</b>, whose data can only be modified incrementally by the methods add(value, index), remove(index), and
 	 * move(fromIndex, toIndex), but can be accessed in batch by the getData method, which returns an array of all data in the list. Suppose
 	 * the list needs to be modified to represent a new arbitrary set of data, <b>d</b>. <b>d</b> may or may not contain elements
@@ -1603,6 +1603,7 @@ public final class ArrayUtils {
 	 * in <b>d</b>. To modify <b>L</b> to represent the data in <b>d</b> in the correct order, the
 	 * {@link ArrayUtils#adjust(Object[], Object[], DifferenceListenerE)} method should be called with <b>L</b>.getData(), <b>d</b>, and a
 	 * listener whose methods perform the following operations:
+	 * </p>
 	 * <ul>
 	 * <li>{@link #identity(Object, Object)}: Tests the two elements to see if the item from <b>L</b> represents the item in <b>d</b>,
 	 * possibly by simply calling {@link Object#equals(Object)}</li>
@@ -1614,10 +1615,8 @@ public final class ArrayUtils {
 	 * </ul>
 	 * The end result of this invocation will be that <b>L</b> contains all the data in <b>d</b>, only the data in <b>d</b>, and is ordered
 	 * identically to <b>d</b>. The returned array may be ignored.
-	 * </p>
 	 *
-	 * <p>
-	 * <b>Alternate Operation:</b><br />
+	 * <b>Alternate Operation:</b><br>
 	 * <ul>
 	 * <li>If it is intended that the modification operation should only add data to <b>L</b>, the remove method may do nothing and return
 	 * o. The return value will cause the adjust method to update future indexes, assuming that the value is kept and not removed.</li>
@@ -1626,7 +1625,6 @@ public final class ArrayUtils {
 	 * <b>d</b>) in their original order.</li>
 	 * <li>Other permutations may exist depending on the business logic used by the listener.</li>
 	 * </ul>
-	 * </p>
 	 *
 	 * <p>
 	 * The listener is entirely free to choose whether items are added or removed from the original array and its representations by

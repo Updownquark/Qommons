@@ -32,9 +32,9 @@ import org.qommons.io.Format;
  * hue-saturation-brightness components (e.g. "hsb(120, 100, 39)").<br>
  * rgb values can be specified via hex like "#006400", and hsb values like "$786427".<br>
  * </p>
- * <p>
  * In addition to {@link #transparent} (which is not available via {@link #parseColor(String)}), the constants in this class are:
  * <table>
+ * <caption>List of available color constants</caption>
  * <tr>
  * <td style="background-color:#000000;color:white">black</td>
  * <td>Basic black, #000000</td>
@@ -588,8 +588,6 @@ import org.qommons.io.Format;
  * <td>#9acd32</td>
  * </tr>
  * </table>
- * </ul>
- * </p>
  */
 public class Colors {
 	private Colors() {
@@ -619,439 +617,439 @@ public class Colors {
 	/** Not available via {@link #parseColor(String)}, this is a code utility constant representing a completely transparent color */
 	public static final transient Color transparent = new Color(0, 0, 0, 0);
 
-	/** Basic black, #000000 <span style="font-weight:bolder;color:black">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** Basic black, #000000 <span style="font-weight:bolder;color:black">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color black = Color.black;
 
-	/** Basic white, #ffffff <span style="font-weight:bolder;color:white">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** Basic white, #ffffff <span style="font-weight:bolder;color:white">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color white = Color.white;
 
-	/** Basic red, #ff0000 <span style="font-weight:bolder;color:red">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** Basic red, #ff0000 <span style="font-weight:bolder;color:red">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color red = Color.red;
 
 	/**
 	 * "Lime" is basic green from HTML. "Green" is a darker color. #00ff00
-	 * <span style="font-weight:bolder;color:green">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span>
+	 * <span style="font-weight:bolder;color:green">\u2588\u2588\u2588\u2588\u2588\u2588</span>
 	 */
 	public static final Color lime = Color.green;
 
-	/** Basic blue, #0000ff <span style="font-weight:bolder;color:blue">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** Basic blue, #0000ff <span style="font-weight:bolder;color:blue">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color blue = Color.blue;
 
 	/**
 	 * Basic yellow, a mix of full red and green, #ffff00
-	 * <span style="font-weight:bolder;color:yellow">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span>
+	 * <span style="font-weight:bolder;color:yellow">\u2588\u2588\u2588\u2588\u2588\u2588</span>
 	 */
 	public static final Color yellow = Color.yellow;
 
 	/**
 	 * Basic cyan, a mix of full green and blue, #00ffff
-	 * <span style="font-weight:bolder;color:cyan">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span>
+	 * <span style="font-weight:bolder;color:cyan">\u2588\u2588\u2588\u2588\u2588\u2588</span>
 	 */
 	public static final Color cyan = Color.cyan;
 
-	/** Same as cyan, #00ffff <span style="font-weight:bolder;color:aqua">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** Same as cyan, #00ffff <span style="font-weight:bolder;color:aqua">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color aqua = cyan;
 
 	/**
 	 * Basic magenta, a mix of full red and blue, #ff00ff
-	 * <span style="font-weight:bolder;color:magenta">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span>
+	 * <span style="font-weight:bolder;color:magenta">\u2588\u2588\u2588\u2588\u2588\u2588</span>
 	 */
 	public static final Color magenta = Color.magenta;
 
-	/** Same as magenta, #ff00ff <span style="font-weight:bolder;color:fuchsia">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** Same as magenta, #ff00ff <span style="font-weight:bolder;color:fuchsia">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color fuchsia = magenta;
 
-	/** A darker red, #800000 <span style="font-weight:bolder;color:maroon">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** A darker red, #800000 <span style="font-weight:bolder;color:maroon">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color maroon = new Color(128, 0, 0);
 
 	/**
 	 * A darker green than {@link java.awt.Color#green}. Use {@link #lime} for that green. #008000
-	 * <span style="font-weight:bolder;color:#008000">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span>
+	 * <span style="font-weight:bolder;color:#008000">\u2588\u2588\u2588\u2588\u2588\u2588</span>
 	 */
 	public static final Color green = new Color(0, 128, 0);
 
-	/** A darker blue, #000080 <span style="font-weight:bolder;color:navy">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** A darker blue, #000080 <span style="font-weight:bolder;color:navy">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color navy = new Color(0, 0, 128);
 
-	/** A darker yellow, #808000 <span style="font-weight:bolder;color:olive">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** A darker yellow, #808000 <span style="font-weight:bolder;color:olive">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color olive = new Color(128, 128, 0);
 
-	/** A darker cyan, <span style="font-weight:bolder;color:teal">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** A darker cyan, <span style="font-weight:bolder;color:teal">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color teal = new Color(0, 128, 128);
 
-	/** A darker magenta, <span style="font-weight:bolder;color:purple">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** A darker magenta, <span style="font-weight:bolder;color:purple">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color purple = new Color(128, 0, 128);
 
-	/** #ffa500 <span style="font-weight:bolder;color:#ffa500">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffa500 <span style="font-weight:bolder;color:#ffa500">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color orange = _parseColor("#ffa500");
 
-	/** #a52a2a" <span style="font-weight:bolder;color:#a52a2a">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #a52a2a" <span style="font-weight:bolder;color:#a52a2a">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color brown = _parseColor("#a52a2a");
 
-	/** #f0f8ff <span style="font-weight:bolder;color:#f0f8ff">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #f0f8ff <span style="font-weight:bolder;color:#f0f8ff">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color aliceBlue = _parseColor("#f0f8ff");
 
-	/** #faebd7 <span style="font-weight:bolder;color:#faebd7">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #faebd7 <span style="font-weight:bolder;color:#faebd7">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color antiqueWhite = _parseColor("#faebd7");
 
-	/** #7fffd4 <span style="font-weight:bolder;color:#7fffd4">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #7fffd4 <span style="font-weight:bolder;color:#7fffd4">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color aquamarine = _parseColor("#7fffd4");
 
-	/** #f0ffff <span style="font-weight:bolder;color:#f0ffff">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #f0ffff <span style="font-weight:bolder;color:#f0ffff">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color azure = _parseColor("#f0ffff");
 
-	/** #f5f5dc <span style="font-weight:bolder;color:#f5f5dc">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #f5f5dc <span style="font-weight:bolder;color:#f5f5dc">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color beige = _parseColor("#f5f5dc");
 
-	/** #ffe4c4 <span style="font-weight:bolder;color:#ffe4c4">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffe4c4 <span style="font-weight:bolder;color:#ffe4c4">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color bisque = _parseColor("#ffe4c4");
 
-	/** A very light brown #ffebcd <span style="font-weight:bolder;color:#ffebcd">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** A very light brown #ffebcd <span style="font-weight:bolder;color:#ffebcd">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color blanchedAlmond = _parseColor("#ffebcd");
 
-	/** Lilac color #8a2be2 <span style="font-weight:bolder;color:#8a2be2">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** Lilac color #8a2be2 <span style="font-weight:bolder;color:#8a2be2">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color blueViolet = _parseColor("#8a2be2");
 
-	/** A light brown #deb887 <span style="font-weight:bolder;color:#deb887">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** A light brown #deb887 <span style="font-weight:bolder;color:#deb887">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color burlyWood = _parseColor("#deb887");
 
-	/** #5f9ea0 <span style="font-weight:bolder;color:#5f9ea0">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #5f9ea0 <span style="font-weight:bolder;color:#5f9ea0">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color cadetBlue = _parseColor("#5f9ea0");
 
-	/** A bright green #7fff00 <span style="font-weight:bolder;color:#7fff00">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** A bright green #7fff00 <span style="font-weight:bolder;color:#7fff00">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color chartreuse = _parseColor("#7fff00");
 
-	/** An orangey brown #d2691e <span style="font-weight:bolder;color:#d2691e">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** An orangey brown #d2691e <span style="font-weight:bolder;color:#d2691e">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color chocolate = _parseColor("#d2691e");
 
-	/** #ff7f50 <span style="font-weight:bolder;color:#ff7f50">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ff7f50 <span style="font-weight:bolder;color:#ff7f50">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color coral = _parseColor("#ff7f50");
 
-	/** #6495ed <span style="font-weight:bolder;color:#6495ed">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #6495ed <span style="font-weight:bolder;color:#6495ed">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color cornflowerBlue = _parseColor("#6495ed");
 
-	/** #fff8dc <span style="font-weight:bolder;color:#fff8dc">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #fff8dc <span style="font-weight:bolder;color:#fff8dc">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color cornsilk = _parseColor("#fff8dc");
 
-	/** #dc143c <span style="font-weight:bolder;color:#dc143c">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #dc143c <span style="font-weight:bolder;color:#dc143c">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color crimson = _parseColor("#dc143c");
 
-	/** #00008b <span style="font-weight:bolder;color:#00008b">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #00008b <span style="font-weight:bolder;color:#00008b">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkBlue = _parseColor("#00008b");
 
-	/** #008b8b <span style="font-weight:bolder;color:#008b8b">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #008b8b <span style="font-weight:bolder;color:#008b8b">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkCyan = _parseColor("#008b8b");
 
-	/** #b8860b <span style="font-weight:bolder;color:#b8860b">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #b8860b <span style="font-weight:bolder;color:#b8860b">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkGoldenrod = _parseColor("#b8860b");
 
-	/** #a9a9a9 <span style="font-weight:bolder;color:#a9a9a9">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #a9a9a9 <span style="font-weight:bolder;color:#a9a9a9">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkGray = _parseColor("#a9a9a9");
 
-	/** #006400 <span style="font-weight:bolder;color:#006400">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #006400 <span style="font-weight:bolder;color:#006400">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkGreen = _parseColor("#006400");
 
-	/** #bdb76b <span style="font-weight:bolder;color:#bdb76b">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #bdb76b <span style="font-weight:bolder;color:#bdb76b">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkKhaki = _parseColor("#bdb76b");
 
-	/** #8b008b <span style="font-weight:bolder;color:#8b008b">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #8b008b <span style="font-weight:bolder;color:#8b008b">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkMagenta = _parseColor("#8b008b");
 
-	/** #556b2f <span style="font-weight:bolder;color:#556b2f">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #556b2f <span style="font-weight:bolder;color:#556b2f">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkOliveGreen = _parseColor("#556b2f");
 
-	/** #ff8c00 <span style="font-weight:bolder;color:#ff8c00">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ff8c00 <span style="font-weight:bolder;color:#ff8c00">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkOrange = _parseColor("#ff8c00");
 
-	/** #9932cc <span style="font-weight:bolder;color:#9932cc">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #9932cc <span style="font-weight:bolder;color:#9932cc">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkOrchid = _parseColor("#9932cc");
 
-	/** #8b0000 <span style="font-weight:bolder;color:#8b0000">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #8b0000 <span style="font-weight:bolder;color:#8b0000">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkRed = _parseColor("#8b0000");
 
-	/** #e9967a <span style="font-weight:bolder;color:#e9967a">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #e9967a <span style="font-weight:bolder;color:#e9967a">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkSalmon = _parseColor("#e9967a");
 
-	/** #8fbc8f <span style="font-weight:bolder;color:#8fbc8f">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #8fbc8f <span style="font-weight:bolder;color:#8fbc8f">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkSeaGreen = _parseColor("#8fbc8f");
 
-	/** #483d8b <span style="font-weight:bolder;color:#483d8b">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #483d8b <span style="font-weight:bolder;color:#483d8b">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkSlateBlue = _parseColor("#483d8b");
 
-	/** #2f4f4f <span style="font-weight:bolder;color:#2f4f4f">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #2f4f4f <span style="font-weight:bolder;color:#2f4f4f">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkSlateGray = _parseColor("#2f4f4f");
 
-	/** #00ced1 <span style="font-weight:bolder;color:#00ced1">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #00ced1 <span style="font-weight:bolder;color:#00ced1">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkTurquoise = _parseColor("#00ced1");
 
-	/** #9400d3 <span style="font-weight:bolder;color:#9400d3">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #9400d3 <span style="font-weight:bolder;color:#9400d3">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color darkViolet = _parseColor("#9400d3");
 
-	/** #ff1493 <span style="font-weight:bolder;color:#ff1493">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ff1493 <span style="font-weight:bolder;color:#ff1493">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color deepPink = _parseColor("#ff1493");
 
-	/** #00bfff <span style="font-weight:bolder;color:#00bfff">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #00bfff <span style="font-weight:bolder;color:#00bfff">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color deepSkyBlue = _parseColor("#00bfff");
 
-	/** #696969 <span style="font-weight:bolder;color:#696969">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #696969 <span style="font-weight:bolder;color:#696969">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color dimGray = _parseColor("#696969");
 
-	/** #1e90ff <span style="font-weight:bolder;color:#1e90ff">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #1e90ff <span style="font-weight:bolder;color:#1e90ff">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color dodgerBlue = _parseColor("#1e90ff");
 
-	/** #b22222 <span style="font-weight:bolder;color:#b22222">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #b22222 <span style="font-weight:bolder;color:#b22222">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color fireBrick = _parseColor("#b22222");
 
-	/** #fffaf0 <span style="font-weight:bolder;color:#fffaf0">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #fffaf0 <span style="font-weight:bolder;color:#fffaf0">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color floralWhite = _parseColor("#fffaf0");
 
-	/** #228b22 <span style="font-weight:bolder;color:#228b22">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #228b22 <span style="font-weight:bolder;color:#228b22">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color forestGreen = _parseColor("#228b22");
 
-	/** #dcdcdc <span style="font-weight:bolder;color:#dcdcdc">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #dcdcdc <span style="font-weight:bolder;color:#dcdcdc">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color gainsboro = _parseColor("#dcdcdc");
 
-	/** #f8f8ff <span style="font-weight:bolder;color:#f8f8ff">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #f8f8ff <span style="font-weight:bolder;color:#f8f8ff">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color ghostWhite = _parseColor("#f8f8ff");
 
-	/** #ffd700 <span style="font-weight:bolder;color:#ffd700">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffd700 <span style="font-weight:bolder;color:#ffd700">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color gold = _parseColor("#ffd700");
 
-	/** #daa520 <span style="font-weight:bolder;color:#daa520">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #daa520 <span style="font-weight:bolder;color:#daa520">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color goldenrod = _parseColor("#daa520");
 
-	/** #808080 <span style="font-weight:bolder;color:#808080">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #808080 <span style="font-weight:bolder;color:#808080">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color gray = _parseColor("#808080");
 
-	/** #adff2f <span style="font-weight:bolder;color:#adff2f">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #adff2f <span style="font-weight:bolder;color:#adff2f">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color greenYellow = _parseColor("#adff2f");
 
-	/** #f0fff0 <span style="font-weight:bolder;color:#f0fff0">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #f0fff0 <span style="font-weight:bolder;color:#f0fff0">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color honeydew = _parseColor("#f0fff0");
 
-	/** #ff69b4 <span style="font-weight:bolder;color:#ff69b4">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ff69b4 <span style="font-weight:bolder;color:#ff69b4">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color hotPink = _parseColor("#ff69b4");
 
-	/** #cd5c5c <span style="font-weight:bolder;color:#cd5c5c">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #cd5c5c <span style="font-weight:bolder;color:#cd5c5c">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color indianRed = _parseColor("#cd5c5c");
 
-	/** #4b0082 <span style="font-weight:bolder;color:#4b0082">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #4b0082 <span style="font-weight:bolder;color:#4b0082">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color indigo = _parseColor("#4b0082");
 
-	/** #fffff0 <span style="font-weight:bolder;color:#fffff0">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #fffff0 <span style="font-weight:bolder;color:#fffff0">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color ivory = _parseColor("#fffff0");
 
-	/** #f0e68c <span style="font-weight:bolder;color:#f0e68c">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #f0e68c <span style="font-weight:bolder;color:#f0e68c">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color khaki = _parseColor("#f0e68c");
 
-	/** #e6e6fa <span style="font-weight:bolder;color:#e6e6fa">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #e6e6fa <span style="font-weight:bolder;color:#e6e6fa">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lavender = _parseColor("#e6e6fa");
 
-	/** #fff0f5 <span style="font-weight:bolder;color:#fff0f5">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #fff0f5 <span style="font-weight:bolder;color:#fff0f5">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lavenderBlush = _parseColor("#fff0f5");
 
-	/** #7cfc00 <span style="font-weight:bolder;color:#7cfc00">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #7cfc00 <span style="font-weight:bolder;color:#7cfc00">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lawnGreen = _parseColor("#7cfc00");
 
-	/** #fffacd <span style="font-weight:bolder;color:#fffacd">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #fffacd <span style="font-weight:bolder;color:#fffacd">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lemonChiffon = _parseColor("#fffacd");
 
-	/** #add8e6 <span style="font-weight:bolder;color:#add8e6">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #add8e6 <span style="font-weight:bolder;color:#add8e6">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightBlue = _parseColor("#add8e6");
 
-	/** #f08080 <span style="font-weight:bolder;color:#f08080">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #f08080 <span style="font-weight:bolder;color:#f08080">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightCoral = _parseColor("#f08080");
 
-	/** #e0ffff <span style="font-weight:bolder;color:#e0ffff">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #e0ffff <span style="font-weight:bolder;color:#e0ffff">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightCyan = _parseColor("#e0ffff");
 
-	/** #fafad2 <span style="font-weight:bolder;color:#fafad2">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #fafad2 <span style="font-weight:bolder;color:#fafad2">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightGoldenrodYellow = _parseColor("#fafad2");
 
-	/** #d3d3d3 <span style="font-weight:bolder;color:#d3d3d3">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #d3d3d3 <span style="font-weight:bolder;color:#d3d3d3">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightGray = _parseColor("#d3d3d3");
 
-	/** #90ee90 <span style="font-weight:bolder;color:#90ee90">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #90ee90 <span style="font-weight:bolder;color:#90ee90">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightGreen = _parseColor("#90ee90");
 
-	/** #ffb6c1 <span style="font-weight:bolder;color:#ffb6c1">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffb6c1 <span style="font-weight:bolder;color:#ffb6c1">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightPink = _parseColor("#ffb6c1");
 
-	/** #ffa07a <span style="font-weight:bolder;color:#ffa07a">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffa07a <span style="font-weight:bolder;color:#ffa07a">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightSalmon = _parseColor("#ffa07a");
 
-	/** #20b2aa <span style="font-weight:bolder;color:#20b2aa">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #20b2aa <span style="font-weight:bolder;color:#20b2aa">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightSeaGreen = _parseColor("#20b2aa");
 
-	/** #87cefa <span style="font-weight:bolder;color:#87cefa">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #87cefa <span style="font-weight:bolder;color:#87cefa">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightSkyBlue = _parseColor("#87cefa");
 
-	/** #778899 <span style="font-weight:bolder;color:#778899">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #778899 <span style="font-weight:bolder;color:#778899">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightSlateGray = _parseColor("#778899");
 
-	/** #b0c4de <span style="font-weight:bolder;color:#b0c4de">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #b0c4de <span style="font-weight:bolder;color:#b0c4de">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightSteelBlue = _parseColor("#b0c4de");
 
-	/** #ffffe0 <span style="font-weight:bolder;color:#ffffe0">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffffe0 <span style="font-weight:bolder;color:#ffffe0">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color lightYellow = _parseColor("#ffffe0");
 
-	/** #32cd32 <span style="font-weight:bolder;color:#32cd32">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #32cd32 <span style="font-weight:bolder;color:#32cd32">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color limeGreen = _parseColor("#32cd32");
 
-	/** #faf0e6 <span style="font-weight:bolder;color:#faf0e6">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #faf0e6 <span style="font-weight:bolder;color:#faf0e6">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color linen = _parseColor("#faf0e6");
 
-	/** #66cdaa <span style="font-weight:bolder;color:#66cdaa">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #66cdaa <span style="font-weight:bolder;color:#66cdaa">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color mediumAquamarine = _parseColor("#66cdaa");
 
-	/** #0000cd <span style="font-weight:bolder;color:#0000cd">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #0000cd <span style="font-weight:bolder;color:#0000cd">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color mediumBlue = _parseColor("#0000cd");
 
-	/** #ba55d3 <span style="font-weight:bolder;color:#ba55d3">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ba55d3 <span style="font-weight:bolder;color:#ba55d3">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color mediumOrchid = _parseColor("#ba55d3");
 
-	/** #9370d8 <span style="font-weight:bolder;color:#9370d8">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #9370d8 <span style="font-weight:bolder;color:#9370d8">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color mediumPurple = _parseColor("#9370d8");
 
-	/** #3cb371 <span style="font-weight:bolder;color:#3cb371">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #3cb371 <span style="font-weight:bolder;color:#3cb371">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color mediumSeaGreen = _parseColor("#3cb371");
 
-	/** #7b68ee <span style="font-weight:bolder;color:#7b68ee">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #7b68ee <span style="font-weight:bolder;color:#7b68ee">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color mediumSlateBlue = _parseColor("#7b68ee");
 
-	/** #00fa9a <span style="font-weight:bolder;color:#00fa9a">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #00fa9a <span style="font-weight:bolder;color:#00fa9a">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color mediumSpringGreen = _parseColor("#00fa9a");
 
-	/** #48d1cc <span style="font-weight:bolder;color:#48d1cc">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #48d1cc <span style="font-weight:bolder;color:#48d1cc">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color mediumTurquoise = _parseColor("#48d1cc");
 
-	/** #c71585 <span style="font-weight:bolder;color:#c71585">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #c71585 <span style="font-weight:bolder;color:#c71585">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color mediumVioletRed = _parseColor("#c71585");
 
-	/** #191970 <span style="font-weight:bolder;color:#191970">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #191970 <span style="font-weight:bolder;color:#191970">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color midnightBlue = _parseColor("#191970");
 
-	/** #f5fffa <span style="font-weight:bolder;color:#f5fffa">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #f5fffa <span style="font-weight:bolder;color:#f5fffa">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color mintCream = _parseColor("#f5fffa");
 
-	/** #ffe4e1 <span style="font-weight:bolder;color:#ffe4e1">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffe4e1 <span style="font-weight:bolder;color:#ffe4e1">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color mistyRose = _parseColor("#ffe4e1");
 
-	/** #ffe4b5 <span style="font-weight:bolder;color:#ffe4b5">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffe4b5 <span style="font-weight:bolder;color:#ffe4b5">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color moccasin = _parseColor("#ffe4b5");
 
-	/** #ffdead <span style="font-weight:bolder;color:#ffdead">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffdead <span style="font-weight:bolder;color:#ffdead">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color navajoWhite = _parseColor("#ffdead");
 
-	/** #fdf5e6 <span style="font-weight:bolder;color:#fdf5e6">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #fdf5e6 <span style="font-weight:bolder;color:#fdf5e6">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color oldLace = _parseColor("#fdf5e6");
 
-	/** #6b8e23 <span style="font-weight:bolder;color:#6b8e23">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #6b8e23 <span style="font-weight:bolder;color:#6b8e23">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color oliveDrab = _parseColor("#6b8e23");
 
-	/** #ff4500 <span style="font-weight:bolder;color:#ff4500">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ff4500 <span style="font-weight:bolder;color:#ff4500">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color orangeRed = _parseColor("#ff4500");
 
-	/** #da70d6 <span style="font-weight:bolder;color:#da70d6">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #da70d6 <span style="font-weight:bolder;color:#da70d6">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color orchid = _parseColor("#da70d6");
 
-	/** #eee8aa <span style="font-weight:bolder;color:#eee8aa">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #eee8aa <span style="font-weight:bolder;color:#eee8aa">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color paleGoldenrod = _parseColor("#eee8aa");
 
-	/** #98fb98 <span style="font-weight:bolder;color:#98fb98">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #98fb98 <span style="font-weight:bolder;color:#98fb98">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color paleGreen = _parseColor("#98fb98");
 
-	/** #afeeee <span style="font-weight:bolder;color:#afeeee">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #afeeee <span style="font-weight:bolder;color:#afeeee">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color paleTurquoise = _parseColor("#afeeee");
 
-	/** #d87093 <span style="font-weight:bolder;color:#d87093">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #d87093 <span style="font-weight:bolder;color:#d87093">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color paleVioletRed = _parseColor("#d87093");
 
-	/** #ffefd5 <span style="font-weight:bolder;color:#ffefd5">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffefd5 <span style="font-weight:bolder;color:#ffefd5">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color papayaWhip = _parseColor("#ffefd5");
 
-	/** #ffdab9 <span style="font-weight:bolder;color:#ffdab9">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffdab9 <span style="font-weight:bolder;color:#ffdab9">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color peachPuff = _parseColor("#ffdab9");
 
-	/** #cd853f <span style="font-weight:bolder;color:#cd853f">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #cd853f <span style="font-weight:bolder;color:#cd853f">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color peru = _parseColor("#cd853f");
 
-	/** #ffc0cb <span style="font-weight:bolder;color:#ffc0cb">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ffc0cb <span style="font-weight:bolder;color:#ffc0cb">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color pink = _parseColor("#ffc0cb");
 
-	/** #dda0dd <span style="font-weight:bolder;color:#dda0dd">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #dda0dd <span style="font-weight:bolder;color:#dda0dd">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color plum = _parseColor("#dda0dd");
 
-	/** #b0e0e6 <span style="font-weight:bolder;color:#b0e0e6">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #b0e0e6 <span style="font-weight:bolder;color:#b0e0e6">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color powderBlue = _parseColor("#b0e0e6");
 
-	/** #bc8f8f <span style="font-weight:bolder;color:#bc8f8f">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #bc8f8f <span style="font-weight:bolder;color:#bc8f8f">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color rosyBrown = _parseColor("#bc8f8f");
 
-	/** #4169e1 <span style="font-weight:bolder;color:#4169e1">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #4169e1 <span style="font-weight:bolder;color:#4169e1">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color royalBlue = _parseColor("#4169e1");
 
-	/** #8b4513 <span style="font-weight:bolder;color:#8b4513">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #8b4513 <span style="font-weight:bolder;color:#8b4513">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color saddleBrown = _parseColor("#8b4513");
 
-	/** #fa8072 <span style="font-weight:bolder;color:#fa8072">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #fa8072 <span style="font-weight:bolder;color:#fa8072">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color salmon = _parseColor("#fa8072");
 
-	/** #f4a460 <span style="font-weight:bolder;color:#f4a460">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #f4a460 <span style="font-weight:bolder;color:#f4a460">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color sandyBrown = _parseColor("#f4a460");
 
-	/** #2e8b57 <span style="font-weight:bolder;color:#2e8b57">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #2e8b57 <span style="font-weight:bolder;color:#2e8b57">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color seaGreen = _parseColor("#2e8b57");
 
-	/** #fff5ee <span style="font-weight:bolder;color:#fff5ee">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #fff5ee <span style="font-weight:bolder;color:#fff5ee">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color seaShell = _parseColor("#fff5ee");
 
-	/** #a0522d <span style="font-weight:bolder;color:#a0522d">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #a0522d <span style="font-weight:bolder;color:#a0522d">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color sienna = _parseColor("#a0522d");
 
-	/** #c0c0c0 <span style="font-weight:bolder;color:#c0c0c0">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #c0c0c0 <span style="font-weight:bolder;color:#c0c0c0">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color silver = _parseColor("#c0c0c0");
 
-	/** #a7ceeb <span style="font-weight:bolder;color:#a7ceeb">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #a7ceeb <span style="font-weight:bolder;color:#a7ceeb">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color skyBlue = _parseColor("#a7ceeb");
 
-	/** #6a5acd <span style="font-weight:bolder;color:#6a5acd">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #6a5acd <span style="font-weight:bolder;color:#6a5acd">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color slateBlue = _parseColor("#6a5acd");
 
-	/** #708090 <span style="font-weight:bolder;color:#708090">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #708090 <span style="font-weight:bolder;color:#708090">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color slateGray = _parseColor("#708090");
 
-	/** #fffafa <span style="font-weight:bolder;color:#fffafa">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #fffafa <span style="font-weight:bolder;color:#fffafa">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color snow = _parseColor("#fffafa");
 
-	/** #00ff7f <span style="font-weight:bolder;color:#00ff7f">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #00ff7f <span style="font-weight:bolder;color:#00ff7f">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color springGreen = _parseColor("#00ff7f");
 
-	/** #4682b4 <span style="font-weight:bolder;color:#4682b4">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #4682b4 <span style="font-weight:bolder;color:#4682b4">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color steelBlue = _parseColor("#4682b4");
 
-	/** #d2b4bc <span style="font-weight:bolder;color:#d2b4bc">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #d2b4bc <span style="font-weight:bolder;color:#d2b4bc">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color tan = _parseColor("#d2b4bc");
 
-	/** #d8bfd8 <span style="font-weight:bolder;color:#d8bfd8">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #d8bfd8 <span style="font-weight:bolder;color:#d8bfd8">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color thistle = _parseColor("#d8bfd8");
 
-	/** #ff6347 <span style="font-weight:bolder;color:#ff6347">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ff6347 <span style="font-weight:bolder;color:#ff6347">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color tomato = _parseColor("#ff6347");
 
-	/** #40e0d0 <span style="font-weight:bolder;color:#40e0d0">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #40e0d0 <span style="font-weight:bolder;color:#40e0d0">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color turquoise = _parseColor("#40e0d0");
 
-	/** #ee82ee <span style="font-weight:bolder;color:#ee82ee">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #ee82ee <span style="font-weight:bolder;color:#ee82ee">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color violet = _parseColor("#ee82ee");
 
-	/** #f5deb3 <span style="font-weight:bolder;color:#f5deb3">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #f5deb3 <span style="font-weight:bolder;color:#f5deb3">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color wheat = _parseColor("#f5deb3");
 
-	/** #f5f5f5 <span style="font-weight:bolder;color:#f5f5f5">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #f5f5f5 <span style="font-weight:bolder;color:#f5f5f5">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color whiteSmoke = _parseColor("#f5f5f5");
 
-	/** #9acd32 <span style="font-weight:bolder;color:#9acd32">&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;&#x2588;</span> */
+	/** #9acd32 <span style="font-weight:bolder;color:#9acd32">\u2588\u2588\u2588\u2588\u2588\u2588</span> */
 	public static final Color yellowGreen = _parseColor("#9acd32");
 
 	private static final Map<String, Color> NAMED_COLORS;
@@ -1494,9 +1492,9 @@ public class Colors {
 	/**
 	 * @param a The first color to merge
 	 * @param b The second color to merge
-	 * @param amount The amount to favor <code>b</code> over <code>a</b>.  A value of zero here (or less) would cause this method to
-	 * return <code>a</code>. A value of one (or greater) would cause it to return <code>b</code>. In between zero and one will create a
-	 *        color somewhere between the two colors.
+	 * @param amount The amount to favor <code>b</code> over <code>a</code>. A value of zero here (or less) would cause this method to
+	 *        return <code>a</code>. A value of one (or greater) would cause it to return <code>b</code>. In between zero and one will
+	 *        create a color somewhere between the two colors.
 	 * @return The merged color
 	 */
 	public static Color merge(Color a, Color b, float amount) {

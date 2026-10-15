@@ -1,6 +1,12 @@
 package org.qommons.collect;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -57,10 +63,7 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 		return keySet().getCoreId();
 	}
 
-	/**
-	 * @param structuralOnly Whether to obtain the structural modification stamp, or to include updates
-	 * @return The stamp of the given type
-	 */
+	/** @return The modification stamp of this map */
 	@Override
 	default long getStamp() {
 		return keySet().getStamp();
@@ -308,16 +311,32 @@ public interface BetterMap<K, V> extends TransactableMap<K, V>, CausalLock, Stam
 	 * @param <X> The type of the custom data to keep track of transfer operations
 	 */
 	interface MapRepairListener<K, V, X> {
-		/** @see ValueStoredCollection.RepairListener#removed(CollectionElement) */
-		@SuppressWarnings("javadoc")
+		/**
+		 * @param element The element, having just been removed, which may or may not be transferred to another position in the collection,
+		 *        with a corresponding call to {@link #transferred} or {@link #disposed(Object, Object, Object)}
+		 * @return A piece of data which will be given as the second argument to {@link #transferred} or
+		 *         {@link #disposed(Object, Object, Object)} as a means of tracking
+		 * @see ValueStoredCollection.RepairListener#removed(CollectionElement)
+		 */
 		X removed(MapEntryHandle<K, V> element);
 
-		/** @see ValueStoredCollection.RepairListener#disposed(Object, Object) */
-		@SuppressWarnings("javadoc")
+		/**
+		 * @param key The key removed due to a collision or due to the element no longer being compatible with this collection (i.e. a
+		 *        sub-set)
+		 * @param value The value removed
+		 * @param data The data returned from the {@link #removed} call, or null if the pre-transferred element was not a member of this
+		 *        collection
+		 * @see ValueStoredCollection.RepairListener#disposed(Object, Object)
+		 */
 		void disposed(K key, V value, X data);
 
-		/** @see ValueStoredCollection.RepairListener#transferred(CollectionElement, Object) */
-		@SuppressWarnings("javadoc")
+		/**
+		 * @param element The element previously removed (most likely, with a corresponding call to {@link #removed}) and now re-added in a
+		 *        different position within the collection
+		 * @param data The data returned from the {@link #removed} call, or null if it is known that the pre-transferred element was not a
+		 *        member of this collection
+		 * @see ValueStoredCollection.RepairListener#transferred
+		 */
 		void transferred(MapEntryHandle<K, V> element, X data);
 	}
 

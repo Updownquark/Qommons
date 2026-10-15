@@ -33,8 +33,8 @@ public interface HexaPredicate<A1, A2, A3, A4, A5, A6> {
 	 * @param <A5> The type of the fifth argument to the 6-argument predicate
 	 * @param <A6> The type of the sixth argument to the 6-argument predicate
 	 * @param function The implementation
-	 * @param print The string for the wrapped predicate's {@link #toString()}
-	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped predicate's {@link Object#toString()}
+	 * @param identity The identity for the predicate's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable 6-argument predicate
 	 */
 	public static <A1, A2, A3, A4, A5, A6> HexaPredicate<A1, A2, A3, A4, A5, A6> printable(
@@ -50,8 +50,8 @@ public interface HexaPredicate<A1, A2, A3, A4, A5, A6> {
 	 * @param <A5> The type of the fifth argument to the 6-argument predicate
 	 * @param <A6> The type of the sixth argument to the 6-argument predicate
 	 * @param function The implementation
-	 * @param print Supplies the string for the wrapped predicate's {@link #toString()}
-	 * @param identity The identity for the predicate's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped predicate's {@link Object#toString()}
+	 * @param identity The identity for the predicate's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable 6-argument predicate
 	 */
 	public static <A1, A2, A3, A4, A5, A6> HexaPredicate<A1, A2, A3, A4, A5, A6> printable(

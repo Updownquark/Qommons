@@ -55,9 +55,9 @@ public interface LocalNetworkAddress extends Named {
 	 * configurations, e.g. cloned VMs.
 	 * </p>
 	 * <p>
-	 * <b><font color="red">WARNING!!!</font></b> This call is <b>SLOW</b>. E.g. &lt;1s. This is because it actually makes network calls to
-	 * determine which network interfaces and addresses returned by {@link NetworkInterface#getNetworkInterfaces()} are actually addresses
-	 * that other hosts can use to reach this localhost. The getNetworkInterfaces call is also quite slow.
+	 * <b><span style="color: red;">WARNING!!!</span></b> This call is <b>SLOW</b>. E.g. &lt;1s. This is because it actually makes network
+	 * calls to determine which network interfaces and addresses returned by {@link NetworkInterface#getNetworkInterfaces()} are actually
+	 * addresses that other hosts can use to reach this localhost. The getNetworkInterfaces call is also quite slow.
 	 * </p>
 	 * <p>
 	 * For this reason, an internal caching mechanism is provided so this method may be called once and the result re-used.

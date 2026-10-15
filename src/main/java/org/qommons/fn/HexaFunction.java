@@ -35,8 +35,8 @@ public interface HexaFunction<A1, A2, A3, A4, A5, A6, R> {
 	 * @param <A6> The type of the sixth argument to the 6-argument function
 	 * @param <R> The return type of the function
 	 * @param function The implementation
-	 * @param print The string for the wrapped function's {@link #toString()}
-	 * @param identity The identity for the function's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped function's {@link Object#toString()}
+	 * @param identity The identity for the function's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable 6-argument function
 	 */
 	public static <A1, A2, A3, A4, A5, A6, R> HexaFunction<A1, A2, A3, A4, A5, A6, R> printable(
@@ -54,8 +54,8 @@ public interface HexaFunction<A1, A2, A3, A4, A5, A6, R> {
 	 * @param <A6> The type of the sixth argument to the 6-argument function
 	 * @param <R> The return type of the function
 	 * @param function The implementation
-	 * @param print Supplies the string for the wrapped function's {@link #toString()}
-	 * @param identity The identity for the function's {@link #hashCode()} and {@link #equals(Object)} methods
+	 * @param print The string for the wrapped function's {@link Object#toString()}
+	 * @param identity The identity for the function's {@link Object#hashCode()} and {@link Object#equals(Object)} methods
 	 * @return The wrapped, printable 6-argument function
 	 */
 	public static <A1, A2, A3, A4, A5, A6, R> HexaFunction<A1, A2, A3, A4, A5, A6, R> printable(

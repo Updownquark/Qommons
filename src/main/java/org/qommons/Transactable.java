@@ -1,7 +1,5 @@
 package org.qommons;
 
-import static org.qommons.Transactable.asWriteLockable;
-
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Objects;
@@ -51,8 +49,7 @@ public interface Transactable extends Lockable {
 	 * exception or deadlock.
 	 * </p>
 	 *
-	 * @param write Whether to lock this object for writing (prevents all access to controlled properties of the object outside of this
-	 *        thread) or just for reading (prevents all modification to this object, this thread included).
+	 * @param tryOnly Whether to abandon the attempt if the lock cannot be immediately obtained
 	 * @param cause An object that may have caused the set of modifications to come. May be null, typically unused for read.
 	 * @return The transaction to close when calling code is finished accessing or modifying this object
 	 */
@@ -126,6 +123,7 @@ public interface Transactable extends Lockable {
 	 * Locks the transactable if it is one
 	 * 
 	 * @param lockable The (possibly) transactable object to lock
+	 * @param tryOnly Whether to abandon the attempt if the lock cannot be immediately obtained
 	 * @param cause The cause of the lock
 	 * @return The transaction to use to unlock the object
 	 */
@@ -147,13 +145,14 @@ public interface Transactable extends Lockable {
 	 * </p>
 	 * <p>
 	 * This method attempts to detect the relation between the two locks (via {@link Transactable#getCoreId()
-	 * CoreId}.{@link Lockable.CoreId#intersects(CoreId) intersects(CoreId)} , and if so attempts the obvious first, but only with a
-	 * {@link Transactable#tryLock(boolean, Object) tryLock} operation on the inner transactable. If this fails, the outer read-only lock is
-	 * released, and a write lock is obtained on both transactables.
+	 * CoreId}.{@link Lockable.CoreId#intersects intersects(CoreId)} , and if so attempts the obvious first, but with
+	 * <code>tryOnly</code>=true operation on the inner transactable. If this fails, the outer read-only lock is released, and a write lock
+	 * is obtained on both transactables.
 	 * </p>
 	 * 
 	 * @param owner The owner of the target transactable to lock for write
 	 * @param lock Supplies the target transactable after the owner is locked
+	 * @param tryOnly Whether to abandon the attempt if the lock cannot be immediately obtained
 	 * @param cause The cause of the write lock
 	 * @return A transaction to release the locks
 	 */
@@ -224,6 +223,7 @@ public interface Transactable extends Lockable {
 	 * 
 	 * @param owner The owner of the target transactable to lock for write
 	 * @param lock Supplies the target transactable after the owner is locked
+	 * @param tryOnly Whether to abandon the attempt if the lock cannot be immediately obtained
 	 * @param cause The cause of the write lock
 	 * @return A transaction to release the locks, or null if the lock cannot be obtained
 	 */
@@ -293,7 +293,6 @@ public interface Transactable extends Lockable {
 	 * Represents a {@link ReentrantReadWriteLock} as a {@link Transactable}
 	 * 
 	 * @param lock The lock to represent
-	 * @param debugInfo Information to use to debug locking
 	 * @param constraint The thread constraint for the transactable to obey
 	 * @return A {@link Transactable} backed by the lock
 	 */
@@ -343,7 +342,6 @@ public interface Transactable extends Lockable {
 	 * @param first The first transactable to lock collectively
 	 * @param others The other transactables to lock collectively
 	 * @param map The function to supply a Transactable for each non-null item among <code>first</code> and <code>others</code>
-	 * @param constant Whether the <code>others</code> and <code>map</code> parameters always return the same values with the same input
 	 * @return The combined transactable
 	 */
 	static <X> Transactable combine(Transactable first, Supplier<? extends Collection<? extends X>> others,
@@ -368,7 +366,7 @@ public interface Transactable extends Lockable {
 		return new NullTransactable(threadConstraint);
 	}
 
-	/** Implements {@link Lockable#lockable(Transactable)} */
+	/** Implements {@link Transactable#asWriteLockable(Transactable, Object)} */
 	static class WriteLockable implements Lockable {
 		private final Transactable theTransactable;
 		private final Object cause;
@@ -464,7 +462,7 @@ public interface Transactable extends Lockable {
 		}
 	}
 
-	/** Implements {@link Transactable#transactable(ReentrantReadWriteLock, Object, ThreadConstraint)} */
+	/** Implements {@link Transactable#transactable(ReentrantReadWriteLock, ThreadConstraint)} */
 	static class RRWLTransactable implements Transactable {
 		private final ReentrantReadWriteLock theLock;
 		private final ThreadConstraint theThreadConstraint;

@@ -168,7 +168,7 @@ public interface QonfigValueDef extends QonfigElementOwned {
 		 * @param type The type that must be specified
 		 * @param specify The specification of the value
 		 * @param defaultValue The value to use if it is not specified
-		 * @param defaultValueContent
+		 * @param defaultValueContent The positioned content to use if it is not specified
 		 * @param position The position in the file where this value was defined
 		 * @param description The description for the value modification
 		 */

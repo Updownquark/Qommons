@@ -20,7 +20,7 @@ import org.qommons.collect.MutableCollectionElement.StdMsg;
  * The inclusion of an element in the source list can be queried via the {@link #isIncluded(int)} method.
  * </p>
  * 
- * @param <T>
+ * @param <T> The type of values in the list
  */
 public class FilteredList<T> extends AbstractIdentifiable implements BetterList<T> {
 	private final BetterList<? extends T> theWrapped;

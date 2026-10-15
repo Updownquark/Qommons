@@ -17,25 +17,20 @@ import org.qommons.io.TextParseException;
  * <p>
  * A fairly simple lines-of-code counter that takes language-specific comments into account.
  * </p>
- * <p>
  * The main method accepts 2 main arguments:
  * <ul>
  * <li>--lang-config=path/to/language-config-file.xml The language XML file allows the specification of languages, each of which may specify
  * file extensions that identify a file as belonging to the language, and comment structures of the language.</li>
  * <li>--project=path/to/project-dir. A project directory to scan for source files.</li>
  * </ul>
- * Both of these arguments may be specified multiple times, or multiple values may be specified for the arguments, separated by commas.
- * </p>
- * <p>
+ * Both of these arguments may be specified multiple times, or multiple values may be specified for the arguments, separated by commas.<br>
  * Other accepted arguments are:
  * <ul>
  * <li>--as-repo. If this flag is present, the files from the --project argument will not be treated as projects, but as directories holding
  * any number of projects. All directories under each --project argument will be treated as projects.</li>
- * <li>--include=&lt;path> If specified, only directories matching a specified --include path will be scanned for source files.</li>
- * <li>--exclude=&lt;path> Any files or directories ending with a --exclude path will be ignored.</li>
+ * <li>--include=&lt;path&gt; If specified, only directories matching a specified --include path will be scanned for source files.</li>
+ * <li>--exclude=&lt;path&gt; Any files or directories ending with a --exclude path will be ignored.</li>
  * </ul>
- * </p>
- * <p>
  * Results are printed for each project and language independently, as well as totals. Metrics include:
  * <ul>
  * <li>Files</li>
@@ -46,8 +41,6 @@ import org.qommons.io.TextParseException;
  * <li>Comment Chars</li>
  * <li>White Space Chars</li>
  * </ul>
- * </p>
- * <p>
  * Since this class does not do a full parse of the structure of any files, its results are susceptible to certain inaccuracies. E.g.:
  * <ul>
  * <li>Boilerplate such as start and end braces on their own lines count as content lines unless they are specifically configured as
@@ -56,7 +49,6 @@ import org.qommons.io.TextParseException;
  * could potentially cause the rest of the file to be interpreted as a comment. This can be worked around in the file by splitting up the
  * comment start string into multiple appended strings, but this tool is not typically on a developer's mind when writing such code.</li>
  * </ul>
- * </p>
  */
 public class LinesOfCode {
 	/**

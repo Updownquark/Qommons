@@ -22,7 +22,6 @@ import org.qommons.Transaction;
  * affect their parents or be affected by their children.
  * </p>
  * 
- * <p>
  * When an attempt is made to lock an instance of this class, it performs the following sequence:
  * <ol>
  * <li>If it is not the root of its hierarchy, a read lock will be obtained on all its ancestors.</li>
@@ -30,7 +29,6 @@ import org.qommons.Transaction;
  * </ol>
  * The child locks are not notified and are only <i>effectively</i> locked at the same level on the same thread as the parent, since the
  * first thing a child lock does when attempting a lock is obtain the lock from the parent.
- * </p>
  * 
  * <p>
  * Thus, modifications can be made to an object protected by this lock or its children while nothing is happening to its ancestors, but

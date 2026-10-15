@@ -2,7 +2,13 @@ package org.qommons.osgi;
 
 import java.awt.EventQueue;
 import java.awt.SplashScreen;
-import java.io.*;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -24,7 +30,12 @@ import javax.swing.JLabel;
 import javax.swing.JProgressBar;
 import javax.swing.Timer;
 
-import org.qommons.*;
+import org.qommons.ArgumentParsing;
+import org.qommons.BiTuple;
+import org.qommons.Named;
+import org.qommons.Range;
+import org.qommons.StringUtils;
+import org.qommons.Version;
 import org.qommons.collect.BetterHashSet;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
@@ -1521,7 +1532,7 @@ public class OsgiBundleSet {
 	 *        <li><b>--exclude-bundles=??</b> Names of bundles to NOT load when using --osgi-bundles-in.</li>
 	 *        <li><b>--jar</b> Flag argument to export the bundle set's bundles to jar files.</li>
 	 *        <li><b>--jar-dir=??</b> Specifies the directory to put the exported bundle jars in when using --jar. If not specified, jars
-	 *        will be put in each bundle's directory.</b>
+	 *        will be put in each bundle's directory.</li>
 	 *        <li><b>--osgi-main-class=??</b> The fully-qualified name of the main class to execute. Command line arguments for the given
 	 *        class can be specified along with arguments specific to this class.</li>
 	 *        <li><b>--start-ds</b> Flag argument to start a dependency service, loading components advertised by each bundle's

@@ -10,7 +10,11 @@ package org.qommons;
 public class ComparableTriTuple<V1 extends Comparable<V1>, V2 extends Comparable<V2>, V3 extends Comparable<V3>>
 	extends TriTuple<V1, V2, V3> implements Comparable<ComparableTriTuple<V1, V2, V3>> {
 
-	/** @see TriTuple#TriTuple(Object, Object, Object) */
+	/**
+	 * @param v1 The first value
+	 * @param v2 The second value
+	 * @param v3 The third value
+	 */
 	public ComparableTriTuple(V1 v1, V2 v2, V3 v3) {
 		super(v1, v2, v3);
 	}

@@ -762,7 +762,7 @@ public class ArchiveEnabledFileSource implements BetterFile.FileDataSource {
 		 * @param forEach Accepts each archive entry found in the archive and its name--may be null
 		 * @param cancel Returns true if the user cancels the operation
 		 * @return The root entry of the archive
-		 * @throws IOException
+		 * @throws IOException If the archive file cannot be read
 		 */
 		ArchiveEntry parseStructure(FileBacking file, ArchiveEntry existingRoot, Consumer<? super ArchiveEntry> onChild,
 			ExBiConsumer<ArchiveEntry, CharSequence, IOException> forEach, BooleanSupplier cancel) throws IOException;

@@ -81,7 +81,7 @@ public class QuarkVersionUpdater {
 	 * Main method. Invoked by this class (from another process) to do the upgrade and start the new version of the app.
 	 * 
 	 * This method deletes the old version of the jar, renames the updated version of the jar to the name of the old version, and invokes
-	 * the updated jar with an environment variable "show.app.version"=true so the app can optionally show its Help->About dialog on
+	 * the updated jar with an environment variable "show.app.version"=true so the app can optionally show its Help-&gt;About dialog on
 	 * startup.
 	 * 
 	 * @param args Command line args:

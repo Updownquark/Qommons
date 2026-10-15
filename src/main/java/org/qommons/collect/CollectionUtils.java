@@ -1,16 +1,6 @@
 package org.qommons.collect;
 
-import java.util.AbstractCollection;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -84,7 +74,7 @@ public class CollectionUtils {
 		/**
 		 * @return The index of the left element in a hypothetical list that was equal to the left list before the adjustment and has been
 		 *         updated with appropriate add/remove/move operations during the adjustment, or -1 if this element does not have a
-		 *         representation in the left list.<br />
+		 *         representation in the left list.<br>
 		 *         This is only different from {@link #getTargetIndex()} if the element is to be moved within the collection.
 		 */
 		int getUpdatedLeftIndex();
@@ -140,8 +130,7 @@ public class CollectionUtils {
 	public interface ElementSyncAction {}
 
 	/**
-	 * Controls the {@link CollectionAdjustment#adjust(CollectionSynchronizerX, AdjustmentOrder) synchronization} of each element of two
-	 * lists
+	 * Controls the {@link CollectionAdjustment#adjust synchronization} of each element of two lists
 	 * 
 	 * @param <L> The type of the list to adjust
 	 * @param <R> The type of the list to synchronize against
@@ -684,10 +673,9 @@ public class CollectionUtils {
 		 * </p>
 		 * <p>
 		 * This method will, for each element in the left list, allow the {@link CollectionSynchronizerX synchronizer} to determine what to
-		 * do with the element using either the {@link CollectionSynchronizerX#leftOnly(ElementSyncInput) leftOnly} or
-		 * {@link CollectionSynchronizerX#common(ElementSyncInput) common} method, as appropriate. For each un-mapped element in the right
-		 * list, the synchronizer will determine whether it should be added to the left list with the
-		 * {@link CollectionSynchronizerX#rightOnly(ElementSyncInput) rightOnly} method.
+		 * do with the element using either the {@link CollectionSynchronizerX#leftOnly leftOnly} or {@link CollectionSynchronizerX#common
+		 * common} method, as appropriate. For each un-mapped element in the right list, the synchronizer will determine whether it should
+		 * be added to the left list with the {@link CollectionSynchronizerX#rightOnly rightOnly} method.
 		 * </p>
 		 * <p>
 		 * If the <code>indexedAdd</code> flag is false, all right-only additions will be attempted only after all left-only and common
@@ -697,8 +685,8 @@ public class CollectionUtils {
 		 * If the <code>indexedAdd</code> flag is true, right-only content will be appended after the previous common element. E.g.
 		 * synchronizing lists <br>
 		 * <code>
-		 * &nbsp;&nbsp;&nbsp;&nbsp;List<String> left=Arrays.asList("A", "B", "C");<br>
-		 * &nbsp;&nbsp;&nbsp;&nbsp;List<String> right=Arrays.asList("D", "B", "E", "F", "C", "G");
+		 * &nbsp;&nbsp;&nbsp;&nbsp;List&lt;String&gt; left=Arrays.asList("A", "B", "C");<br>
+		 * &nbsp;&nbsp;&nbsp;&nbsp;List&lt;String&gt; right=Arrays.asList("D", "B", "E", "F", "C", "G");
 		 * </code><br>
 		 * with a simple synchronizer that preserves all left and content and adds all right content would produce a list with the sequence
 		 * <br>
@@ -745,7 +733,6 @@ public class CollectionUtils {
 		 * @param value The value to find
 		 * @param start The index to start looking in the list at
 		 * @param filter A test for whether a particular index in the left list is as yet unmatched
-		 * @param after The index after which to find the value (strictly after)
 		 * @return The index of the element in the list with given value, or -1 if the value could not be found after the given index
 		 */
 		int findElement(List<? extends L> list, R value, int start, IntPredicate filter);
@@ -1130,7 +1117,7 @@ public class CollectionUtils {
 		/**
 		 * Synchronizes the content of the two lists.
 		 * 
-		 * @see CollectionAdjustment#adjust(CollectionSynchronizerX, AdjustmentOrder)
+		 * @see CollectionAdjustment#adjust
 		 * 
 		 * @throws X If the mapping function (or {@link #handleCommon(ExFunction) custom common element handler}) throws an exception
 		 */

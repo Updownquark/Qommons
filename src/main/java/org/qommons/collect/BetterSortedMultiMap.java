@@ -162,8 +162,8 @@ public interface BetterSortedMultiMap<K, V> extends BetterMultiMap<K, V>, Sorted
 	 * @param to The upper bound comparator
 	 * @return A multi-map whose contents are those of this map for which it is true of the key:
 	 *         <ul>
-	 *         <li><code>from.compareTo(key)<=0</code></li> and
-	 *         <li><code>to.compareTo(key)>=0</code></li>
+	 *         <li><code>from.compareTo(key)&lt;=0 and</code></li>
+	 *         <li><code>to.compareTo(key)&gt;=0</code></li>
 	 *         </ul>
 	 */
 	default BetterSortedMultiMap<K, V> subMap(Comparable<? super K> from, Comparable<? super K> to) {

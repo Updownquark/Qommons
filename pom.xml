@@ -1,10 +1,32 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>org.qommons</groupId>
+	<groupId>com.quark-sw</groupId>
 	<artifactId>Qommons</artifactId>
 	<version>3.0.0</version>
 	<name>Qommons</name>
 	<description>A catch-all repository of utilities I've created, containing a mixture of first-class APIs and one-off utilities</description>
+	<url>https://github.com/Updownquark/Qommons</url>
+	<scm>
+		<connection>scm:git:git://://github.com</connection>
+		<developerConnection>scm:git:ssh://github.com:updownquark/Qommons.git</developerConnection>
+		<url>https://github.com/tree/main</url>
+	</scm>
+	<developers>
+		<developer>
+			<name>Andrew Butler</name>
+			<email>updownquark@gmail.com</email>
+			<organization>Quark Software</organization>
+			<organizationUrl>https://quark-sw.com</organizationUrl>
+		</developer>
+	</developers>
+	<licenses>
+		<license>
+		    <name>MIT License</name>
+		    <url>https://opensource.org</url>
+		    <distribution>repo</distribution>
+		</license>
+	</licenses>
 	<dependencies>
 		<dependency>
 			<groupId>javax.servlet</groupId>
@@ -38,6 +60,54 @@
 			</testResource>
 		</testResources>
 		<plugins>
+			<!-- Sources Plugin -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+				<version>3.3.1</version>
+				<executions>
+					<execution>
+						<id>attach-sources</id>
+						<goals>
+							<goal>jar-no-fork</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- Javadoc Plugin -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<version>3.6.3</version>
+				<configuration>
+					<encoding>UTF-8</encoding>
+				</configuration>
+				<executions>
+					<execution>
+						<id>attach-javadocs</id>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- GPG Signing Plugin -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-gpg-plugin</artifactId>
+				<version>3.2.4</version>
+				<executions>
+					<execution>
+						<id>sign-artifacts</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>sign</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.8.1</version>
@@ -45,6 +115,15 @@
 					<source>1.8</source>
 					<target>1.8</target>
 					<useIncrementalCompilation>false</useIncrementalCompilation>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.sonatype.central</groupId>
+				<artifactId>central-publishing-maven-plugin</artifactId>
+				<version>0.12.0</version>
+				<extensions>true</extensions>
+				<configuration>
+					<publishingServerId>central</publishingServerId>
 				</configuration>
 			</plugin>
 		</plugins>

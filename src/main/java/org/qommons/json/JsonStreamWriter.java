@@ -497,7 +497,7 @@ public class JsonStreamWriter implements JsonSerialWriter {
 
 	/**
 	 * @param depth The depth of the item to get
-	 * @return The item that is being written at the given depth, or null if depth> {@link #getDepth()}
+	 * @return The item that is being written at the given depth, or null if depth&gt;{@link #getDepth()}
 	 */
 	public ParseNode fromTop(int depth) {
 		if (thePath.size() <= depth)
