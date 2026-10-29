@@ -919,7 +919,7 @@ public class StringUtils {
 		 * @param name The name containing the first try to append the duplicate suffix onto
 		 * @param suffix The suffix integer to append
 		 */
-		void appendDuplicate(StringBuilder name, int suffix);
+		StringBuilder appendDuplicate(StringBuilder name, int suffix);
 
 		/**
 		 * @param name The name to test
@@ -964,12 +964,13 @@ public class StringUtils {
 		Pattern pattern = Pattern.compile(patternStr.toString());
 		return new DuplicateItemNamer() {
 			@Override
-			public void appendDuplicate(StringBuilder name, int suffix) {
+			public StringBuilder appendDuplicate(StringBuilder name, int suffix) {
 				if (between != null)
 					name.append(between);
 				name.append(suffix);
 				if (post != null)
 					name.append(post);
+				return name;
 			}
 
 			@Override
