@@ -291,18 +291,16 @@ public class LongList implements Iterable<Long>, Sealable, Cloneable
 	 * Adds a value to this list at the given index.
 	 *
 	 * <p>
-	 * If this list is sorted, the index parameter will be ignored and the value will be inserted at
-	 * the index where it belongs.
+	 * If this list is sorted, the index parameter will be ignored and the value will be inserted at the index where it belongs.
 	 * </p>
 	 *
 	 * <p>
 	 * If this list is unique, the value will not be added if it already exists in the list.
-	 * <p>
+	 * </p>
 	 *
 	 * @param index The index to add the value at
 	 * @param value The value to add to the list
-	 * @return Whether the value was added. This will only be false if this list is unique and the
-	 *         value already exists.
+	 * @return Whether the value was added. This will only be false if this list is unique and the value already exists.
 	 */
 	public boolean add(int index, long value)
 	{

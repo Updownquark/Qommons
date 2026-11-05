@@ -1512,10 +1512,11 @@ public final class ArrayUtils {
 	}
 
 	/**
-	 * @see DifferenceListenerE
+	 * Same as {@link DifferenceListenerE} except that it cannot throw checked exceptions
 	 *
 	 * @param <T1> The type of the original array
 	 * @param <T2> The type of the modifying array
+	 * @see DifferenceListenerE
 	 */
 	public static interface DifferenceListener<T1, T2> extends DifferenceListenerE<T1, T2, RuntimeException> {
 		/**

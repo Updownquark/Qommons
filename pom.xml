@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.quark-sw</groupId>
 	<artifactId>Qommons</artifactId>
-	<version>3.0.0</version>
+	<version>3.0.1</version>
 	<name>Qommons</name>
 	<description>A catch-all repository of utilities I've created, containing a mixture of first-class APIs and one-off utilities</description>
 	<url>https://github.com/Updownquark/Qommons</url>
@@ -82,6 +82,9 @@
 				<version>3.6.3</version>
 				<configuration>
 					<encoding>UTF-8</encoding>
+			        <additionalOptions>
+			            <additionalOption>-Xdoclint:all,-missing</additionalOption>
+			        </additionalOptions>
 				</configuration>
 				<executions>
 					<execution>

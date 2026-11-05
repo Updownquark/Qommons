@@ -309,7 +309,7 @@ public class FloatList implements Iterable<Float>, Sealable, Cloneable
 	 *
 	 * <p>
 	 * If this list is unique, the value will not be added if it already exists in the list.
-	 * <p>
+	 * </p>
 	 *
 	 * @param index The index to add the value at
 	 * @param value The value to add to the list

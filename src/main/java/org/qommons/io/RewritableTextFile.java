@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.RandomAccessFile;
 import java.io.Reader;
@@ -105,7 +106,8 @@ public class RewritableTextFile implements AutoCloseable {
 		if (theOutput == null) {
 			RandomAccessFile raf = new RandomAccessFile(theFile, "rw");
 			raf.seek(position);
-			theOutput = new OutputStreamWriter(new RandomAccessFileOutputStream(raf), theCharset);
+			OutputStream stream = new RandomAccessFileOutputStream(raf);
+			theOutput = new OutputStreamWriter(stream, theCharset);
 			theOutputPosition = raf.getFilePointer();
 		}
 		return new Writer() {

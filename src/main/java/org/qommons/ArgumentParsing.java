@@ -5,7 +5,20 @@ import java.io.IOException;
 import java.text.ParseException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TimeZone;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -389,7 +402,7 @@ public class ArgumentParsing {
 		/** @return The argument pattern that parses this argument from a command-line string */
 		ArgumentPattern getPattern();
 
-		/** @return The type of the argument's values, or {@link void} if the argument is value-less (a flag) */
+		/** @return The type of the argument's values, or {@link Void} if the argument is value-less (a flag) */
 		Class<T> getType();
 
 		/** @return Whether this argument type is value-less */
@@ -2226,6 +2239,8 @@ public class ArgumentParsing {
 	}
 
 	/**
+	 * Builds a constraint on the value of a set of 2 arguments
+	 * 
 	 * @param <T> The type of the argument being tested
 	 * @param <A> The type of the argument being tested against
 	 */

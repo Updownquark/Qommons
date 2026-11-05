@@ -8,8 +8,17 @@ import java.util.function.Function;
 
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
-import org.qommons.collect.*;
+import org.qommons.collect.BetterSortedList;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
+import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.MutableCollectionElement;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.SplitSpliterable;
+import org.qommons.collect.StampedLockingStrategy;
+import org.qommons.collect.ThreadConstrainedLockingStrategy;
 
 /**
  * A {@link org.qommons.collect.BetterList} backed by a tree structure that sorts its values, with duplicates allowed
@@ -20,6 +29,8 @@ public class SortedTreeList<E> extends RedBlackNodeList<E> implements TreeBasedS
 	private static final String DEFAULT_DESCRIP = "sorted-tree-list";
 
 	/**
+	 * A builder for a {@link SortedTreeList}
+	 * 
 	 * @param <E> The type of elements in the list
 	 * @param <L> The sub-type of the list
 	 * @param <B> The sub-type of this builder

@@ -25,46 +25,47 @@ public class QonsoleTest {
 			CircularCharBuffer rw = new CircularCharBuffer(-1);
 			int[] testValues = new int[2];
 			try (Reader reader = rw.asDeletingReader(false); // Keep the Qonsole alive
-				Qonsole qonsole = new Qonsole("Test", reader, ":", () -> false)//
-				.addPlugin("test0", content -> {
-					int line = indexOf(content, '\n');
-					String firstLine = line < 0 ? content.toString() : content.subSequence(0, line).toString();
-					switch (firstLine) {
-					case "add":
-						if (line > 0) {
-							testValues[0] += Integer.parseInt(content.subSequence(line + 1, content.length()).toString());
-							return true;
-						} else
-							return false;
-					case "sub":
-						if (line > 0) {
-							testValues[0] -= Integer.parseInt(content.subSequence(line + 1, content.length()).toString());
-							return true;
-						} else
-							return false;
-					default:
-						throw new IllegalArgumentException("Unrecognized command: " + content);
-					}
-				}).addPlugin("test1", content -> {
-					int line = indexOf(content, '\n');
-					String firstLine = line < 0 ? content.toString() : content.subSequence(0, line).toString();
-					switch (firstLine) {
-					case "add":
-						if (line > 0) {
-							testValues[1] += Integer.parseInt(content.subSequence(line + 1, content.length()).toString());
-							return true;
-						} else
-							return false;
-					case "sub":
-						if (line > 0) {
-							testValues[1] -= Integer.parseInt(content.subSequence(line + 1, content.length()).toString());
-							return true;
-						} else
-							return false;
-					default:
-						throw new IllegalArgumentException("Unrecognized command: " + content);
-					}
-					})) {
+				Qonsole qonsole = new Qonsole("Test", reader, ":", () -> false)) {
+				qonsole//
+					.addPlugin("test0", content -> {
+						int line = indexOf(content, '\n');
+						String firstLine = line < 0 ? content.toString() : content.subSequence(0, line).toString();
+						switch (firstLine) {
+						case "add":
+							if (line > 0) {
+								testValues[0] += Integer.parseInt(content.subSequence(line + 1, content.length()).toString());
+								return true;
+							} else
+								return false;
+						case "sub":
+							if (line > 0) {
+								testValues[0] -= Integer.parseInt(content.subSequence(line + 1, content.length()).toString());
+								return true;
+							} else
+								return false;
+						default:
+							throw new IllegalArgumentException("Unrecognized command: " + content);
+						}
+					}).addPlugin("test1", content -> {
+						int line = indexOf(content, '\n');
+						String firstLine = line < 0 ? content.toString() : content.subSequence(0, line).toString();
+						switch (firstLine) {
+						case "add":
+							if (line > 0) {
+								testValues[1] += Integer.parseInt(content.subSequence(line + 1, content.length()).toString());
+								return true;
+							} else
+								return false;
+						case "sub":
+							if (line > 0) {
+								testValues[1] -= Integer.parseInt(content.subSequence(line + 1, content.length()).toString());
+								return true;
+							} else
+								return false;
+						default:
+							throw new IllegalArgumentException("Unrecognized command: " + content);
+						}
+					});
 				int[] expectedValues = new int[testValues.length];
 
 				// The Qonsole is reading things off of a different thread, so we need to add to the buffer all at once
@@ -90,8 +91,7 @@ public class QonsoleTest {
 					for (tries = 0; tries < 100 && testValues[whichValue] == preValue; tries++) {
 						try {
 							Thread.sleep(2);
-						} catch (InterruptedException e) {
-						}
+						} catch (InterruptedException e) {}
 					}
 					// System.out.println("Tries=" + tries);
 					Assert.assertArrayEquals(expectedValues, testValues);

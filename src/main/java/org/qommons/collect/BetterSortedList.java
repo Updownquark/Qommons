@@ -61,17 +61,17 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 		 * <code>search.{@link Comparable#compareTo compareTo}(value)&lt;=0</code>
 		 */
 		Greater(Ternian.FALSE, true);
-	
+
 		/** Whether this search prefers values less than an exact match, or {@link Ternian#NONE} for {@link #OnlyMatch} */
 		public final Ternian less;
 		/** Whether this search allows matches that do not match the #less value */
 		public final boolean strict;
-	
+
 		private SortedSearchFilter(Ternian less, boolean strict) {
 			this.less = less;
 			this.strict = strict;
 		}
-	
+
 		public SortedSearchFilter opposite() {
 			switch (this) {
 			case Less:
@@ -86,14 +86,14 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 				return this;
 			}
 		}
-	
+
 		public static SortedSearchFilter of(Boolean less, boolean strict) {
 			for (SortedSearchFilter ssf : SortedSearchFilter.values())
 				if (Objects.equals(ssf.less.value, less) && ssf.strict == strict)
 					return ssf;
 			throw new IllegalArgumentException("No such filter exists");
 		}
-	
+
 		/** @return A short String representing this filter */
 		public String getSymbol() {
 			switch (this) {
@@ -547,7 +547,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	 * 
 	 * @param fromElement low endpoint (inclusive) of the returned list
 	 * @param toElement high endpoint (exclusive) of the returned list
-	 * @return A view of the portion of this list whose elements range from <tt>fromElement</tt>, inclusive, to <tt>toElement</tt>,
+	 * @return A view of the portion of this list whose elements range from <code>fromElement</code>, inclusive, to <code>toElement</code>,
 	 *         exclusive
 	 */
 	default BetterSortedList<E> subSequence(E fromElement, E toElement) {
@@ -569,7 +569,7 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 	 * Equivalent to {@code tailSet(fromElement, true)}.
 	 * 
 	 * @param fromElement low endpoint (inclusive) of the returned list
-	 * @return A view of the portion of this list whose elements are greater than or equal to <tt>fromElement</tt>
+	 * @return A view of the portion of this list whose elements are greater than or equal to <code>fromElement</code>
 	 */
 	default BetterSortedList<E> tailSequence(E fromElement) {
 		return tailSequence(fromElement, true);
@@ -861,14 +861,14 @@ public interface BetterSortedList<E> extends ValueStoredCollection<E>, BetterLis
 
 		@Override
 		public ListElement<E> search(Comparable<? super E> search, SortedSearchFilter filter) {
-			if(isEmpty())
+			if (isEmpty())
 				return null;
-			int index=indexFor(search);
-			if(index>=0)
+			int index = indexFor(search);
+			if (index >= 0)
 				return getElement(index);
-			else if(filter==SortedSearchFilter.OnlyMatch)
+			else if (filter == SortedSearchFilter.OnlyMatch)
 				return null;
-			index=-index-1;
+			index = -index - 1;
 			if (index == 0) {
 				if (filter == SortedSearchFilter.Less)
 					return null;

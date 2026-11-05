@@ -20,6 +20,8 @@ public interface BetterSupplier<T> extends Supplier<T> {
 	}
 
 	/**
+	 * A supplier that maps the value of another supplier using a function
+	 * 
 	 * @param <T> The type of the source supplier
 	 * @param <X> The return type of the mapping function
 	 */

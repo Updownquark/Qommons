@@ -6,7 +6,19 @@ import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.Date;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TimeZone;
+import java.util.TreeSet;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -4262,7 +4274,11 @@ public class TimeUtils {
 		DURATION_PRECISION_ABBREVS = Collections.unmodifiableList(abbrevs);
 	}
 
-	/** @see RelativeTimeFormat#withAboveDayStrategy */
+	/**
+	 * Available strategies for printing durations longer than one day
+	 * 
+	 * @see RelativeTimeFormat#withAboveDayStrategy
+	 */
 	public enum AboveDaysStrategy {
 		/** Prints &gt;1 day time differences in terms of months and years */
 		MonthYear,

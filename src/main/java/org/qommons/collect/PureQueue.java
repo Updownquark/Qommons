@@ -12,12 +12,12 @@ import java.util.Queue;
  * @param <E> The type of values in the queue
  */
 public interface PureQueue<E> {
-	/** @return <tt>true</tt> if this queue contains no elements */
+	/** @return <code>true</code> if this queue contains no elements */
 	boolean isEmpty();
 
 	/**
-	 * Returns the number of elements in this queue. If this queue contains more than <tt>Integer.MAX_VALUE</tt> elements, returns
-	 * <tt>Integer.MAX_VALUE</tt>.
+	 * Returns the number of elements in this queue. If this queue contains more than <code>Integer.MAX_VALUE</code> elements, returns
+	 * <code>Integer.MAX_VALUE</code>.
 	 *
 	 * @return The number of elements in this queue
 	 */

@@ -11,8 +11,17 @@ import org.qommons.Identifiable.AbstractIdentifiable;
 import org.qommons.Lockable;
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
-import org.qommons.collect.*;
+import org.qommons.collect.BetterCollection;
+import org.qommons.collect.BetterList;
+import org.qommons.collect.BetterSortedList;
+import org.qommons.collect.BetterSortedSet;
+import org.qommons.collect.CollectionBuilder;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
 import org.qommons.collect.MutableCollectionElement.StdMsg;
+import org.qommons.collect.OptimisticContext;
+import org.qommons.collect.ValueStoredCollection;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 
 /**
@@ -22,6 +31,8 @@ import org.qommons.collect.ValueStoredCollection.RepairListener;
  */
 public abstract class RedBlackNodeList<E> extends AbstractIdentifiable implements TreeBasedList<E> {
 	/**
+	 * An abstract builder for {@link RedBlackNodeList} subtypes
+	 * 
 	 * @param <E> The type of elements for the list
 	 * @param <L> The type of the list
 	 * @param <B> The sub-type of this builder

@@ -7,7 +7,14 @@ import java.util.function.Function;
 
 import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
-import org.qommons.collect.*;
+import org.qommons.collect.CollectionElement;
+import org.qommons.collect.CollectionLockingStrategy;
+import org.qommons.collect.ElementId;
+import org.qommons.collect.FastFailLockingStrategy;
+import org.qommons.collect.ListElement;
+import org.qommons.collect.MutableCollectionElement;
+import org.qommons.collect.StampedLockingStrategy;
+import org.qommons.collect.ThreadConstrainedLockingStrategy;
 import org.qommons.collect.ValueStoredCollection.RepairListener;
 
 /**
@@ -31,6 +38,8 @@ public class BetterTreeList<E> extends RedBlackNodeList<E> {
 	private static final String DEFAULT_DESCRIPTION = "better-tree-list";
 
 	/**
+	 * A builder for a {@link BetterTreeList}
+	 * 
 	 * @param <E> The type of elements for the list
 	 * @param <B> The sub-type of this builder
 	 */

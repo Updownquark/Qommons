@@ -18,6 +18,8 @@ public class BetterTreeSet<E> extends SortedTreeList<E> implements TreeBasedSet<
 	private static final String DEFAULT_DESCRIPTION = "better-tree-set";
 
 	/**
+	 * A builder for a {@link BetterTreeSet}
+	 * 
 	 * @param <E> The type of elements for the set
 	 * @param <L> The sub-type of set
 	 * @param <B> The sub-type of this builder
